@@ -519,7 +519,8 @@ def _judge(source: str) -> dict:
         mypy = _run(["uv", "run", "--quiet", "--with", "mypy", "mypy",
                      "--no-color-output", "--no-error-summary", "--hide-error-context",
                      "--no-incremental", "--cache-dir", str(Path(td) / "c"), str(f)])
-        mypy_codes = sorted(set(re.findall(r"\[([a-z-]+)\]\s*$", mypy.stdout, re.M)))
+        mypy_codes = sorted(set(re.findall(
+            r"^.*?:\d+:(?:\d+:)?\s*error:\s*.*?\s*\[([a-z-]+)\]\s*$", mypy.stdout, re.M)))
 
         run = _run([sys.executable, str(f)])
         raised = ""
