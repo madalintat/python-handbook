@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The Python Handbook</title>
+<meta name="description" content="Learn Python by finding out what it actually did. 39 units, 15 projects, and three judges that run your code in the browser and disagree with each other.">
+<link rel="icon" href="assets/mascot-128.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:ital,wght@0,400;0,600;1,400&display=swap">
+<link rel="stylesheet" href="assets/app.css">
+<script>
+  // set the theme before first paint so there is no flash
+  try {
+    const t = localStorage.getItem("ph.theme");
+    if (t) document.documentElement.dataset.theme = t;
+    else if (matchMedia("(prefers-color-scheme: dark)").matches) document.documentElement.dataset.theme = "dark";
+  } catch {}
+</script>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#/">
+      <img src="assets/mascot-128.png" alt="">
+      <span>The <b>Python</b> Handbook</span>
+    </a>
+    <nav class="nav" id="nav">
+      <a href="#/track">Track</a>
+      <a href="#/projects">Projects</a>
+      <a href="#/errors">Errors</a>
+      <a href="#/glossary">Glossary</a>
+      <a href="#/progress">Progress</a>
+    </nav>
+    <input class="nav-search" id="navsearch" type="search" placeholder="Search  /" aria-label="Search">
+    <button class="icon-btn" id="theme" title="Toggle theme" aria-label="Toggle theme">◐</button>
+  </div>
+</header>
+
+<main id="main"></main>
+
+<footer class="foot">
+  <div class="wrap">
+    <img src="assets/mascot-128.png" alt="">
+    <p>
+      Built and verified against CPython 3.14, ruff 0.16 and mypy 2.3.<br>
+      Every exercise is compiled and run for real, in your browser. Nothing you write leaves this machine.
+    </p>
+  </div>
+</footer>
+
+<nav class="tabbar" id="tabbar">
+  <a href="#/">Home</a>
+  <a href="#/track">Track</a>
+  <a href="#/projects">Projects</a>
+  <a href="#/errors">Errors</a>
+  <a href="#/progress">Progress</a>
+</nav>
+
+<button class="sheetbtn" id="sheetbtn" hidden aria-label="Contents">Contents</button>
+<div class="sheet" id="sheet"><div class="sheet-handle"></div><div id="sheet-body"></div></div>
+
+<script type="module" src="assets/app.js"></script>
+</body>
+</html>
