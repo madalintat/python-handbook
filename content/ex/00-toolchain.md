@@ -9,7 +9,7 @@ slug: 00-toolchain
 @expect silent
 @hint Compare `"3.9"` and `"3.10"` as text, character by character, and say which one sorts first.
 @hint The parts are numbers. Compare them as numbers.
-@diagnose silent Nothing raised, because comparing two strings is a perfectly legal thing to do — it just answers a different question than you meant. Text comparison goes character by character, so `"3.9"` and `"3.10"` are decided at the third character, where `9` beats `1`. Every version below 3.10 is therefore reported as newer than every version above it. Split on the dot, turn each part into an integer, and compare the tuples — tuples compare elementwise, so `(3, 9)` correctly sorts below `(3, 10)`. Or skip the parsing entirely and use `sys.version_info`, which the interpreter already provides in exactly that form.
+@diagnose silent Nothing raised, because comparing two strings is a perfectly legal thing to do. It just answers a different question than you meant. Text comparison goes character by character, so `"3.9"` and `"3.10"` are decided at the third character, where `9` beats `1`. Every version below 3.10 is therefore reported as newer than every version above it. Split on the dot, turn each part into an integer, and compare the tuples, which compare elementwise, so `(3, 9)` correctly sorts below `(3, 10)`. Or skip the parsing entirely and use `sys.version_info`, which the interpreter already provides in exactly that form.
 
 ~~~starter
 def modern_enough(version):
@@ -40,7 +40,7 @@ def modern_enough(version):
 @expect silent
 @hint `compile` takes a mode. There are three, and only one of them produces something with a value.
 @hint `"exec"` compiles a sequence of statements. A statement does not evaluate to anything.
-@diagnose silent It ran cleanly and gave you `None`. `compile(src, filename, "exec")` produces a code object for a *module body* — a series of statements — and running statements does not produce a value, so `eval` hands back `None`. The mode you want is `"eval"`, which compiles exactly one expression and yields its value. The third mode, `"single"`, is what the REPL uses: one statement, and it prints the result if there is one.
+@diagnose silent It ran cleanly and gave you `None`. `compile(src, filename, "exec")` produces a code object for a *module body*, a series of statements, and running statements does not produce a value, so `eval` hands back `None`. The mode you want is `"eval"`, which compiles exactly one expression and yields its value. The third mode, `"single"`, is what the REPL uses: one statement, and it prints the result if there is one.
 
 ~~~starter
 def evaluate(expr):
@@ -73,7 +73,7 @@ print(evaluate("2 + 2"))
 @expect raises:AssertionError
 @hint `assert` exists to catch bugs in your own code. This is checking someone else's input.
 @hint Every `assert` statement is removed entirely when Python runs with `-O`. Write the check so that cannot happen.
-@diagnose AssertionError The check fired, so at first glance this works. It is still the wrong tool. `assert` is a statement Python removes completely under the `-O` optimisation flag — every one of them, silently — so a validation written as an assert is a validation that vanishes in exactly the deployment where you were counting on it. `assert` is for conditions you believe are already true and want to catch yourself being wrong about. Rejecting bad input is not that; raise a real exception, and pick one that says what the caller did wrong.
+@diagnose AssertionError The check fired, so at first glance this works. It is still the wrong tool. `assert` is a statement Python removes completely under the `-O` optimisation flag, every one of them, silently, so a validation written as an assert is a validation that vanishes in exactly the deployment where you were counting on it. `assert` is for conditions you believe are already true and want to catch yourself being wrong about. Rejecting bad input is not that; raise a real exception, and pick one that says what the caller did wrong.
 
 ~~~starter
 def parse_port(text):
@@ -179,8 +179,8 @@ def describe(value):
 
 @expect silent
 @hint When you run a file directly, what is its `__name__`? When you import the same file, what is it then?
-@hint A `def` builds a function object when reached. A bare call at the bottom of the file *runs* when reached — including on import.
-@diagnose silent Nothing raised, and that is the whole problem: the work happened at import time. Everything at module level executes top to bottom when the module is first loaded, and a bare `main()` at the bottom is module level. So `import report` runs it — as does `from report import summarise`, which loads the entire module to get at one name. The guard is the fix, and now you can see exactly what it guards: Python sets `__name__` to the string `"__main__"` only for the file you ran directly, and to the module's own name for anything imported. So `if __name__ == "__main__": main()` means *do the work only when I am the program, not when I am a library*. That one line is what separates a file you can import from a file that does something the moment you touch it.
+@hint A `def` builds a function object when reached. A bare call at the bottom of the file *runs* when reached, including on import.
+@diagnose silent Nothing raised, and that is the whole problem: the work happened at import time. Everything at module level executes top to bottom when the module is first loaded, and a bare `main()` at the bottom is module level. So `import report` runs it, as does `from report import summarise`, which loads the entire module to get at one name. The guard is the fix, and now you can see exactly what it guards: Python sets `__name__` to the string `"__main__"` only for the file you ran directly, and to the module's own name for anything imported. So `if __name__ == "__main__": main()` means *do the work only when I am the program, not when I am a library*. That one line is what separates a file you can import from a file that does something the moment you touch it.
 
 ~~~starter
 LOG: list[str] = []
@@ -231,7 +231,7 @@ if __name__ == "__main__":
 @hint Comparing types with `==` asks whether they are that exact type. Ask a different question.
 @hint What should this say about a class that inherits from `int`?
 @diagnose E721 ruff's `E721` is "do not compare types, for exact checks use `is`, or `isinstance()` for instance checks". The rule exists because `type(x) == int` is almost never what anybody means: it demands that exact class and rejects every subclass of it, which breaks the substitution that inheritance is for.
-@diagnose silent No exception, and the right answer for ordinary integers — which is why this survives code review. `type(value) == int` is `False` for an instance of a class deriving from `int`, even though such a value *is* an integer in every sense that matters. `isinstance(value, int)` asks the question you actually meant.
+@diagnose silent No exception, and the right answer for ordinary integers, which is why this survives code review. `type(value) == int` is `False` for an instance of a class deriving from `int`, even though such a value *is* an integer in every sense that matters. `isinstance(value, int)` asks the question you actually meant.
 
 ~~~starter
 def is_integer(value):
@@ -263,7 +263,7 @@ def is_integer(value):
 @expect silent
 @hint Evaluate `0.1 + 0.2` in the REPL and read every digit of the answer.
 @hint Two floats computed different ways are almost never bit-identical. Compare them with a tolerance.
-@diagnose silent Nothing went wrong in your code. A `float` is a binary fraction, and `0.1` has no exact binary representation any more than one third has an exact decimal one — so `0.1 + 0.2` is `0.30000000000000004`, and `==` is quite right to say that is not `0.3`. This is IEEE 754 and every language with floats has it. Compare with a tolerance (`math.isclose`), or, when the values are money, do not use floats at all — use `decimal.Decimal` or count in whole cents.
+@diagnose silent Nothing went wrong in your code. A `float` is a binary fraction, and `0.1` has no exact binary representation any more than one third has an exact decimal one, so `0.1 + 0.2` is `0.30000000000000004`, and `==` is quite right to say that is not `0.3`. This is IEEE 754 and every language with floats has it. Compare with a tolerance (`math.isclose`), or, when the values are money, do not use floats at all. Use `decimal.Decimal`, or count in whole cents.
 
 ~~~starter
 def totals_match(a, b):

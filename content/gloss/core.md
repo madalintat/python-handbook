@@ -18,7 +18,7 @@ A function that has captured names from an enclosing scope. It captures the vari
 A compiled expression that builds a list, dict, set or generator in one pass. It has its own scope, so its loop variable does not leak into the surrounding function.
 
 ## Coroutine
-A function defined with `async def`. Calling it does not run it — it returns an object that does nothing until something awaits it. See [[event-loop]].
+A function defined with `async def`. Calling it does not run it. It returns an object that does nothing until something awaits it. See [[event-loop]].
 
 ## Descriptor
 An object defining `__get__`, `__set__` or `__delete__`, which the attribute machinery calls when it is found on a class. `property`, methods, `classmethod` and `staticmethod` are all descriptors; learning the protocol explains all four at once.

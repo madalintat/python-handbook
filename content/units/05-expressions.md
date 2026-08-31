@@ -99,7 +99,7 @@ Two places this matters. Multiple assignment evaluates the entire right side bef
 a, b = b, a
 ```
 
-The right side builds a tuple of the old values first. And `f() + g()` calls `f` first — so if either has side effects, reordering the operands changes the program even though addition is commutative.
+The right side builds a tuple of the old values first. And `f() + g()` calls `f` first, so if either has side effects, reordering the operands changes the program even though addition is commutative.
 
 ## Conditional expressions
 
@@ -109,7 +109,7 @@ status = "on" if enabled else "off"
 
 The value-producing counterpart of `if`. The condition sits in the middle, which reads oddly at first and is deliberate: the common case comes first.
 
-It binds very loosely, looser than arithmetic, so `a if c else b + 1` is `a if c else (b + 1)` and not `(a if c else b) + 1`. Parenthesise whenever the expression continues after the `else`, and prefer a real `if` statement once there is a second condition — nested conditional expressions are legal and nearly unreadable.
+It binds very loosely, looser than arithmetic, so `a if c else b + 1` is `a if c else (b + 1)` and not `(a if c else b) + 1`. Parenthesise whenever the expression continues after the `else`, and prefer a real `if` statement once there is a second condition: nested conditional expressions are legal and nearly unreadable.
 
 ## Unpacking is an expression shape too
 
@@ -122,7 +122,7 @@ first, *rest = [1, 2, 3, 4]      # rest is [2, 3, 4]
 (a, b), c = (1, 2), 3            # nested patterns work
 ```
 
-The starred name collects whatever is left over, always as a list, and there may be at most one of them because two would be ambiguous. If the shape does not match, you get a `ValueError` naming the counts — "too many values to unpack" is one of the more helpful messages in the language.
+The starred name collects whatever is left over, always as a list, and there may be at most one of them because two would be ambiguous. If the shape does not match, you get a `ValueError` naming the counts, "too many values to unpack" is one of the more helpful messages in the language.
 
 The same star works in calls and in literals, where it means "spread this out":
 
@@ -132,13 +132,13 @@ merged = {**defaults, **overrides}
 f(*args, **kwargs)
 ```
 
-That dictionary form is the idiomatic way to merge with later keys winning, and it builds a new dictionary rather than mutating either input — which, after unit 02, you will recognise as the safer of the two options.
+That dictionary form is the idiomatic way to merge with later keys winning, and it builds a new dictionary rather than mutating either input, which, after unit 02, you will recognise as the safer of the two options.
 
 ## Precedence, and the four rules worth memorising
 
 Python has around seventeen levels of operator precedence and nobody sensible remembers all of them. Four cause almost every real mistake.
 
-**Comparison binds tighter than `and` and `or`.** So `a == b and c == d` groups the way you want without parentheses, and `a == b or c` groups as `(a == b) or c` — which is the trap from the previous section.
+**Comparison binds tighter than `and` and `or`.** So `a == b and c == d` groups the way you want without parentheses, and `a == b or c` groups as `(a == b) or c`, which is the trap from the previous section.
 
 **`not` binds tighter than `and` and `or`, but looser than comparison.** `not a == b` is `not (a == b)`, which is `a != b` and should be written that way; ruff's `SIM201` says so. But `not a in b` is `not (a in b)`, which should be `a not in b`.
 
@@ -146,13 +146,13 @@ Python has around seventeen levels of operator precedence and nobody sensible re
 
 **The conditional expression binds looser than nearly everything**, which is the previous section's warning.
 
-Everything else — bitwise operators sitting between arithmetic and comparison, `**` binding tighter than unary minus so that `-2 ** 2` is `-4` — is worth parenthesising rather than remembering. Parentheses cost nothing and a reader should never have to consult a table to know what a line does.
+Everything else (bitwise operators sitting between arithmetic and comparison, `**` binding tighter than unary minus so that `-2 ** 2` is `-4`) is worth parenthesising rather than remembering. Parentheses cost nothing and a reader should never have to consult a table to know what a line does.
 
 ## Where an expression can hide a statement's job
 
 Because comprehensions and conditional expressions are expressions, it is possible to write a great deal of a program without any statements at all. This is occasionally elegant and usually a mistake, and it is worth knowing why the line falls where it does.
 
-A comprehension is for building a collection from another one. When the loop exists for its side effects rather than its result, a `for` statement says so and a comprehension actively lies — it constructs a list of `None`s that nobody wants, and it hides the intent behind machinery for producing a value you then discard.
+A comprehension is for building a collection from another one. When the loop exists for its side effects rather than its result, a `for` statement says so and a comprehension actively lies. It constructs a list of `None`s that nobody wants, and it hides the intent behind machinery for producing a value you then discard.
 
 The same applies to `and` and `or` used for control flow. `check() and do_thing()` works, because of short-circuiting, and it says nothing about what it is for. `if check(): do_thing()` is one character longer and is a sentence.
 

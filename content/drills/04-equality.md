@@ -35,7 +35,7 @@ slug: 04-equality
 - (x) A collision, which the table handles by comparing within the bucket
 - ( ) Silent data loss
 - ( ) A RuntimeError
-> Collisions are normal and cheap. It is the other direction — equal objects with different hashes — that breaks the table.
+> Collisions are normal and cheap. It is the other direction (equal objects with different hashes) that breaks the table.
 
 ## `hash("abc")` gives a different number in each new Python process because
 - ( ) Strings are mutable

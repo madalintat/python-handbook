@@ -15,7 +15,7 @@ Two different lists holding the same numbers are `==` and are not `is`. Two name
 
 **Use `is` for `None`, `True` and `False`, and for genuine "same object?" questions. Use `==` for everything else.**
 
-`None` is a singleton — there is exactly one, forever — so `x is None` is both correct and unmistakable. `x == None` usually gives the same answer, but it is a request the other object gets to answer, and a class with a permissive `__eq__` will happily say yes. ruff flags it as `E711` for that reason.
+`None` is a singleton (there is exactly one, forever), so `x is None` is both correct and unmistakable. `x == None` usually gives the same answer, but it is a request the other object gets to answer, and a class with a permissive `__eq__` will happily say yes. ruff flags it as `E711` for that reason.
 
 ## The `__eq__` contract
 
@@ -25,7 +25,7 @@ It should be **reflexive** (`x == x`), **symmetric** (if `x == y` then `y == x`)
 
 The commonest mistake is comparing only some of the fields, so that two objects your program considers different compare equal, and the second one silently replaces the first the moment either goes into a set.
 
-Python gives you `!=` for free: unless you define `__ne__`, it is the negation of `__eq__`. The ordering operators are not free — `<`, `<=`, `>`, `>=` come from `__lt__` and friends, and a class with `__eq__` but no `__lt__` cannot be sorted.
+Python gives you `!=` for free: unless you define `__ne__`, it is the negation of `__eq__`. The ordering operators are not free, `<`, `<=`, `>`, `>=` come from `__lt__` and friends, and a class with `__eq__` but no `__lt__` cannot be sorted.
 
 ## Hashing shares that contract
 
@@ -33,7 +33,7 @@ A hash is an integer summarising a value, used by `set` and `dict` to pick a buc
 
 **If `a == b` then `hash(a)` must equal `hash(b)`.**
 
-The reverse need not hold. Two unequal objects may share a hash — that is a collision, and the table handles it by comparing within the bucket. But two equal objects with different hashes land in different buckets and the table can never match them up. You get a set containing two things you consider identical, and a dictionary that cannot find a key you are certain you stored.
+The reverse need not hold. Two unequal objects may share a hash. That is a collision, and the table handles it by comparing within the bucket. But two equal objects with different hashes land in different buckets and the table can never match them up. You get a set containing two things you consider identical, and a dictionary that cannot find a key you are certain you stored.
 
 Python protects you from half of this: defining `__eq__` sets `__hash__` to `None`, so instances are unhashable until you write a hash yourself. Write it over exactly the fields equality uses:
 
@@ -57,11 +57,11 @@ Hashing a tuple of the fields is the idiom. It is correct, it is fast, and it st
 
 A key must be **hashable**, which means it has a `__hash__` that never changes for the life of the object and an `__eq__` consistent with it.
 
-Immutable built-ins qualify: numbers, strings, bytes, tuples, frozensets, `None`. Lists, dicts and sets do not, and a tuple containing a list does not either — a tuple's hash is computed from its elements, so it inherits their hashability.
+Immutable built-ins qualify: numbers, strings, bytes, tuples, frozensets, `None`. Lists, dicts and sets do not, and a tuple containing a list does not either: a tuple's hash is computed from its elements, so it inherits their hashability.
 
 Objects you define are hashable by default, using identity, which is exactly right for objects whose equality is identity and exactly wrong the moment you add `__eq__` without `__hash__`.
 
-The genuinely dangerous case is an object that is hashable and mutable. Put it in a dict, change a field the hash depends on, and the entry is still in the old bucket while lookups now go to the new one. The key is not lost from memory — you can still find it by iterating — but it is unreachable by lookup, which is a bug that looks like the dictionary lying to you. Keys should be immutable in the fields their hash uses, and `frozen=True` on a dataclass is the tidy way to guarantee it.
+The genuinely dangerous case is an object that is hashable and mutable. Put it in a dict, change a field the hash depends on, and the entry is still in the old bucket while lookups now go to the new one. The key is not lost from memory (you can still find it by iterating), but it is unreachable by lookup, which is a bug that looks like the dictionary lying to you. Keys should be immutable in the fields their hash uses, and `frozen=True` on a dataclass is the tidy way to guarantee it.
 
 ## What a hash is actually for
 
@@ -71,7 +71,7 @@ Finding an item in a list of a million elements means comparing against up to a 
 
 Stable means two things. Within one run, an object's hash must never change while it is in a table, because the table will not be told to move it. Across runs it need not be stable at all, and for strings it deliberately is not: Python randomises string hashing per process by default, so that an attacker cannot craft input that collides into one bucket and turns your dictionary into a linked list. That is why `hash("abc")` gives a different number each time you start Python, and why writing a hash to a file as an identifier is a mistake.
 
-Collisions are normal and cheap — the table keeps looking in nearby slots and compares for equality as it goes. An inconsistent hash is not a collision. It is the table looking in a place the key was never put.
+Collisions are normal and cheap, the table keeps looking in nearby slots and compares for equality as it goes. An inconsistent hash is not a collision. It is the table looking in a place the key was never put.
 
 ## Comparing objects of different types
 
@@ -86,13 +86,13 @@ For your own classes this shows up as a class with `__eq__` that cannot be sorte
 `bool` is a subclass of `int`, and `True` really does equal `1`. Consequences worth knowing before they surprise you:
 
 ```python
-{1: "one", True: "two"}      # {1: 'two'} — one key
-{1, True, 1.0}               # {1} — one element
+{1: "one", True: "two"}      # {1: 'two'}, one key
+{1, True, 1.0}               # {1}, one element
 ["a", "b"][True]             # 'b'
 sum([True, True, False])     # 2
 ```
 
-`1 == True` and `hash(1) == hash(True)`, so a dict cannot tell them apart and the second assignment overwrites the first while keeping the original key object. It is rarely what you want and occasionally very useful — counting truths with `sum` is idiomatic.
+`1 == True` and `hash(1) == hash(True)`, so a dict cannot tell them apart and the second assignment overwrites the first while keeping the original key object. It is rarely what you want and occasionally very useful: counting truths with `sum` is idiomatic.
 
 ## Truthiness in full
 
@@ -118,8 +118,8 @@ x is x          # True
 [x] == [x]      # True
 ```
 
-IEEE 754 requires that a not-a-number value compares unequal to everything including itself, so `==` is quite right. The list comparison is `True` because containers check identity first as a shortcut — which means a `nan` inside a list behaves differently from a bare one. Use `math.isnan(x)` when you need to ask.
+IEEE 754 requires that a not-a-number value compares unequal to everything including itself, so `==` is quite right. The list comparison is `True` because containers check identity first as a shortcut, which means a `nan` inside a list behaves differently from a bare one. Use `math.isnan(x)` when you need to ask.
 
 ## What to carry forward
 
-`is` is identity and cannot be overridden; `==` is a question the object answers. Equal objects must hash equal, which is why defining `__eq__` removes hashing until you supply `__hash__` over the same fields. Keys must be immutable in whatever their hash reads. `True` is `1` and shares its hash. And `if x:` conflates absent with empty, so use `is None` whenever those two mean different things — which, in a function signature, is nearly always.
+`is` is identity and cannot be overridden; `==` is a question the object answers. Equal objects must hash equal, which is why defining `__eq__` removes hashing until you supply `__hash__` over the same fields. Keys must be immutable in whatever their hash reads. `True` is `1` and shares its hash. And `if x:` conflates absent with empty, so use `is None` whenever those two mean different things, which, in a function signature, is nearly always.

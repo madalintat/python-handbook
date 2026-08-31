@@ -29,7 +29,7 @@ The practical consequence is that there is no separate category of "things you c
 
 `a + b` is not a primitive. It is a request, which Python turns into `type(a).__add__(a, b)`. When that returns the special value `NotImplemented`, Python tries the reflected form on the right operand, `type(b).__radd__(b, a)`, and only when both decline does it raise `TypeError`.
 
-Every operator works this way, and the double-underscore methods — *dunders* — are how you take part:
+Every operator works this way, and the double-underscore methods, *dunders*, are how you take part:
 
 | You write | Python calls |
 | --- | --- |
@@ -46,7 +46,7 @@ Every operator works this way, and the double-underscore methods — *dunders* �
 | `with a:` | `a.__enter__()`, `a.__exit__()` |
 | `if a:` | `a.__bool__()`, or `a.__len__()` |
 
-None of these are hooks bolted on for extensibility. They are the actual implementation: `len("abc")` really does call `str.__len__`. Your own classes are not second-class citizens of the language, they are participants in the same protocol as everything built in.
+None of these are hooks bolted on for extensibility. They are the actual implementation: `len("abc")` really does call `str.__len__`. Your own classes are not second-class citizens of the language. They are participants in the same protocol as everything built in.
 
 One important detail: for these implicit calls Python looks the dunder up **on the type**, not on the instance. Assigning `obj.__len__ = ...` does not change what `len(obj)` does. That is why the table above says `type(a).__add__` rather than `a.__add__`, and unit 20 explains why it has to work that way.
 
@@ -81,13 +81,13 @@ That last clause is the one that catches people. **An object with neither method
 
 Anything with `__iter__` can be used in a `for` loop, whether or not it inherits from anything. Anything with `__len__` works with `len()`. There is no interface to declare and no base class to inherit from, and a function written against "something I can iterate" works with lists, files, generators, database cursors and a class you write this afternoon.
 
-The cost is that the requirement is invisible. A function that calls `.read()` on its argument documents that requirement nowhere the reader or the type checker can see. `typing.Protocol` is the fix — the same structural idea, written down so mypy can check it — and unit 24 gets to it.
+The cost is that the requirement is invisible. A function that calls `.read()` on its argument documents that requirement nowhere the reader or the type checker can see. `typing.Protocol` is the fix, the same structural idea, written down so mypy can check it, and unit 24 gets to it.
 
 ## What `type` and `isinstance` ask
 
 `type(x) is C` asks whether `x` is exactly a `C`. `isinstance(x, C)` asks whether `x` is a `C` or anything derived from one.
 
-Almost always you want `isinstance`, because rejecting subclasses defeats the point of having them. And usually you want neither: the duck-typed version — try the operation, or check for the method — accommodates types you have never heard of. A tower of `isinstance` checks is often a hint that the behaviour belongs on the objects themselves as a method they each implement differently.
+Almost always you want `isinstance`, because rejecting subclasses defeats the point of having them. And usually you want neither: the duck-typed version (try the operation, or check for the method) accommodates types you have never heard of. A tower of `isinstance` checks is often a hint that the behaviour belongs on the objects themselves as a method they each implement differently.
 
 ## `NotImplemented` is a value, not an error
 
@@ -103,9 +103,9 @@ Note the name carefully. `NotImplemented` is a value you return. `NotImplemented
 
 Two dunders that must be written as a pair, because Python enforces a relationship between them.
 
-Define `__eq__` on a class and Python sets that class's `__hash__` to `None`, making instances unhashable — they can no longer go in a set or be used as a dict key. This is not spite. A hash table finds a key by hashing it and then comparing for equality, so two objects that compare equal must hash equal, or the table will look in the wrong bucket and never find what it stored. Rather than let you build that bug, Python removes hashing until you say what the hash should be.
+Define `__eq__` on a class and Python sets that class's `__hash__` to `None`, making instances unhashable. They can no longer go in a set or be used as a dict key. This is not spite. A hash table finds a key by hashing it and then comparing for equality, so two objects that compare equal must hash equal, or the table will look in the wrong bucket and never find what it stored. Rather than let you build that bug, Python removes hashing until you say what the hash should be.
 
-If your objects are immutable in the fields that define equality, write `__hash__` returning a hash of the same fields, usually `hash((self.x, self.y))`. If they are mutable, leaving them unhashable is the correct outcome — a key whose hash changes after insertion is genuinely lost inside the dictionary. Unit 04 works this through properly; the thing to carry from here is that the two methods are one decision.
+If your objects are immutable in the fields that define equality, write `__hash__` returning a hash of the same fields, usually `hash((self.x, self.y))`. If they are mutable, leaving them unhashable is the correct outcome: a key whose hash changes after insertion is genuinely lost inside the dictionary. Unit 04 works this through properly; the thing to carry from here is that the two methods are one decision.
 
 ## Which protocols are worth knowing
 
@@ -113,7 +113,7 @@ There are around a hundred dunders. You will use perhaps fifteen, and they clust
 
 **Representation**: `__repr__`, `__str__`, `__format__`. **Comparison**: `__eq__`, `__lt__` and friends, plus `__hash__`. **Containers**: `__len__`, `__getitem__`, `__setitem__`, `__contains__`, `__iter__`. **Context**: `__enter__` and `__exit__`, which are what `with` compiles into. **Callables**: `__call__`, which makes an instance usable as a function. **Attributes**: `__getattr__`, `__setattr__`, `__getattribute__`, covered in unit 19.
 
-The rest — numeric operators, buffers, coroutines, pickling — you implement when you are building the specific kind of thing that needs them, and look up at the time. The Python data model reference is one page and worth reading once, slowly, at some point after unit 22.
+The rest (numeric operators, buffers, coroutines, pickling) you implement when you are building the specific kind of thing that needs them, and look up at the time. The Python data model reference is one page and worth reading once, slowly, at some point after unit 22.
 
 ## What to carry forward
 

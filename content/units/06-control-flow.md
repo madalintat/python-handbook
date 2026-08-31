@@ -40,7 +40,7 @@ Iterating a dictionary gives you its **keys**, not its values and not its pairs.
 
 Both take a keyword argument that most people never discover, and both are worth setting deliberately.
 
-`enumerate(things, start=1)` counts from one, which is what you want for anything a human reads — line numbers, ranked results, step counts. The default of zero is right for indices and wrong for prose.
+`enumerate(things, start=1)` counts from one, which is what you want for anything a human reads, line numbers, ranked results, step counts. The default of zero is right for indices and wrong for prose.
 
 `zip(a, b, strict=True)` raises when the two inputs are different lengths. The default silently stops at the shorter one, which is occasionally what you want and is far more often a bug that hides a data problem: two lists that were supposed to correspond, one of them short, and the extra rows quietly dropped with nothing to show for it. Added in 3.10, and worth making a habit.
 
@@ -71,7 +71,7 @@ else:
     print("no match found")
 ```
 
-The `else` runs **when the loop finished without breaking**. Not when the loop body never ran, and not when the collection was empty — an empty collection completes without breaking, so the `else` runs.
+The `else` runs **when the loop finished without breaking**. Not when the loop body never ran, and not when the collection was empty. An empty collection completes without breaking, so the `else` runs.
 
 Read it as "if we got all the way through without finding anything", and it is genuinely useful for search loops, because it removes the `found = False` flag that would otherwise be needed. Read it as "if the loop did not run", which is what the keyword suggests, and you will get it wrong every time. Many experienced Python programmers avoid it for that reason alone, and that is a defensible position.
 
@@ -85,7 +85,7 @@ Put the loops in a function and `return`, which is usually clearest and has the 
 
 Use a flag, which is explicit and verbose.
 
-Or restructure so there is only one loop — `itertools.product` turns nested iteration into a single loop over pairs:
+Or restructure so there is only one loop, `itertools.product` turns nested iteration into a single loop over pairs:
 
 ```python
 for row, col in itertools.product(range(h), range(w)):
@@ -105,7 +105,7 @@ while True:
 
 That reads better than it looks, because it puts the exit condition exactly where the information arrives rather than forcing it to the top before the value exists. It is also the shape the walrus operator was designed to compress.
 
-The failure mode of `while` is the loop whose condition can never become false, and it has two common causes. The first is forgetting to advance: reading from a source without consuming it, or comparing against a variable nothing updates. The second is subtler — a `continue` placed above the line that advances the counter, so every pass through that branch skips the increment. `for` avoids both by taking responsibility for advancing, which is one reason to prefer it whenever the number of iterations is knowable.
+The failure mode of `while` is the loop whose condition can never become false, and it has two common causes. The first is forgetting to advance: reading from a source without consuming it, or comparing against a variable nothing updates. The second is subtler, a `continue` placed above the line that advances the counter, so every pass through that branch skips the increment. `for` avoids both by taking responsibility for advancing, which is one reason to prefer it whenever the number of iterations is knowable.
 
 ## `match` is not a switch
 
@@ -127,7 +127,7 @@ match command:
 
 Each `case` is a **pattern**, and patterns come in kinds: literal patterns (`case 0:`), sequence patterns (`case [a, b]:`), mapping patterns (`case {"k": v}:`), class patterns (`case Point(x=0):`), and the wildcard `_`.
 
-Sequence patterns match lists and tuples and any other sequence — but deliberately **not** strings or bytes, because matching a string as a sequence of characters is almost never what anyone means.
+Sequence patterns match lists and tuples and any other sequence, but deliberately **not** strings or bytes, because matching a string as a sequence of characters is almost never what anyone means.
 
 Mapping patterns match on a subset: `case {"action": "quit"}` matches a dictionary that has that key with that value, whatever else it also contains.
 
@@ -154,7 +154,7 @@ case constants.RED:    # also compares
 
 So constants used in patterns need to live on a class, an enum or a module. An `Enum` is the tidy answer, and it is one of the better reasons to reach for one.
 
-Guards handle the rest — an `if` attached to a case, evaluated only after the pattern matched:
+Guards handle the rest, an `if` attached to a case, evaluated only after the pattern matched:
 
 ```python
 case [x, y] if x == y:
@@ -164,9 +164,9 @@ case [x, y] if x == y:
 
 A chain of `elif` comparisons and a `match` are not the same tool with different syntax, and the difference is what the pattern can express.
 
-`elif` compares values. To pull apart a structure it needs separate code: check the type, check the length, then index into it, then bind the pieces to names — four steps that can each be wrong and none of which state the shape you were expecting.
+`elif` compares values. To pull apart a structure it needs separate code: check the type, check the length, then index into it, then bind the pieces to names, four steps that can each be wrong and none of which state the shape you were expecting.
 
-A pattern states the shape and does all four at once. `case ["move", direction]:` says: a sequence, of length two, whose first element equals `"move"`, and bind the second to `direction`. If any part fails the case simply does not match and the next one is tried. That is worth having when the data really is structured — parsed commands, JSON documents, ASTs, message envelopes.
+A pattern states the shape and does all four at once. `case ["move", direction]:` says: a sequence, of length two, whose first element equals `"move"`, and bind the second to `direction`. If any part fails the case simply does not match and the next one is tried. That is worth having when the data really is structured, parsed commands, JSON documents, ASTs, message envelopes.
 
 When you are comparing one value against a handful of constants, `elif` remains perfectly good and a dictionary lookup is often better still:
 
@@ -190,7 +190,7 @@ for _ in range(3):
 first, _, third = row
 ```
 
-The name really is bound in those cases — it is only inside a `match` pattern that it is special. And in the REPL, `_` is separately bound to the last result, which is why using it as a throwaway in an interactive session occasionally surprises you.
+The name really is bound in those cases. It is only inside a `match` pattern that it is special. And in the REPL, `_` is separately bound to the last result, which is why using it as a throwaway in an interactive session occasionally surprises you.
 
 ## Loops that should not be loops
 
@@ -206,4 +206,4 @@ The version with a `for`, a flag and a `break` is four lines that a reader has t
 
 ## What to carry forward
 
-`for` iterates whatever an object's iterator produces and never counts, so `range(len(x))` is a smell and `enumerate` and `zip` are the fixes. Iterating a dict gives keys. `break` and `continue` affect only the innermost loop and there is no label; use a function and `return` to escape two. The loop `else` runs when no `break` happened, which is not what the word suggests. And in `match`, a bare name captures rather than compares — constants must be dotted.
+`for` iterates whatever an object's iterator produces and never counts, so `range(len(x))` is a smell and `enumerate` and `zip` are the fixes. Iterating a dict gives keys. `break` and `continue` affect only the innermost loop and there is no label; use a function and `return` to escape two. The loop `else` runs when no `break` happened, which is not what the word suggests. And in `match`, a bare name captures rather than compares, so constants must be dotted.

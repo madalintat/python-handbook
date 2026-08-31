@@ -3,13 +3,13 @@ slug: 07-functions
 title: Functions
 ---
 
-A `def` statement is an instruction that runs. When it runs it builds a function object — evaluating the default expressions on the way — and binds a name to it. Everything surprising about Python functions follows from those two facts, and this unit spends most of its time on the parameter list, which is more expressive than almost anyone uses.
+A `def` statement is an instruction that runs. When it runs it builds a function object, evaluating the default expressions on the way, and binds a name to it. Everything surprising about Python functions follows from those two facts, and this unit spends most of its time on the parameter list, which is more expressive than almost anyone uses.
 
 ## Parameters and arguments
 
 A **parameter** is a name in the definition. An **argument** is a value at the call site. Keeping the words apart makes the rest of this readable.
 
-Python matches them in a fixed order. Positional arguments fill parameters left to right, keyword arguments fill by name, and anything left over goes to `*args` or `**kwargs` if they exist and is an error if they do not. A parameter filled twice — once positionally and once by name — is an error too, and the message says so.
+Python matches them in a fixed order. Positional arguments fill parameters left to right, keyword arguments fill by name, and anything left over goes to `*args` or `**kwargs` if they exist and is an error if they do not. A parameter filled twice, once positionally and once by name, is an error too, and the message says so.
 
 At the call site, positional arguments must come before keyword arguments. `f(1, x=2)` is fine; `f(x=2, 1)` is a `SyntaxError`, because otherwise the reader would have to count to know which parameter `1` fills.
 
@@ -21,7 +21,7 @@ Calling a function binds its parameter names to the very objects the caller pass
 
 The often-repeated question "is Python pass by value or pass by reference?" has no useful answer, because it is neither in the sense those terms usually carry. The value passed is a reference, and the name receiving it is an ordinary local name. Once you think in names and objects the question stops being interesting.
 
-The practical rule that falls out: if a function must not modify what it was handed, either copy it at the top of the body or, better, do not modify it — build and return something new. And when you do intend to modify, say so in the name. `sort_in_place(rows)` and `sorted_rows(rows)` are both fine; `process(rows)` tells the reader nothing about which one it is.
+The practical rule that falls out: if a function must not modify what it was handed, either copy it at the top of the body or, better, do not modify it at all. Build and return something new. And when you do intend to modify, say so in the name. `sort_in_place(rows)` and `sorted_rows(rows)` are both fine; `process(rows)` tells the reader nothing about which one it is.
 
 ## The full parameter list
 
@@ -31,7 +31,7 @@ The complete form has five sections, and the two markers are punctuation rather 
 def f(a, b, /, c, d, *args, e, f=1, **kwargs):
 ```
 
-Everything before `/` is **positional-only**: it cannot be passed by name. Everything between `/` and `*` is ordinary. `*args` collects surplus positional arguments into a tuple. Everything after `*args` — or after a bare `*` — is **keyword-only**: it cannot be passed positionally. `**kwargs` collects surplus keyword arguments into a dict.
+Everything before `/` is **positional-only**: it cannot be passed by name. Everything between `/` and `*` is ordinary. `*args` collects surplus positional arguments into a tuple. Everything after `*args`, or after a bare `*`, is **keyword-only**: it cannot be passed positionally. `**kwargs` collects surplus keyword arguments into a dict.
 
 You will rarely use all five. The two worth reaching for deliberately:
 
@@ -42,7 +42,7 @@ def connect(host, *, timeout=30, retry=True):
 connect("db.local", timeout=5)        # the only legal form
 ```
 
-**Positional-only parameters**, with `/`, free you to rename a parameter later without breaking callers, because nobody can depend on the name. Most builtins are positional-only for exactly that reason — `len(obj=x)` is an error.
+**Positional-only parameters**, with `/`, free you to rename a parameter later without breaking callers, because nobody can depend on the name. Most builtins are positional-only for exactly that reason, `len(obj=x)` is an error.
 
 ## Defaults are evaluated once, at definition time
 
@@ -53,7 +53,7 @@ def stamp(at=time.time()):
     return at
 ```
 
-`time.time()` runs once, when the `def` statement executes, and the result is stored on the function object. Every call that omits the argument gets that same moment, forever. Unit 02 covered the mutable version of this — the `[]` that every caller shares — and this is the same mechanism with a different symptom: not a shared object that grows, but a value frozen at import time.
+`time.time()` runs once, when the `def` statement executes, and the result is stored on the function object. Every call that omits the argument gets that same moment, forever. Unit 02 covered the mutable version of this (the `[]` that every caller shares), and this is the same mechanism with a different symptom: not a shared object that grows, but a value frozen at import time.
 
 You can inspect the stored defaults directly:
 
@@ -67,7 +67,7 @@ A related rule: a default expression cannot refer to another parameter. `def f(a
 
 ## `*args` and `**kwargs`
 
-Inside the function, `args` is a tuple and `kwargs` is a dict — real objects, built fresh on every call, and `kwargs` in particular is a new dictionary each time, so mutating it cannot affect the caller.
+Inside the function, `args` is a tuple and `kwargs` is a dict, real objects, built fresh on every call, and `kwargs` in particular is a new dictionary each time, so mutating it cannot affect the caller.
 
 At the call site the same symbols mean the opposite thing: they **spread** rather than collect.
 
@@ -92,7 +92,7 @@ def wrapper(*args, **kwargs):
 
 Every function returns something. A bare `return` returns `None`, and falling off the end returns `None`, which is why a forgotten `return` produces a `None` several lines away from the mistake rather than an error at the mistake.
 
-`return a, b` returns one object — a tuple — because it is the comma that builds it. The caller usually unpacks it, and unpacking is checked: too many or too few values raises `ValueError` naming both counts.
+`return a, b` returns one object, a tuple, because it is the comma that builds it. The caller usually unpacks it, and unpacking is checked: too many or too few values raises `ValueError` naming both counts.
 
 The standard library's convention, from unit 02, is worth restating as a rule for your own functions: if it mutates, return `None`; if it computes, return the result and leave the inputs alone.
 
@@ -115,7 +115,7 @@ A docstring is not a comment. It is a string literal in the first statement posi
 
 The convention is one summary line in the imperative mood, a blank line, then detail if there is any. What is worth documenting is the part the signature cannot say: what the function does with its arguments, what it raises, and anything a caller must not assume. Restating the parameter names in prose adds nothing that the signature does not already carry.
 
-Two habits make signatures do more work. Keep parameter counts small — a function needing six arguments is usually two functions, or one that should take an object. And prefer keyword-only parameters for anything a reader could not identify from position alone, which in practice means every boolean and every optional tuning value.
+Two habits make signatures do more work. Keep parameter counts small: a function needing six arguments is usually two functions, or one that should take an object. And prefer keyword-only parameters for anything a reader could not identify from position alone, which in practice means every boolean and every optional tuning value.
 
 ```python
 def render(template, *, escape=True, indent=2):
@@ -136,7 +136,7 @@ def multiplier(n):
 double = multiplier(2)
 ```
 
-`double` still knows what `n` is, because the inner function captured the enclosing variable rather than copying its value. That distinction — variable, not value — is the whole content of unit 08, and it is the reason building functions in a loop rarely does what people expect the first time.
+`double` still knows what `n` is, because the inner function captured the enclosing variable rather than copying its value. That distinction (variable, not value) is the whole content of unit 08, and it is the reason building functions in a loop rarely does what people expect the first time.
 
 ## Annotations do nothing
 
@@ -145,7 +145,7 @@ def area(r: float) -> float:
     return 3.14159 * r * r
 ```
 
-The annotations are evaluated and stored in `area.__annotations__`, and **nothing checks them**. Passing a string raises only when the arithmetic fails, and passing something that happens to work does not raise at all. They are documentation that a separate tool — mypy, in this book — can verify.
+The annotations are evaluated and stored in `area.__annotations__`, and **nothing checks them**. Passing a string raises only when the arithmetic fails, and passing something that happens to work does not raise at all. They are documentation that a separate tool (mypy, in this book) can verify.
 
 That is a deliberate design choice rather than an omission, and unit 24 covers what it buys and costs. The practical note here is that annotating a function is what allows the second of this book's three judges to say anything about it at all: mypy does not look inside unannotated functions by default.
 

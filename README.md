@@ -2,7 +2,7 @@
 
 > Learn Python by finding out what it actually did.
 
-Rust stops you. Python agrees with you and then does something else — and that
+Rust stops you. Python agrees with you and then does something else, and that
 is the whole difficulty of the language. So this handbook runs your code past
 **three judges that disagree with each other**, and treats the disagreement as
 the lesson.
@@ -31,7 +31,7 @@ reason it exists:
 `silent` is mutable default arguments, late-binding closures, `is` on large
 integers, a shallow copy that shares its rows. Python's most expensive bugs are
 invisible to every static tool, so the exercise passes ruff, passes mypy, runs
-clean — and the hidden tests fail anyway.
+clean, and the hidden tests fail anyway.
 
 ## Running it
 
@@ -52,7 +52,7 @@ python3 -m http.server 8848 # then open http://127.0.0.1:8848
 
 `--net` is the one that matters. It asserts that each starter still produces the
 verdict its prose describes, that every code a judge emits has an explanation
-written for it, and that each starter still **fails its own hidden tests** — the
+written for it, and that each starter still **fails its own hidden tests**, the
 check that stops an exercise quietly becoming already-solved when the tools
 change their diagnostics.
 

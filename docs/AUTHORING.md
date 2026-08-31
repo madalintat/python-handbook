@@ -60,7 +60,7 @@ code that passes
 ~~~
 ````
 
-### `@expect` — the four verdict kinds
+### `@expect`, the four verdict kinds
 
 | Directive | Means |
 | --- | --- |
@@ -90,7 +90,7 @@ cannot fall behind the tools.
 ### `@hint`
 
 At least one, as many as the exercise deserves. A hint is a sentence that makes
-the reader see the error. It is never the corrected code — solutions exist in
+the reader see the error. It is never the corrected code. Solutions exist in
 this repository and are compiled by the build, and are deliberately never shown.
 
 ### What `--validate` actually enforces
@@ -99,7 +99,7 @@ For every exercise, against real ruff, real mypy and real CPython:
 
 1. the starter alone produces the verdict its `@expect` lines claim;
 2. every code either judge reports has an `@diagnose`;
-3. the starter **fails its own hidden tests** — otherwise the exercise is
+3. the starter **fails its own hidden tests**, otherwise the exercise is
    already solved and nobody would notice;
 4. a `silent` starter fails with `AssertionError` specifically, not by crashing;
 5. the solution passes the tests and is clean under both static judges.
@@ -111,7 +111,7 @@ meaning what it says.
 
 - **mypy only checks annotated functions.** An unannotated `def f(x):` has an
   implicitly `Any` parameter and mypy will not look inside the body. If an
-  exercise needs a mypy verdict, the starter must carry annotations — which is
+  exercise needs a mypy verdict, the starter must carry annotations, which is
   itself worth saying to the reader.
 - **ruff runs `E,F,B,SIM,UP` with `E501` ignored.** Line length is a formatting
   opinion and not a teaching signal.
@@ -131,7 +131,7 @@ belonging to a later unit:
 VOCABULARY  01-names #6 One level deep: solution uses comprehension before the reader has met it
 ```
 
-`BASELINE` is what the book assumes on page one — `def`, `for`, `if`, calls,
+`BASELINE` is what the book assumes on page one, `def`, `for`, `if`, calls,
 attribute access, f-strings, annotations, the four container literals. Everything
 else has to be introduced somewhere before it can be used.
 
@@ -139,7 +139,7 @@ Two rules follow when you hit a violation:
 
 **Do not weaken the gate to make an exercise pass.** Either rewrite the solution
 using what is available, or move the feature to the unit whose note genuinely
-teaches it. The second is legitimate — a note that shows `sorted()` while
+teaches it. The second is legitimate, a note that shows `sorted()` while
 explaining in-place versus returning has introduced `sorted`, and `INTRODUCES`
 should say so.
 

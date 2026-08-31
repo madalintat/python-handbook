@@ -9,7 +9,7 @@ slug: 01-names
 @expect silent
 @hint How many list objects does this function create? Count them. The answer is not one more than it started with.
 @hint `result = items` binds a second name. Binding never copies.
-@diagnose silent Every judge is happy. ruff has nothing to say, mypy has nothing to say, and the program ran to completion without raising. It is still wrong, and this is the failure mode this whole book exists for. `result = items` did not make a list — it made a second name for the list the caller handed you, so `result.append` reached straight through and modified theirs.
+@diagnose silent Every judge is happy. ruff has nothing to say, mypy has nothing to say, and the program ran to completion without raising. It is still wrong, and this is the failure mode this whole book exists for. `result = items` did not make a list. It made a second name for the list the caller handed you, so `result.append` reached straight through and modified theirs.
 
 ~~~starter
 def add_item(items, value):
@@ -42,7 +42,7 @@ def add_item(items, value):
 @expect ruff:F841
 @hint Assigning to a parameter name inside a function only ever affects that function's local namespace.
 @hint There is a list method that empties a list in place. Find it.
-@diagnose F841 ruff caught this one, and the message is the whole lesson: the local variable `items` is assigned and never used again. That is ruff telling you the assignment could not possibly have had an effect outside this function. Compare it with the previous exercise, where ruff had nothing at all to say about an equally broken function — the difference is that rebinding a name to a value nobody reads is a *visible* pattern, and mutating the wrong object is not.
+@diagnose F841 ruff caught this one, and the message is the whole lesson: the local variable `items` is assigned and never used again. That is ruff telling you the assignment could not possibly have had an effect outside this function. Compare it with the previous exercise, where ruff had nothing at all to say about an equally broken function, the difference is that rebinding a name to a value nobody reads is a *visible* pattern, and mutating the wrong object is not.
 @diagnose silent The program ran without raising, which is the point: nothing here is an error. `items = []` pointed the local name at a brand new empty list and then the function ended and that name ceased to exist. The caller's list was never touched.
 
 ~~~starter
@@ -102,7 +102,7 @@ def collect(item, into=None):
 @expect silent
 @hint `is` and `==` ask two different questions. One is about objects, the other is about values.
 @hint Try it in your head with `256` and then with `257`, and ask why the answer would change.
-@diagnose silent Nothing raised, and for most inputs this function even returns the right answer — which is what makes it dangerous. `is` compares identity: are these two names pointing at one object? CPython pre-builds the integers from -5 to 256 and hands out the same object every time, so `a is b` accidentally agrees with `a == b` across that range. Above it, `int("1000")` builds a fresh object and the illusion collapses. Use `is` only for `None`, `True`, `False`, and real "same object?" questions.
+@diagnose silent Nothing raised, and for most inputs this function even returns the right answer, which is what makes it dangerous. `is` compares identity: are these two names pointing at one object? CPython pre-builds the integers from -5 to 256 and hands out the same object every time, so `a is b` accidentally agrees with `a == b` across that range. Above it, `int("1000")` builds a fresh object and the illusion collapses. Use `is` only for `None`, `True`, `False`, and real "same object?" questions.
 
 ~~~starter
 def same_value(a, b):
@@ -129,9 +129,9 @@ def same_value(a, b):
 @expect raises:AttributeError
 @expect mypy:attr-defined
 @hint Which of Python's built-in types can be changed in place? `str` is not among them.
-@hint This is the first exercise with type annotations on it. That is not decoration — it is what lets the second judge say anything at all.
+@hint This is the first exercise with type annotations on it. That is not decoration. It is what lets the second judge say anything at all.
 @hint Every string method returns a new string. None of them modify the one you called them on.
-@diagnose AttributeError At runtime, `str` objects simply have no `append` method, so the attribute lookup fails. This is the honest answer and it arrives only when that line actually executes — if `shout` sat behind an `if` that was rarely true, you would meet this in production rather than here.
+@diagnose AttributeError At runtime, `str` objects simply have no `append` method, so the attribute lookup fails. This is the honest answer and it arrives only when that line actually executes, if `shout` sat behind an `if` that was rarely true, you would meet this in production rather than here.
 @diagnose attr-defined mypy said the same thing without running anything. It knows the parameter is used as a `str` and it knows `str` has no `append`, so it reports `attr-defined` at check time. This is the case for type checking in one line: the same defect, found before the program ran, on a line that never had to execute.
 
 ~~~starter
@@ -165,7 +165,7 @@ print(shout("hello"))
 @expect silent
 @hint `list(grid)` builds a new outer list. What does it put inside that new list?
 @hint The rows are objects too, and the new outer list holds the very same row objects.
-@diagnose silent No judge can help you here, because nothing is wrong with the code as code. `list(grid)` genuinely copies — it makes a new list, and appending to it would not touch the original. What it copies are the *references* the original held, so the new outer list points at exactly the same row objects. That is a **shallow copy**, and it is what `list()`, `dict()`, `set()` and `copy.copy` all give you. To get independent rows you have to copy each row as well, which means a loop that copies one row at a time. Unit 02 gives this its proper name and shows the tool for copying all the way down.
+@diagnose silent No judge can help you here, because nothing is wrong with the code as code. `list(grid)` genuinely copies. It makes a new list, and appending to it would not touch the original. What it copies are the *references* the original held, so the new outer list points at exactly the same row objects. That is a **shallow copy**, and it is what `list()`, `dict()`, `set()` and `copy.copy` all give you. To get independent rows you have to copy each row as well, which means a loop that copies one row at a time. Unit 02 gives this its proper name and shows the tool for copying all the way down.
 
 ~~~starter
 def duplicate(grid):
@@ -198,7 +198,7 @@ def duplicate(grid):
 @expect ruff:F821
 @hint `del` takes a name, not a value. Ask what `del last` actually deletes.
 @hint The list element and the name `last` are different things. Removing one does not require removing the other.
-@diagnose F821 ruff got there first, without running anything: `F821 Undefined name last`. It read the function, saw the `del`, and saw a read of that name afterwards. This is the same defect CPython reports below, found statically — and it is worth noticing that the two judges describe it in different vocabulary. ruff says the name is undefined; CPython says the local variable is not associated with a value. They are the same sentence at different distances.
+@diagnose F821 ruff got there first, without running anything: `F821 Undefined name last`. It read the function, saw the `del`, and saw a read of that name afterwards. This is the same defect CPython reports below, found statically, and it is worth noticing that the two judges describe it in different vocabulary. ruff says the name is undefined; CPython says the local variable is not associated with a value. They are the same sentence at different distances.
 @diagnose UnboundLocalError `del last` did not delete the integer. It unbound the local name `last`, leaving the object alive but unreachable from this function, and then the very next line tried to read that name. `UnboundLocalError` is what a `NameError` is called when the name is local and the compiler knows it should have existed. Note the asymmetry: `del items[-1]` removes an element from a container, while `del last` removes a name from a namespace. Same keyword, two different targets.
 
 ~~~starter
@@ -236,9 +236,9 @@ Two baskets are created and only one of them has anything added to it. Check wha
 
 @expect silent
 @expect mypy:var-annotated
-@hint Where does `items = []` live — on the class, or on each instance?
+@hint Where does `items = []` live, on the class, or on each instance?
 @hint `self.items.append(...)` looks up `items`, does not find it on the instance, and falls back to the class.
-@diagnose var-annotated mypy cannot infer what a bare `[]` is a list *of*, so it asks you to annotate it. That is not the bug — but it is mypy standing next to the bug and pointing at the same line, which is often how a type checker earns its place. Annotating it as `list[str]` would silence mypy and leave the sharing bug completely intact. Silencing a checker is not the same as fixing anything.
+@diagnose var-annotated mypy cannot infer what a bare `[]` is a list *of*, so it asks you to annotate it. That is not the bug, but it is mypy standing next to the bug and pointing at the same line, which is often how a type checker earns its place. Annotating it as `list[str]` would silence mypy and leave the sharing bug completely intact. Silencing a checker is not the same as fixing anything.
 @diagnose silent Runs clean, and every basket in your application now shares one list. `items = []` executed once, in the class body, so the list is an attribute of the class rather than of any instance. `self.items` finds nothing on the instance, falls back to the class attribute, and appends there. Because that is a mutation and not a rebinding, no instance ever gets its own list. Per-instance state has to be created per instance, which means inside `__init__`.
 
 ~~~starter

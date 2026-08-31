@@ -9,7 +9,7 @@ slug: 03-data-model
 @expect silent
 @hint `print(p)` and `print([p])` use different methods. Work out which one the list is using.
 @hint `str()` falls back to the other method when it is missing. The fallback does not go the other way.
-@diagnose silent It runs, and every place a programmer would actually look at this object shows `<__main__.Point object at 0x...>`. `__str__` is for the person using the program and is what `print` and `f"{x}"` call. `__repr__` is for the programmer: it is what the REPL shows, what appears for objects nested inside a printed container, and what `!r` and every decent log line uses. If you write only one, write `__repr__` — `str()` falls back to it, and the reverse is not true.
+@diagnose silent It runs, and every place a programmer would actually look at this object shows `<__main__.Point object at 0x...>`. `__str__` is for the person using the program and is what `print` and `f"{x}"` call. `__repr__` is for the programmer: it is what the REPL shows, what appears for objects nested inside a printed container, and what `!r` and every decent log line uses. If you write only one, write `__repr__`, `str()` falls back to it, and the reverse is not true.
 
 ~~~starter
 class Point:
@@ -45,7 +45,7 @@ class Point:
 @expect raises:TypeError
 @hint Defining `__eq__` changes what Python does with the class's `__hash__`.
 @hint A hash table finds a key by hashing it and then comparing. What must be true of two equal objects for that to work?
-@diagnose TypeError Defining `__eq__` sets the class's `__hash__` to `None`, so instances become unhashable and cannot go in a set or be used as a dict key. This is deliberate. A hash table locates a key by hashing it to a bucket and then comparing for equality inside that bucket, so two objects that compare equal must hash equal, or the table will search the wrong bucket and never find what it stored. Rather than let you build that bug, Python withdraws hashing until you state what the hash should be — normally a hash of exactly the fields equality uses.
+@diagnose TypeError Defining `__eq__` sets the class's `__hash__` to `None`, so instances become unhashable and cannot go in a set or be used as a dict key. This is deliberate. A hash table locates a key by hashing it to a bucket and then comparing for equality inside that bucket, so two objects that compare equal must hash equal, or the table will search the wrong bucket and never find what it stored. Rather than let you build that bug, Python withdraws hashing until you state what the hash should be, normally a hash of exactly the fields equality uses.
 
 ~~~starter
 class Tag:
@@ -88,7 +88,7 @@ print({Tag("a"), Tag("b")})
 @expect silent
 @hint `if x:` asks the object. What does it do when the object has nothing to say?
 @hint One method gives you both `len(basket)` and `if basket:` at once.
-@diagnose silent No error, and every basket is true. `if x:` consults `__bool__` first, falls back to `__len__` and calls the object true when the length is non-zero, and — when the class defines neither — simply calls it true. That default is the trap: an object that clearly represents emptiness is truthy unless you say otherwise. Implementing `__len__` fixes both `len(basket)` and `if basket:` from one method, which is why it is usually the right one to write.
+@diagnose silent No error, and every basket is true. `if x:` consults `__bool__` first, falls back to `__len__` and calls the object true when the length is non-zero, and, when the class defines neither, simply calls it true. That default is the trap: an object that clearly represents emptiness is truthy unless you say otherwise. Implementing `__len__` fixes both `len(basket)` and `if basket:` from one method, which is why it is usually the right one to write.
 
 ~~~starter
 class Basket:
@@ -129,7 +129,7 @@ class Basket:
 @hint There is a builtin whose entire job is this question.
 @hint Dunders are looked up on the type, not the instance. `hasattr` looks at the instance first.
 @diagnose B004 ruff's `B004` is "using `hasattr(x, '__call__')` to test if x is callable is unreliable; use `callable(x)`". The unreliability is the point: implicit dunder calls are resolved on the *type*, but `hasattr` searches the instance as well, so an object with a `__call__` attribute stuck on the instance answers yes to `hasattr` and still cannot be called. `callable()` asks the same question the interpreter asks.
-@diagnose silent It runs and returns the wrong label for the instance carrying a fake `__call__` attribute. `hasattr` found that attribute; calling the object would still fail, because Python looks `__call__` up on the type when it evaluates `obj()`. This gap between "the instance has an attribute" and "the type implements a protocol" is worth holding on to — unit 19 is largely about it.
+@diagnose silent It runs and returns the wrong label for the instance carrying a fake `__call__` attribute. `hasattr` found that attribute; calling the object would still fail, because Python looks `__call__` up on the type when it evaluates `obj()`. This gap between "the instance has an attribute" and "the type implements a protocol" is worth holding on to. Unit 19 is largely about it.
 
 ~~~starter
 def describe_all(values):
@@ -176,7 +176,7 @@ def describe_all(values):
 @hint `k in a` calls a method. Two different methods can satisfy it, and this class has neither.
 @hint The cheap fix delegates to the list the class already holds.
 @diagnose operator mypy reports `Unsupported right operand type for in ("Shelf")` without running anything. It knows the class defines neither `__contains__` nor `__iter__`, and therefore that `in` has nothing to call. Every protocol in this unit is visible to a type checker in exactly this way: a missing dunder is a missing method, and a missing method is something mypy can see.
-@diagnose TypeError `x in obj` calls `obj.__contains__(x)`. When the class does not define one, Python falls back to iterating with `__iter__` and comparing each item, and when there is no `__iter__` either it gives up with `argument of type 'Shelf' is not iterable`. That message is naming the fallback rather than the first choice, which is worth knowing when you read it. Define `__contains__` for an efficient answer, or `__iter__` if the class should be loopable anyway — and here, defining `__iter__` gets you `in`, `list()`, unpacking and `for` from one method.
+@diagnose TypeError `x in obj` calls `obj.__contains__(x)`. When the class does not define one, Python falls back to iterating with `__iter__` and comparing each item, and when there is no `__iter__` either it gives up with `argument of type 'Shelf' is not iterable`. That message is naming the fallback rather than the first choice, which is worth knowing when you read it. Define `__contains__` for an efficient answer, or `__iter__` if the class should be loopable anyway, and here, defining `__iter__` gets you `in`, `list()`, unpacking and `for` from one method.
 
 ~~~starter
 class Shelf:
@@ -259,7 +259,7 @@ print(len(Window(3, 4)))
 @hint When your `__add__` cannot handle the other operand, there is a value to return rather than an exception to raise.
 @hint Returning it lets Python offer the operation to the other side.
 @diagnose list-item mypy is objecting to the `sum()` call for the same underlying reason, and its complaint spells out the mechanism: `sum` is typed as starting from the integer `0`, so every element has to support being added to an `int`. `Money` does not, because it has no `__radd__`. Once the class declines properly with `NotImplemented` and provides `__radd__`, both the runtime failure and this one go away together.
-@diagnose TypeError Raising from inside `__add__` is the mistake, even though a `TypeError` is what should eventually come out. When your method cannot handle the other operand, return the singleton `NotImplemented`: that tells Python "I decline", and Python then offers the operation to the right-hand operand as `__radd__`. Only when both decline does Python raise, with a better message than yours naming both types. Raising immediately means a perfectly good `__radd__` — including the one these tests need for `sum()`, which starts from `0` — is never asked.
+@diagnose TypeError Raising from inside `__add__` is the mistake, even though a `TypeError` is what should eventually come out. When your method cannot handle the other operand, return the singleton `NotImplemented`: that tells Python "I decline", and Python then offers the operation to the right-hand operand as `__radd__`. Only when both decline does Python raise, with a better message than yours naming both types. Raising immediately means a perfectly good `__radd__`, including the one these tests need for `sum()`, which starts from `0`, is never asked.
 
 ~~~starter
 class Money:

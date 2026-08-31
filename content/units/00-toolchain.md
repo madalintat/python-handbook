@@ -5,7 +5,7 @@ title: The toolchain
 
 You type `python app.py` and something happens. This unit is about what.
 
-Not because you need it on day one — you can write working Python knowing none of it — but because almost every confusing thing later in this book becomes obvious the moment you know that Python compiles your source before running it, and that you can read what it produced.
+Not because you need it on day one. You can write working Python knowing none of it, but because almost every confusing thing later in this book becomes obvious the moment you know that Python compiles your source before running it, and that you can read what it produced.
 
 ## Python is compiled. It just does not tell you.
 
@@ -21,7 +21,7 @@ def broken(:
     pass
 ```
 
-Every other kind of mistake — a misspelled name, a wrong type, dividing by zero — compiles perfectly well and fails later, when that instruction is reached. That single distinction explains why Python catches so little before running, and it is the gap the other two judges in this book exist to close.
+Every other kind of mistake (a misspelled name, a wrong type, dividing by zero) compiles perfectly well and fails later, when that instruction is reached. That single distinction explains why Python catches so little before running, and it is the gap the other two judges in this book exist to close.
 
 ## You can read the bytecode
 
@@ -47,7 +47,7 @@ You get something close to:
 
 Four instructions. Push `a`, push `b`, add the top two, return. Everything in Python is built out of a few dozen operations like these, and when you cannot work out what a line does, disassembling it is faster than arguing about it.
 
-It is also how you catch the compiler doing work on your behalf. Compile `2 ** 10` and there is no exponentiation instruction at all — just `LOAD_CONST 1024`. The compiler folded the constant while building the bytecode, because both operands were known and would never change. That is a real optimisation pass, in a language people describe as not having a compiler.
+It is also how you catch the compiler doing work on your behalf. Compile `2 ** 10` and there is no exponentiation instruction at all, just `LOAD_CONST 1024`. The compiler folded the constant while building the bytecode, because both operands were known and would never change. That is a real optimisation pass, in a language people describe as not having a compiler.
 
 ## The `.pyc` and the directory you did not ask for
 
@@ -55,7 +55,7 @@ Compiling takes time, and for an imported module that time would be paid on ever
 
 Three things follow, and each surprises somebody:
 
-The directory appears without being asked for, contains no source, and belongs in `.gitignore`. The filename carries the interpreter version because bytecode is not portable between Python versions — a `.pyc` from 3.12 means nothing to 3.14. And the file you run directly is never cached, only the ones you import; a script has nothing to gain, because it is compiled once and then the process ends.
+The directory appears without being asked for, contains no source, and belongs in `.gitignore`. The filename carries the interpreter version because bytecode is not portable between Python versions: a `.pyc` from 3.12 means nothing to 3.14. And the file you run directly is never cached, only the ones you import; a script has nothing to gain, because it is compiled once and then the process ends.
 
 If a stale `.pyc` ever seems to be haunting you, delete the directory. It is a cache and nothing is lost.
 
@@ -94,7 +94,7 @@ uv run app.py            # run inside it, creating it if needed
 
 ## Two numbers, and what they promise
 
-`python --version` gives something like `3.14.2`. The first two numbers are what matter. A minor version bump — 3.13 to 3.14 — may add syntax, change performance characteristics, and remove things deprecated several versions earlier. The third number is bug fixes only and never changes behaviour you were relying on.
+`python --version` gives something like `3.14.2`. The first two numbers are what matter. A minor version bump, 3.13 to 3.14, may add syntax, change performance characteristics, and remove things deprecated several versions earlier. The third number is bug fixes only and never changes behaviour you were relying on.
 
 This book is written against 3.14, and where a feature is newer than 3.9 the unit says so. Two changes worth knowing about now: dictionaries have preserved insertion order as a language guarantee since 3.7, and since 3.13 there is an official build of CPython with no global interpreter lock, which unit 33 will get into properly.
 
@@ -117,7 +117,7 @@ True
 
 `python app.py` does a surprising amount of work before it reaches anything you wrote.
 
-It locates the interpreter, initialises it, and builds `sys.path` — the list of directories that imports are searched in, in order. The first entry is the directory containing the script you ran, which is the single most useful fact about the import system and the cause of its most common bug: a file of your own named `random.py` or `json.py` sitting next to your script will be found *before* the standard library, and everything that imports it gets yours instead.
+It locates the interpreter, initialises it, and builds `sys.path`, the list of directories that imports are searched in, in order. The first entry is the directory containing the script you ran, which is the single most useful fact about the import system and the cause of its most common bug: a file of your own named `random.py` or `json.py` sitting next to your script will be found *before* the standard library, and everything that imports it gets yours instead.
 
 Then it creates a module object for your file, sets its `__name__` to the string `"__main__"`, compiles the source, and executes the resulting bytecode from top to bottom in that module's namespace. A `def` statement is not a declaration processed ahead of time; it is an instruction that runs when reached, building a function object and binding a name to it. This is why you cannot call a function defined further down the file from code at the top: at that moment the name does not exist yet.
 
@@ -136,15 +136,15 @@ Both of these catch people in their first week, and both are the runtime doing e
 
 `round(0.5)` is `0`, and `round(1.5)` is `2`. Python rounds a value exactly between two integers to the **even** one, which is called banker's rounding. Rounding halves consistently upward biases the total of a long column of numbers upward; going to even cancels out. It is the right default and the wrong behaviour for a function documented to round halves up, which therefore has to implement that itself.
 
-`0.1 + 0.2 == 0.3` is `False`. A `float` is a binary fraction, and one tenth has no exact binary form any more than one third has an exact decimal one, so the sum is `0.30000000000000004`. This is IEEE 754 and every language with floats has it. Compare with `math.isclose`, and for money do not use floats at all — use `decimal.Decimal`, or count in whole pennies and divide only when you print.
+`0.1 + 0.2 == 0.3` is `False`. A `float` is a binary fraction, and one tenth has no exact binary form any more than one third has an exact decimal one, so the sum is `0.30000000000000004`. This is IEEE 754 and every language with floats has it. Compare with `math.isclose`, and for money do not use floats at all. Use `decimal.Decimal`, or count in whole pennies and divide only when you print.
 
 ## Reading what went wrong
 
 When something does fail, Python prints a traceback: the chain of calls that were in progress when the exception was raised, oldest first, with the exception itself on the last line.
 
-Read the last line first. It tells you what went wrong and is almost always the sentence you need. Then read upward through the frames to find the last one that is code you wrote — in a stack that goes ten frames deep into a library, that line is where your part of the mistake lives.
+Read the last line first. It tells you what went wrong and is almost always the sentence you need. Then read upward through the frames to find the last one that is code you wrote, in a stack that goes ten frames deep into a library, that line is where your part of the mistake lives.
 
-The temptation, faced with forty lines of traceback, is to skim it and start guessing. Guessing costs more than reading. Unit 38 makes this a proper skill and covers the cases where the useful information is genuinely buried, but the two-step version — bottom line for what, your own frame for where — resolves most of them.
+The temptation, faced with forty lines of traceback, is to skim it and start guessing. Guessing costs more than reading. Unit 38 makes this a proper skill and covers the cases where the useful information is genuinely buried, but the two-step version (bottom line for what, your own frame for where) resolves most of them.
 
 ## What to carry forward
 

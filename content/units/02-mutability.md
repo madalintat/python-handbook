@@ -3,7 +3,7 @@ slug: 02-mutability
 title: Mutability and aliasing
 ---
 
-Unit 01 established that a name refers to an object and that binding never copies. This unit is about the consequence, which is where the bugs actually are: when two names share an object, changing it through one of them changes it for both — and Python offers you at least four different operations that look like copying and are not.
+Unit 01 established that a name refers to an object and that binding never copies. This unit is about the consequence, which is where the bugs actually are: when two names share an object, changing it through one of them changes it for both, and Python offers you at least four different operations that look like copying and are not.
 
 ## Which types can change at all
 
@@ -22,7 +22,7 @@ print(id(s))      # a different object
 
 That is not `s` being modified; it is `s` being rebound to a new string. Which is why calling `s.upper()` on its own line accomplishes nothing at all, and why that is such a common first bug.
 
-Immutability is what makes a value safe to share. A string can be handed to twenty functions with no coordination, because none of them can change it. That guarantee is also why only immutable-ish objects can be dict keys — unit 04 makes that precise.
+Immutability is what makes a value safe to share. A string can be handed to twenty functions with no coordination, because none of them can change it. That guarantee is also why only immutable-ish objects can be dict keys. Unit 04 makes that precise.
 
 ## The list that changed under you
 
@@ -57,7 +57,7 @@ copy_of[0][0] = 9
 print(grid)         # [[9, 0], [0, 0]]
 ```
 
-The outer list really was copied — appending to `copy_of` leaves `grid` alone. It is the rows that are shared, because copying a list copies its references and a reference to a row is not a row.
+The outer list really was copied, appending to `copy_of` leaves `grid` alone. It is the rows that are shared, because copying a list copies its references and a reference to a row is not a row.
 
 `copy.deepcopy` walks the whole structure and rebuilds every mutable object it finds, handling cycles correctly. It is the right answer when you genuinely need independence and the wrong default: it is slow, it copies things you may have wanted shared, and on objects holding file handles or connections it either fails or produces something broken. Reach for it deliberately.
 
@@ -95,7 +95,7 @@ a += (3,)
 print(b)        # (1, 2)
 ```
 
-Same syntax, opposite outcomes. `+=` first asks the object whether it can extend itself in place, by looking for `__iadd__`. Lists have one, so `a += [3]` mutates the list and every name bound to it sees the change. Tuples do not, so Python falls back to `a = a + (3,)`, which builds a new tuple and rebinds — leaving `b` where it was.
+Same syntax, opposite outcomes. `+=` first asks the object whether it can extend itself in place, by looking for `__iadd__`. Lists have one, so `a += [3]` mutates the list and every name bound to it sees the change. Tuples do not, so Python falls back to `a = a + (3,)`, which builds a new tuple and rebinds, leaving `b` where it was.
 
 So `+=` is a mutation for mutable types and a rebinding for immutable ones. In a function that means `items += [x]` changes the caller's list, while `total += 1` cannot possibly change the caller's number. Nothing about the syntax tells you which you are doing; the type does.
 
@@ -129,7 +129,7 @@ collect(1)
 print(collect.__defaults__)     # ([1],)
 ```
 
-That list is an attribute of the function, created once when the module was imported, and it lives for as long as the process does. Every caller who omits the argument gets the same one. The bug is not that the default is mutable — it is that the default is *shared*, and mutability is what makes the sharing observable.
+That list is an attribute of the function, created once when the module was imported, and it lives for as long as the process does. Every caller who omits the argument gets the same one. The bug is not that the default is mutable. It is that the default is *shared*, and mutability is what makes the sharing observable.
 
 The idiom is `None` as a sentinel, with the real default built inside the body where it runs per call:
 
@@ -143,7 +143,7 @@ def collect(item, into=None):
 
 Use `is None` rather than `if not into:`, because an empty list the caller deliberately passed is falsy and would be quietly replaced by a fresh one.
 
-Immutable defaults are safe for the same reason — `def f(x=0)` shares that zero with every call and no caller can do anything about it — which is why the rule people repeat is specifically about mutable defaults.
+Immutable defaults are safe for the same reason, `def f(x=0)` shares that zero with every call and no caller can do anything about it, which is why the rule people repeat is specifically about mutable defaults.
 
 ## Mutating what you are iterating over
 
@@ -165,7 +165,7 @@ for key in scores:
         del scores[key]     # RuntimeError: dictionary changed size during iteration
 ```
 
-Two fixes. Build a new collection — `[x for x in items if x % 2]` — which is usually clearer anyway. Or iterate over a snapshot: `for key in list(scores):` makes a separate list of keys first, so the loop is not walking the thing you are editing.
+Two fixes. Build a new collection, `[x for x in items if x % 2]`, which is usually clearer anyway. Or iterate over a snapshot: `for key in list(scores):` makes a separate list of keys first, so the loop is not walking the thing you are editing.
 
 ## Mutable state that outlives the call
 
@@ -175,7 +175,7 @@ The same shape appears as a class attribute, which unit 01 met in the last exerc
 
 The question that catches all of them is the same: **how many times does this line run, and how many things can see the result?** If the answer to the first is "once" and to the second is "more than one", you have shared mutable state, and the only remaining question is whether anybody is going to mutate it.
 
-Shared mutable state is not automatically wrong — a cache is exactly that, deliberately. What makes it a bug is sharing you did not intend and cannot see at the call site.
+Shared mutable state is not automatically wrong, a cache is exactly that, deliberately. What makes it a bug is sharing you did not intend and cannot see at the call site.
 
 ## Copying, decided
 
@@ -183,7 +183,7 @@ A short decision procedure, since this is where the time actually goes:
 
 If the object is immutable, do nothing at all. There is no copy to make, because nobody can change it. Passing a string, a number or a tuple of numbers around freely is safe and costs nothing.
 
-If it is flat and mutable — a list of numbers, a set of strings, a dict of strings to strings — take a shallow copy with `list(x)`, `dict(x)`, `set(x)` or a slice. One level is all there is.
+If it is flat and mutable, a list of numbers, a set of strings, a dict of strings to strings. Take a shallow copy with `list(x)`, `dict(x)`, `set(x)` or a slice. One level is all there is.
 
 If it is nested and you need real independence, use `copy.deepcopy`, and know that you are paying for it.
 

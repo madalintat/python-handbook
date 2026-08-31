@@ -11,7 +11,7 @@ slug: 07-functions
 @hint When does the default expression run? Not on every call.
 @hint The stored default is visible as `stamp.__defaults__`. Look at it twice.
 @diagnose B008 ruff's `B008` is "do not perform function call in argument defaults". The rule exists because a call in a default runs exactly once, when the `def` statement executes, and its result is then frozen onto the function object for the life of the process. That is almost never what a call in that position was meant to express.
-@diagnose silent It runs and every call reports the same instant — the instant the module was imported. This is the mutable-default bug from unit 02 with a different symptom: not a shared object that grows, but a value frozen at definition time. The fix is the same sentinel: default to `None` and compute the real value inside the body, where it runs once per call.
+@diagnose silent It runs and every call reports the same instant, the instant the module was imported. This is the mutable-default bug from unit 02 with a different symptom: not a shared object that grows, but a value frozen at definition time. The fix is the same sentinel: default to `None` and compute the real value inside the body, where it runs once per call.
 
 ~~~starter
 import time
@@ -48,7 +48,7 @@ def stamp(event, at=None):
 @expect raises:TypeError
 @hint In a definition `*values` collects. At a call site `*` does the opposite.
 @hint The function received exactly one argument. Ask what it was.
-@diagnose TypeError A `*values` parameter collects surplus positional arguments into a tuple, so handing it a list gives you a one-element tuple containing that list — and summing a tuple whose only element is a list fails. At the call site the same symbol means the opposite: `total(*numbers)` spreads the list into separate arguments. This mistake usually surfaces somewhere downstream rather than at the call, which is what makes it annoying to track down. If a function is only ever going to be handed one sequence, taking a plain iterable parameter is simpler than `*args`.
+@diagnose TypeError A `*values` parameter collects surplus positional arguments into a tuple, so handing it a list gives you a one-element tuple containing that list, and summing a tuple whose only element is a list fails. At the call site the same symbol means the opposite: `total(*numbers)` spreads the list into separate arguments. This mistake usually surfaces somewhere downstream rather than at the call, which is what makes it annoying to track down. If a function is only ever going to be handed one sequence, taking a plain iterable parameter is simpler than `*args`.
 
 ~~~starter
 def total(*values):
@@ -84,7 +84,7 @@ print(total(*numbers))
 @expect silent
 @hint A bare `*` in a parameter list marks everything after it as keyword-only.
 @hint The tests check that passing positionally is rejected. That is a property of the signature, not of the body.
-@diagnose silent It runs, and `connect("db", 5, False)` is accepted — a call whose second and third arguments mean nothing to a reader. A bare `*` in the parameter list makes every parameter after it keyword-only, so the only legal form becomes `connect("db", timeout=5, retry=False)`. This is worth doing for every boolean and every optional tuning value: it costs one character in the definition and removes the need to go and look at the signature from every call site forever.
+@diagnose silent It runs, and `connect("db", 5, False)` is accepted, a call whose second and third arguments mean nothing to a reader. A bare `*` in the parameter list makes every parameter after it keyword-only, so the only legal form becomes `connect("db", timeout=5, retry=False)`. This is worth doing for every boolean and every optional tuning value: it costs one character in the definition and removes the need to go and look at the signature from every call site forever.
 
 ~~~starter
 def connect(host, timeout=30, retry=True):
@@ -118,9 +118,9 @@ def connect(host, *, timeout=30, retry=True):
 @expect mypy:name-defined
 @hint When the default expression is evaluated, is a call happening?
 @hint `start` is a parameter, which means it only exists during a call.
-@diagnose F821 ruff reports `Undefined name start` without running anything. From a linter's point of view the default expression is just code in the enclosing scope, and `start` is not a name in that scope — which is precisely the fact the runtime error is about.
+@diagnose F821 ruff reports `Undefined name start` without running anything. From a linter's point of view the default expression is just code in the enclosing scope, and `start` is not a name in that scope, which is precisely the fact the runtime error is about.
 @diagnose name-defined mypy says the same thing in its own vocabulary. All three judges agreeing here is worth noticing: the mistake is not subtle once you know where default expressions are evaluated, and every tool that knows the scoping rules can see it.
-@diagnose NameError Default expressions are evaluated once, when the `def` statement runs — at which point no call is in progress and no parameter exists, so the name `start` simply is not there. This is the same single fact as the frozen timestamp and the shared mutable list, showing its third face. Any default that has to depend on the arguments must be computed in the body, with `None` standing in for "not supplied".
+@diagnose NameError Default expressions are evaluated once, when the `def` statement runs, at which point no call is in progress and no parameter exists, so the name `start` simply is not there. This is the same single fact as the frozen timestamp and the shared mutable list, showing its third face. Any default that has to depend on the arguments must be computed in the body, with `None` standing in for "not supplied".
 
 ~~~starter
 def window(start, end=start + 10):
@@ -155,7 +155,7 @@ print(window(5))
 @expect raises:ValueError
 @hint Unpacking requires the shape to match exactly, and says so when it does not.
 @hint A starred target absorbs whatever is left over.
-@diagnose ValueError Unpacking checks the count and refuses to guess, with a message naming what it expected and what it got — one of the more helpful errors in the language. A starred target is the fix: `first, *rest = parts` binds the leftovers as a list, and there may be at most one starred target because two would be ambiguous. Note the asymmetry with function calls, where surplus arguments are an error unless a `*args` is there to catch them: it is the same rule in both places.
+@diagnose ValueError Unpacking checks the count and refuses to guess, with a message naming what it expected and what it got. One of the more helpful errors in the language. A starred target is the fix: `first, *rest = parts` binds the leftovers as a list, and there may be at most one starred target because two would be ambiguous. Note the asymmetry with function calls, where surplus arguments are an error unless a `*args` is there to catch them: it is the same rule in both places.
 
 ~~~starter
 def split_name(full):
@@ -193,8 +193,8 @@ print(split_name("ada byron lovelace"))
 @expect mypy:return
 @hint Falling off the end of a function is not an error. Ask what it returns.
 @hint The annotation says this returns a `str`. Check whether every path does.
-@diagnose return mypy reports "missing return statement", because the annotation promises a `str` and one path through the function returns nothing. This is one of the highest-value checks a type checker performs, and it only works because the function is annotated — mypy does not look inside unannotated functions by default, so an unannotated version of this bug would be invisible to it.
-@diagnose silent Nothing raised. Every Python function returns something, and falling off the end returns `None`, so this quietly produces `None` at every call site. The failure then surfaces somewhere else entirely — an `AttributeError` on `None`, or a `None` written into a database — which is why a forgotten `return` is disproportionately annoying to track down.
+@diagnose return mypy reports "missing return statement", because the annotation promises a `str` and one path through the function returns nothing. This is one of the highest-value checks a type checker performs, and it only works because the function is annotated, and mypy does not look inside unannotated functions by default, so an unannotated version of this bug would be invisible to it.
+@diagnose silent Nothing raised. Every Python function returns something, and falling off the end returns `None`, so this quietly produces `None` at every call site. The failure then surfaces somewhere else entirely, an `AttributeError` on `None`, or a `None` written into a database, which is why a forgotten `return` is disproportionately annoying to track down.
 
 ~~~starter
 def normalise(name: str) -> str:
@@ -221,7 +221,7 @@ def normalise(name: str) -> str:
 @expect raises:TypeError
 @hint The wrapper needs to accept and pass on both kinds of argument.
 @hint `*args, **kwargs` in the definition collects both; the same symbols at the call site spread them.
-@diagnose TypeError The wrapper's signature accepts only positional arguments, so a keyword argument has nowhere to go and the call fails before the wrapped function is ever reached. `def wrapper(*args, **kwargs)` collects both kinds, and `original(*args, **kwargs)` spreads both back out — the two meanings of the same symbols, used once each, in the two places they mean opposite things. This pair of lines is the whole basis of unit 26: a wrapper that forwards everything untouched can wrap anything.
+@diagnose TypeError The wrapper's signature accepts only positional arguments, so a keyword argument has nowhere to go and the call fails before the wrapped function is ever reached. `def wrapper(*args, **kwargs)` collects both kinds, and `original(*args, **kwargs)` spreads both back out, the two meanings of the same symbols, used once each, in the two places they mean opposite things. This pair of lines is the whole basis of unit 26: a wrapper that forwards everything untouched can wrap anything.
 
 ~~~starter
 def traced(fn, log):
@@ -271,7 +271,7 @@ print(traced(greet, [])("ada", greeting="hi"))
 @expect silent
 @hint Which object does the function return? Compare it with the one that was passed in.
 @hint `{**a, **b}` builds a new dictionary with the later keys winning.
-@diagnose silent Runs, returns the right values, and has edited the caller's defaults on the way — so the second call starts from a base that the first call changed. `**kwargs` really is a fresh dictionary each call, but `base` is not: it is the caller's object, bound to a local name. `{**base, **overrides}` builds a new mapping with later keys winning and leaves both inputs alone, which is the whole fix. This is unit 02's rule again: mutate and return `None`, or compute and leave the inputs untouched.
+@diagnose silent Runs, returns the right values, and has edited the caller's defaults on the way, so the second call starts from a base that the first call changed. `**kwargs` really is a fresh dictionary each call, but `base` is not: it is the caller's object, bound to a local name. `{**base, **overrides}` builds a new mapping with later keys winning and leaves both inputs alone, which is the whole fix. This is unit 02's rule again: mutate and return `None`, or compute and leave the inputs untouched.
 
 ~~~starter
 def configure(base, **overrides):

@@ -10,7 +10,7 @@ slug: 04-equality
 @expect silent
 @hint `==` is a question the other object answers. `is` is not.
 @hint There is exactly one `None` object in a running Python, forever.
-@diagnose E711 ruff's `E711` is "comparison to None should be `cond is None`". `None` is a singleton, so identity is both the correct test and the unambiguous one — and it is faster, since it compares pointers rather than dispatching to a method.
+@diagnose E711 ruff's `E711` is "comparison to None should be `cond is None`". `None` is a singleton, so identity is both the correct test and the unambiguous one, and it is faster, since it compares pointers rather than dispatching to a method.
 @diagnose silent It runs, and it believes the wildcard is missing. `value == None` calls `value.__eq__(None)`, which any class is free to answer however it likes; a permissive `__eq__` that returns `True` for everything therefore reports itself as absent. `is None` cannot be intercepted by anything, which is precisely why it is the right test for a sentinel.
 
 ~~~starter
@@ -44,7 +44,7 @@ def is_missing(value):
 @expect silent
 @hint `if not timeout:` is true for `None` and also true for `0`.
 @hint "Nothing was given" and "zero was given" are different facts. Test them separately.
-@diagnose silent Nothing raised, and a caller who explicitly asked for a zero timeout is told none was configured. `if not timeout:` collapses "absent" and "empty or zero" into one test, and the built-in falsy values include `0`, `0.0`, `""`, `[]` and `{}` — every one of which a caller might have meant. This is the whole reason `None` is the conventional sentinel for a default argument: it is the one value that means *nothing was supplied* and cannot be confused with a legitimate empty one.
+@diagnose silent Nothing raised, and a caller who explicitly asked for a zero timeout is told none was configured. `if not timeout:` collapses "absent" and "empty or zero" into one test, and the built-in falsy values include `0`, `0.0`, `""`, `[]` and `{}`, every one of which a caller might have meant. This is the whole reason `None` is the conventional sentinel for a default argument: it is the one value that means *nothing was supplied* and cannot be confused with a legitimate empty one.
 
 ~~~starter
 def describe_timeout(timeout):
@@ -75,7 +75,7 @@ def describe_timeout(timeout):
 @expect silent
 @hint Two objects that compare equal must hash equal. Check whether the reverse holds here, and whether it needs to.
 @hint The hash is computed from fewer fields than equality uses. Work out which direction that breaks.
-@diagnose silent It runs and quietly produces a set with duplicates in it. Hashing on the rank alone means two different cards with the same rank collide into one bucket, which is legal and merely slow — collisions are normal. The real damage is the other way round: nothing here breaks *equal implies same hash*, but hashing on fewer fields than equality is only safe if those fields determine equality, and here they do not. The result is that `Card("A", "spades")` and `Card("A", "hearts")` land in the same bucket, get compared, and are found unequal — so both stay, which is correct — while your intuition that a smaller hash is harmless quietly stops holding the moment equality narrows. Hash exactly the fields equality uses: `hash((self.rank, self.suit))`.
+@diagnose silent It runs and quietly produces a set with duplicates in it. Hashing on the rank alone means two different cards with the same rank collide into one bucket, which is legal and merely slow, collisions are normal. The real damage is the other way round: nothing here breaks *equal implies same hash*, but hashing on fewer fields than equality is only safe if those fields determine equality, and here they do not. The result is that `Card("A", "spades")` and `Card("A", "hearts")` land in the same bucket, get compared, and are found unequal, so both stay, which is correct, while your intuition that a smaller hash is harmless quietly stops holding the moment equality narrows. Hash exactly the fields equality uses: `hash((self.rank, self.suit))`.
 
 ~~~starter
 class Card:
@@ -117,7 +117,7 @@ class Card:
 @expect silent
 @hint The dictionary chose a bucket from the key's hash at the moment of insertion, and nothing ever asks again.
 @hint Both the hash and the equality test now give different answers than they did when the entry went in.
-@diagnose silent It runs, and the entry is unreachable by lookup while still being right there when you iterate. A dict stores an entry in a bucket chosen by `hash(key)` at insertion time. Mutating a field the hash reads means every later lookup computes a different hash, and even when it happens to land on the right bucket the equality comparison against the mutated key now fails too. The key is not lost — `list(schedule)` still shows it — which makes this look like the dictionary lying to you. A key must be immutable in whatever its hash reads: store a copy, use a tuple, or freeze the class.
+@diagnose silent It runs, and the entry is unreachable by lookup while still being right there when you iterate. A dict stores an entry in a bucket chosen by `hash(key)` at insertion time. Mutating a field the hash reads means every later lookup computes a different hash, and even when it happens to land on the right bucket the equality comparison against the mutated key now fails too. The key is not lost, `list(schedule)` still shows it, which makes this look like the dictionary lying to you. A key must be immutable in whatever its hash reads: store a copy, use a tuple, or freeze the class.
 
 ~~~starter
 class Slot:
@@ -230,7 +230,7 @@ print(sorted([Version(1, 5), Version(1, 2)]))
 @expect raises:TypeError
 @hint A key needs a hash that never changes. Ask whether a list can promise that.
 @hint There is an immutable sequence type, and an immutable set type. Either will do here.
-@diagnose TypeError Lists are unhashable, deliberately and by design: a hash must not change while the object sits in a table, and a list can be appended to at any moment. `list.__hash__` is set to `None`, which is what produces `unhashable type: 'list'`. Convert to something immutable first — `tuple(tags)` if order matters, `frozenset(tags)` if it does not and duplicates should collapse. Note that a tuple only helps if its contents are hashable too; a tuple of lists is just as unhashable.
+@diagnose TypeError Lists are unhashable, deliberately and by design: a hash must not change while the object sits in a table, and a list can be appended to at any moment. `list.__hash__` is set to `None`, which is what produces `unhashable type: 'list'`. Convert to something immutable first, `tuple(tags)` if order matters, `frozenset(tags)` if it does not and duplicates should collapse. Note that a tuple only helps if its contents are hashable too; a tuple of lists is just as unhashable.
 
 ~~~starter
 def group_by_tags(records):
@@ -274,7 +274,7 @@ print(group_by_tags([(["a", "b"], "first")]))
 @expect silent
 @hint `bool` inherits from `int`. Check what `1 == True` and `hash(1) == hash(True)` give you.
 @hint A dictionary cannot separate two keys that are equal and hash the same. Give it something that differs.
-@diagnose silent It runs and reports one key where you expected two. `bool` is a subclass of `int`, `True == 1` and `hash(True) == hash(1)`, so a dictionary has no way to tell them apart — the second one found simply lands on the existing entry, keeping the original key object and updating the count. The same collapse happens in sets, and it is why `{1, True, 1.0}` has one element. When the distinction matters, key on something that carries the type as well, such as `(type(value).__name__, value)`.
+@diagnose silent It runs and reports one key where you expected two. `bool` is a subclass of `int`, `True == 1` and `hash(True) == hash(1)`, so a dictionary has no way to tell them apart. The second one found simply lands on the existing entry, keeping the original key object and updating the count. The same collapse happens in sets, and it is why `{1, True, 1.0}` has one element. When the distinction matters, key on something that carries the type as well, such as `(type(value).__name__, value)`.
 
 ~~~starter
 def tally(values):
@@ -310,7 +310,7 @@ def tally(values):
 @expect silent
 @hint Evaluate `float("nan") == float("nan")`, and then evaluate it again with the same object on both sides.
 @hint The `in` operator does something extra before comparing. Work out what, by asking why `[nan] == [nan]` is True while `nan == nan` is not.
-@diagnose silent Nothing raised, and a value sitting plainly in the list is counted zero times. IEEE 754 requires a not-a-number value to compare unequal to everything including itself, so `value == target` is `False` even when `value` **is** `target`, and `==` is behaving exactly as specified. The standard library works around this everywhere it matters: `in`, `list.index` and container equality all test identity first and fall back to equality, which is why `[nan] == [nan]` is `True` for one shared object. Do the same — `value is target or value == target` — and when what you actually want to ask is whether something is nan, `math.isnan` is the question that has an answer.
+@diagnose silent Nothing raised, and a value sitting plainly in the list is counted zero times. IEEE 754 requires a not-a-number value to compare unequal to everything including itself, so `value == target` is `False` even when `value` **is** `target`, and `==` is behaving exactly as specified. The standard library works around this everywhere it matters: `in`, `list.index` and container equality all test identity first and fall back to equality, which is why `[nan] == [nan]` is `True` for one shared object. Do the same, `value is target or value == target`, and when what you actually want to ask is whether something is nan, `math.isnan` is the question that has an answer.
 
 ~~~starter
 def count_of(values, target):

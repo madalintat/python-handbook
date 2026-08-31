@@ -9,7 +9,7 @@ slug: 06-control-flow
 @expect silent
 @hint The loop `else` runs when the loop finished. Work out what "finished" excludes.
 @hint It is skipped only when a `break` got you out. Reaching the end of the collection counts as finishing.
-@diagnose silent Nothing raised, and the function reports no admin even when it found one. A `for ... else` runs its `else` when the loop completed **without breaking** — and this loop never breaks, so the `else` runs every time, overwriting the answer. Read the construct as "if we got all the way through without finding anything". Used properly it removes the `found = False` flag a search loop would otherwise need; misread as "if the loop did not run", it is wrong every time, which is why plenty of experienced Python programmers avoid it entirely.
+@diagnose silent Nothing raised, and the function reports no admin even when it found one. A `for ... else` runs its `else` when the loop completed **without breaking**, and this loop never breaks, so the `else` runs every time, overwriting the answer. Read the construct as "if we got all the way through without finding anything". Used properly it removes the `found = False` flag a search loop would otherwise need; misread as "if the loop did not run", it is wrong every time, which is why plenty of experienced Python programmers avoid it entirely.
 
 ~~~starter
 def find_admin(users):
@@ -48,7 +48,7 @@ def find_admin(users):
 @hint Read the error message. It says a name makes the remaining patterns unreachable, which tells you what that name is doing.
 @hint What does `case [a, b]:` do with `a` and `b`? A lone name follows the same rule.
 @hint A dotted name is compared. A bare one is not.
-@diagnose SyntaxError The message is `name capture 'ACTIVE' makes remaining patterns unreachable`, and it is naming the mechanism exactly. A bare name in a pattern is a **capture**, not a comparison: `case ACTIVE:` means "match anything, and bind it to the name `ACTIVE`" — the same thing `case [a, b]` does for `a` and `b`. Since it matches everything, no later case can ever be reached, and Python refuses to compile that. Be glad it does: put the bare name in the *last* case and there is nothing unreachable, so it compiles cleanly and silently swallows every value while quietly overwriting your constant. The fix is that a *dotted* name is a value pattern — `case Status.ACTIVE:` compares — which is why constants used in patterns must live on a class, an enum or a module.
+@diagnose SyntaxError The message is `name capture 'ACTIVE' makes remaining patterns unreachable`, and it is naming the mechanism exactly. A bare name in a pattern is a **capture**, not a comparison: `case ACTIVE:` means "match anything, and bind it to the name `ACTIVE`", the same thing `case [a, b]` does for `a` and `b`. Since it matches everything, no later case can ever be reached, and Python refuses to compile that. Be glad it does: put the bare name in the *last* case and there is nothing unreachable, so it compiles cleanly and silently swallows every value while quietly overwriting your constant. The fix is that a *dotted* name is a value pattern, `case Status.ACTIVE:` compares, which is why constants used in patterns must live on a class, an enum or a module.
 @diagnose invalid-syntax ruff parses Python itself, so it reports the same refusal before you run anything. When all three judges agree and one of them is the parser, the problem is that the file cannot become a program at all.
 @diagnose F841 A side effect of the capture: ruff sees `ACTIVE` being assigned by the pattern and never read afterwards, which is exactly what a capture that was meant to be a comparison looks like from the outside.
 
@@ -182,7 +182,7 @@ print(running_totals([1, 2, 3]))
 @hint ruff is telling you the loop variable is never read. If the body does not use it, what is the body looking at?
 @hint This whole loop is one call to a builtin that short-circuits.
 @diagnose B007 ruff's `B007` is "loop control variable not used within loop body". Usually that means the name should be `_`. Here it means something has gone wrong: a loop that iterates a collection without ever looking at the item is either pointless or, as in this case, examining the wrong thing.
-@diagnose SIM110 ruff's `SIM110` is "use `return any(...)` instead of a `for` loop". It has recognised the shape — iterate, return True on a match, return False after — and is proposing the exact rewrite this exercise wants. A linter suggesting your solution is worth noticing: this shape is common enough to have a rule about it.
+@diagnose SIM110 ruff's `SIM110` is "use `return any(...)` instead of a `for` loop". It has recognised the shape (iterate, return True on a match, return False after) and is proposing the exact rewrite this exercise wants. A linter suggesting your solution is worth noticing: this shape is common enough to have a rule about it.
 @diagnose silent It runs and answers based entirely on the first record, however many there are, because the body reads `records[0]` instead of the `record` the loop bound. Once you see it, the whole loop collapses into `any(r.expired for r in records)`, which short-circuits on the first true value and states the question in one line rather than requiring the reader to execute four.
 
 ~~~starter
@@ -214,7 +214,7 @@ def any_expired(records):
 @expect raises:TypeError
 @hint `for k in d` is shorthand for one of `.keys()`, `.values()` or `.items()`. Which one?
 @hint The error names the types it could not add, which tells you what the loop was actually handing over.
-@diagnose TypeError Iterating a dictionary yields its **keys** — `for name in scores` is `for name in scores.keys()` — so this is adding strings to an integer and Python says so. The three views are `.keys()`, `.values()` and `.items()`, the last giving `(key, value)` pairs, and being explicit about which one you want makes the loop read correctly to somebody who has not memorised the default. For a plain total, `sum(scores.values())` is the whole function.
+@diagnose TypeError Iterating a dictionary yields its **keys**, `for name in scores` is `for name in scores.keys()`, so this is adding strings to an integer and Python says so. The three views are `.keys()`, `.values()` and `.items()`, the last giving `(key, value)` pairs, and being explicit about which one you want makes the loop read correctly to somebody who has not memorised the default. For a plain total, `sum(scores.values())` is the whole function.
 
 ~~~starter
 def total_score(scores):
@@ -251,8 +251,8 @@ print(total_score({"ada": 3, "bob": 4}))
 @expect ruff:B905
 @hint `zip` stops at the shorter input by default. Ask whether silence is the right response to mismatched data.
 @hint There is a keyword argument, added in 3.10, that turns the mismatch into an error.
-@diagnose B905 ruff's `B905` is "`zip()` without an explicit `strict=` parameter". The rule exists because the default is a silent truncation, and a linter cannot know whether you meant it — so it asks you to say. Passing `strict=False` explicitly satisfies the rule too, and documents that the mismatch is expected.
-@diagnose silent It runs and silently discards the extra name. `zip` stopping at the shorter input is occasionally what you want and far more often a bug that hides a data problem — two lists that were meant to correspond, one of them short, and rows dropped with nothing to show for it. `zip(a, b, strict=True)` raises `ValueError` on a length mismatch instead, and is worth making a habit whenever the inputs are supposed to line up.
+@diagnose B905 ruff's `B905` is "`zip()` without an explicit `strict=` parameter". The rule exists because the default is a silent truncation, and a linter cannot know whether you meant it, so it asks you to say. Passing `strict=False` explicitly satisfies the rule too, and documents that the mismatch is expected.
+@diagnose silent It runs and silently discards the extra name. `zip` stopping at the shorter input is occasionally what you want and far more often a bug that hides a data problem, two lists that were meant to correspond, one of them short, and rows dropped with nothing to show for it. `zip(a, b, strict=True)` raises `ValueError` on a length mismatch instead, and is worth making a habit whenever the inputs are supposed to line up.
 
 ~~~starter
 def pair_up(names, scores):
@@ -283,7 +283,7 @@ def pair_up(names, scores):
 @expect silent
 @hint Sequence patterns match lists and tuples. Check whether they match strings too, and why that choice was made.
 @hint The string falls through to a case you did not intend.
-@diagnose silent Runs clean and sends the plain string to the wrong branch. Sequence patterns deliberately do **not** match `str` or `bytes`, even though both are sequences, because matching a string as a sequence of characters is almost never what anybody means and would make `case [a, b]:` quietly match every two-character string. So the string here skips the sequence case entirely. Match it explicitly with `case str():` — a class pattern — and put it before or after the sequence case depending on which should win.
+@diagnose silent Runs clean and sends the plain string to the wrong branch. Sequence patterns deliberately do **not** match `str` or `bytes`, even though both are sequences, because matching a string as a sequence of characters is almost never what anybody means and would make `case [a, b]:` quietly match every two-character string. So the string here skips the sequence case entirely. Match it explicitly with `case str():`, which is a class pattern, and put it before or after the sequence case depending on which should win.
 
 ~~~starter
 def describe(command):
