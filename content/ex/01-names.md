@@ -163,14 +163,14 @@ print(shout("hello"))
 `duplicate` copies the outer list correctly. The tests change a cell of the copy and then look at the original. Work out how many list objects a slice actually creates when the list contains other lists.
 
 @expect silent
-@hint `grid[:]` builds a new outer list. What does it put inside that new list?
+@hint `list(grid)` builds a new outer list. What does it put inside that new list?
 @hint The rows are objects too, and the new outer list holds the very same row objects.
-@diagnose silent No judge can help you here, because nothing is wrong with the code as code. `grid[:]` genuinely copies — it makes a new list. What it copies are the *references* in the original, so the new outer list points at exactly the same row objects. That is a shallow copy, and it is what every slice, `list()`, `dict()`, and `copy.copy` gives you. To get independent rows you have to copy each row too.
+@diagnose silent No judge can help you here, because nothing is wrong with the code as code. `list(grid)` genuinely copies — it makes a new list, and appending to it would not touch the original. What it copies are the *references* the original held, so the new outer list points at exactly the same row objects. That is a **shallow copy**, and it is what `list()`, `dict()`, `set()` and `copy.copy` all give you. To get independent rows you have to copy each row as well, which means a loop that copies one row at a time. Unit 02 gives this its proper name and shows the tool for copying all the way down.
 
 ~~~starter
 def duplicate(grid):
     """Return a fully independent copy of a list of rows."""
-    return grid[:]
+    return list(grid)
 ~~~
 
 ~~~tests
@@ -184,7 +184,10 @@ assert copy[0][0] == 9
 ~~~solution
 def duplicate(grid):
     """Return a fully independent copy of a list of rows."""
-    return [row[:] for row in grid]
+    out = []
+    for row in grid:
+        out.append(list(row))
+    return out
 ~~~
 
 ## del removes a name

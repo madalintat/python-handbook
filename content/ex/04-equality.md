@@ -237,7 +237,9 @@ def group_by_tags(records):
     """Index records by their tags."""
     grouped = {}
     for tags, name in records:
-        grouped.setdefault(tags, []).append(name)
+        if tags not in grouped:
+            grouped[tags] = []
+        grouped[tags].append(name)
     return grouped
 
 
@@ -255,7 +257,10 @@ def group_by_tags(records):
     """Index records by their tags."""
     grouped = {}
     for tags, name in records:
-        grouped.setdefault(tuple(tags), []).append(name)
+        key = tuple(tags)
+        if key not in grouped:
+            grouped[key] = []
+        grouped[key].append(name)
     return grouped
 
 
@@ -300,35 +305,38 @@ def tally(values):
 
 ## The value that is not equal to itself
 
-`index_of` scans for a value and returns where it is. It compares with `==`, which is the obvious thing to do and which fails for exactly one value in the language. The tests look for that value.
+`count_of` tallies how many times a value appears. It compares with `==`, which is the obvious thing to do and which fails for exactly one value in the language. The tests count that value.
 
 @expect silent
 @hint Evaluate `float("nan") == float("nan")`, and then evaluate it again with the same object on both sides.
-@hint `list.index` and `in` do something extra before comparing. Work out what, by asking why `[nan] == [nan]` is True.
-@diagnose silent Nothing raised, and a value sitting plainly in the list is reported as absent. IEEE 754 requires a not-a-number value to compare unequal to everything including itself, so `v == target` is `False` even when `v` *is* `target`, and `==` is behaving exactly as specified. The standard library works around this: `list.index`, `in` and container equality all test identity first and fall back to equality, which is why `[nan] == [nan]` is `True` for one shared object while `nan == nan` is `False`. Do the same — `v is target or v == target` — and use `math.isnan` when you actually need to ask whether something is nan.
+@hint The `in` operator does something extra before comparing. Work out what, by asking why `[nan] == [nan]` is True while `nan == nan` is not.
+@diagnose silent Nothing raised, and a value sitting plainly in the list is counted zero times. IEEE 754 requires a not-a-number value to compare unequal to everything including itself, so `value == target` is `False` even when `value` **is** `target`, and `==` is behaving exactly as specified. The standard library works around this everywhere it matters: `in`, `list.index` and container equality all test identity first and fall back to equality, which is why `[nan] == [nan]` is `True` for one shared object. Do the same — `value is target or value == target` — and when what you actually want to ask is whether something is nan, `math.isnan` is the question that has an answer.
 
 ~~~starter
-def index_of(values, target):
-    """Return the index of target in values, or -1 if it is not there."""
-    for i, value in enumerate(values):
+def count_of(values, target):
+    """Return how many times target appears in values."""
+    total = 0
+    for value in values:
         if value == target:
-            return i
-    return -1
+            total += 1
+    return total
 ~~~
 
 ~~~tests
-assert index_of([10, 20, 30], 20) == 1
-assert index_of([10, 20], 99) == -1
+assert count_of([10, 20, 10], 10) == 2
+assert count_of([10, 20], 99) == 0
 nan = float("nan")
-assert index_of([1, nan, 2], nan) == 1, "a nan sitting in the list was not found"
-assert [nan] == [nan], "containers compare identity first"
+assert count_of([1, nan, 2, nan], nan) == 2, "the nans in the list were not counted"
+assert (nan in [1, nan, 2]) is True, "the real `in` operator finds it, which is the clue"
+assert [nan] == [nan], "containers compare identity before equality"
 ~~~
 
 ~~~solution
-def index_of(values, target):
-    """Return the index of target in values, or -1 if it is not there."""
-    for i, value in enumerate(values):
+def count_of(values, target):
+    """Return how many times target appears in values."""
+    total = 0
+    for value in values:
         if value is target or value == target:
-            return i
-    return -1
+            total += 1
+    return total
 ~~~

@@ -108,7 +108,15 @@ const RUNNER = `
 import io, json, sys, traceback
 
 def _ph_run(src, tests):
-    ns = {"__name__": "__main__"}
+    # The reader's file is run the way "python your_code.py" runs it, so
+    # __name__ is "__main__". Some exercises need to know what would happen on
+    # an import instead, so the hidden tests get _ph_import() to find out.
+    def _ph_import():
+        mod = {"__name__": "your_code"}
+        exec(compile(src, "your_code.py", "exec"), mod)
+        return mod
+
+    ns = {"__name__": "__main__", "_ph_import": _ph_import}
     buf = io.StringIO()
     real, sys.stdout = sys.stdout, buf
     try:

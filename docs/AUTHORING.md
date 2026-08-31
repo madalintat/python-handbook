@@ -117,6 +117,55 @@ meaning what it says.
   opinion and not a teaching signal.
 - Keep starters short. The longest one in unit 01 is nine lines.
 
+## The vocabulary gate
+
+An exercise must be solvable with what the reader has already met. Relying on the
+author to remember the ordering across 39 units does not work, so `build.py`
+enforces it.
+
+Each unit declares what its note introduces, in `INTRODUCES`. `build.py --check`
+on an exercise file parses every starter and solution and refuses any construct
+belonging to a later unit:
+
+```
+VOCABULARY  01-names #6 One level deep: solution uses comprehension before the reader has met it
+```
+
+`BASELINE` is what the book assumes on page one — `def`, `for`, `if`, calls,
+attribute access, f-strings, annotations, the four container literals. Everything
+else has to be introduced somewhere before it can be used.
+
+Two rules follow when you hit a violation:
+
+**Do not weaken the gate to make an exercise pass.** Either rewrite the solution
+using what is available, or move the feature to the unit whose note genuinely
+teaches it. The second is legitimate — a note that shows `sorted()` while
+explaining in-place versus returning has introduced `sorted`, and `INTRODUCES`
+should say so.
+
+**The hidden tests are not gated.** The reader never writes them, so they may use
+anything.
+
+Where the idiomatic solution needs a later tool, say so in the `@diagnose` prose
+and point forward: "unit 12 shows the one-line version". That turns a limitation
+into a thread the reader can follow.
+
+## `_ph_import`, for exercises about import time
+
+The reader's code runs the way `python your_code.py` runs it, so `__name__` is
+`"__main__"`. When an exercise is about what happens on *import* instead, the
+hidden tests can call `_ph_import()`, which re-executes the reader's code with
+`__name__` set to `"your_code"` and returns the resulting namespace:
+
+```python
+imported = _ph_import()
+assert imported["LOG"] == [], "importing the module already did the work"
+```
+
+Both the browser runner and `--validate` provide it. Unit 00's `__main__` guard
+exercise is the reason it exists: without it, the guard can only be described,
+never demonstrated.
+
 ## The drills
 
 Exactly fifteen, each a `## ` question, three or more options, exactly one

@@ -29,11 +29,27 @@ step "vim mode"
 node test_vim.mjs | tail -1
 node test_vim.mjs | grep -q "0 failed"; note $?
 
+step "every content file parses"
+parsefail=0
 for f in content/units/*.md content/ex/*.md content/drills/*.md content/gloss/*.md content/projects/*.md; do
   [ -e "$f" ] || continue
-  out=$(python3 build.py --check "$f" 2>&1) || { echo "  $f: $out"; fail=1; }
+  out=$(python3 build.py --check "$f" 2>&1) || { echo "   $f: $out"; parsefail=1; }
 done
-step "every content file parses"; note $fail
+note $parsefail
+
+step "no exercise uses a construct the reader has not met"
+python3 - <<'PY'
+import sys
+from pathlib import Path
+sys.path.insert(0, ".")
+import build
+problems = [p for f in sorted(Path("content/ex").glob("*.md")) for p in build.gate(f)]
+for p in problems:
+    print("  " + p)
+print(f"   {len(problems)} vocabulary violations")
+sys.exit(1 if problems else 0)
+PY
+note $?
 
 if [ "${*}" != "${*/--net/}" ]; then
   step "every starter and solution, against all three judges"

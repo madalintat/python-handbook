@@ -66,8 +66,8 @@ def with_extra(items, extra):
 
 @expect silent
 @hint `dict.fromkeys(keys, [])` evaluates that `[]` once, before the dictionary exists.
-@hint A dict comprehension evaluates its value expression once per key.
-@diagnose silent Runs clean, and every key in the dictionary is pointing at one list. `dict.fromkeys(keys, value)` is handed a single already-constructed value and stores that same object against every key — it has no way to make copies, and would not know how deep to copy if it tried. This is `[x] * n` in dictionary form. A dict comprehension, `{k: [] for k in keys}`, evaluates the `[]` afresh for each key.
+@hint Build the dictionary with a loop, so the `[]` is written out once per key.
+@diagnose silent Runs clean, and every key in the dictionary is pointing at one list. `dict.fromkeys(keys, value)` is handed a single already-constructed value and stores that same object against every key — it has no way to make copies, and would not know how deep to copy if it tried. This is `[x] * n` in dictionary form, and the fix is the same shape: write the `[]` somewhere that runs once per key, which for now means a loop. Unit 12 shows the one-line version.
 
 ~~~starter
 def empty_buckets(keys):
@@ -85,7 +85,10 @@ assert buckets["b"] == [], f"appending to a leaked into b: {buckets}"
 ~~~solution
 def empty_buckets(keys):
     """Return a dict giving each key its own empty list."""
-    return {key: [] for key in keys}
+    buckets = {}
+    for key in keys:
+        buckets[key] = []
+    return buckets
 ~~~
 
 ## Copying one level down

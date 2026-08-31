@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import json
 import re
 import subprocess
@@ -350,6 +351,172 @@ def parse_project(path: Path) -> dict:
     return {"slug": meta["slug"], "stages": stages}
 
 
+
+# ---------------------------------------------------------------- the vocabulary gate
+#
+# An exercise must be solvable with what the reader has already met. Relying on
+# the author to remember the ordering does not survive contact with 39 units, so
+# each unit declares what it introduces and the build refuses any exercise whose
+# code uses something from further down the track.
+
+# Assumed from the first page: this is a book for people who can already write a
+# little code, and a unit-00 exercise that could not call a function or write an
+# f-string would be unteachable.
+BASELINE = {
+    "def", "call", "attribute", "if", "for", "while", "return", "assign",
+    "compare", "boolop", "arithmetic", "subscript", "fstring", "annotation",
+    "import", "list", "dict", "tuple", "print", "len", "str", "int", "float",
+    "bool", "range", "isinstance", "type",
+}
+
+# slug -> what that unit's note teaches, and therefore what its exercises and
+# every later unit's exercises may use.
+INTRODUCES = {
+    "00-toolchain": {"compile", "eval", "round", "math", "assert", "raise", "main_guard"},
+    "01-names": {"id", "copy_slice", "del", "class", "init", "self", "list_call"},
+    "02-mutability": {"comprehension", "copy_module", "deepcopy", "clear", "update",
+                      "spread", "slice", "sorted"},
+    "03-data-model": {"dunder", "callable", "iter", "sum", "setattr", "getattr",
+                      "repr", "hash"},
+    "04-equality": {"set", "frozenset", "any", "all", "nan"},
+    "05-expressions": {"walrus", "starred_assign", "conditional_expr", "next"},
+    "06-control-flow": {"match", "enumerate", "zip", "break", "continue", "loop_else", "product"},
+    "07-functions": {"starargs", "kwargs", "keyword_only", "positional_only", "closure", "lambda"},
+    "08-scope": {"nonlocal", "global"},
+    "09-exceptions": {"try", "except", "finally", "custom_exception"},
+    "10-sequences": {"slice", "negative_index", "slice_assign"},
+    "11-strings": {"encode", "decode", "bytes", "format_spec", "join", "split"},
+    "12-dicts": {"setdefault", "defaultdict", "dict_views", "dict_comprehension"},
+    "13-comprehensions": {"nested_comprehension", "counter", "deque", "chainmap"},
+    "14-sorting": {"key_func", "heapq", "bisect", "total_ordering"},
+    "15-iterators": {"iter_protocol", "stopiteration"},
+    "16-generators": {"yield", "yield_from", "generator_send"},
+    "17-itertools": {"itertools", "functools", "map", "filter", "reduce", "cache", "partial"},
+    "18-classes": {"new", "classmethod", "staticmethod", "class_attribute"},
+    "19-attributes": {"getattr_dunder", "slots", "property"},
+    "20-descriptors": {"descriptor"},
+    "21-mro": {"super", "inheritance", "mro"},
+    "22-protocols": {"with", "context_manager", "operator_overload"},
+    "23-dataclasses": {"dataclass", "namedtuple", "enum"},
+    "24-typing": {"generic", "typevar", "protocol_class", "literal", "typeddict", "optional"},
+    "25-typecheck": set(),
+    "26-decorators": {"decorator", "wraps"},
+    "27-metaclasses": {"metaclass", "init_subclass"},
+    "28-ast": {"ast", "dis", "inspect"},
+    "29-modules": {"relative_import", "package"},
+    "30-packaging": set(),
+    "31-testing": {"pytest", "fixture", "monkeypatch"},
+    "32-tooling": {"logging"},
+    "33-concurrency": {"thread", "process", "lock"},
+    "34-async": {"async_def", "await", "async_for", "taskgroup"},
+    "35-performance": {"profile", "timeit"},
+    "36-memory": {"weakref", "gc"},
+    "37-ecosystem": {"pathlib", "datetime", "re", "subprocess"},
+    "38-tracebacks": {"breakpoint", "pdb"},
+}
+
+_NODE_FEATURES = [
+    ((ast.ListComp, ast.SetComp, ast.GeneratorExp), "comprehension"),
+    ((ast.DictComp,), "dict_comprehension"),
+    ((ast.Lambda,), "lambda"),
+    ((ast.NamedExpr,), "walrus"),
+    ((ast.Match,), "match"),
+    ((ast.ClassDef,), "class"),
+    ((ast.Yield, ast.YieldFrom), "yield"),
+    ((ast.With, ast.AsyncWith), "with"),
+    ((ast.Try,), "try"),
+    ((ast.Slice,), "slice"),
+    ((ast.Global,), "global"),
+    ((ast.Nonlocal,), "nonlocal"),
+    ((ast.AsyncFunctionDef,), "async_def"),
+    ((ast.Await,), "await"),
+    ((ast.IfExp,), "conditional_expr"),
+    ((ast.Delete,), "del"),
+    ((ast.Assert,), "assert"),
+    ((ast.Raise,), "raise"),
+]
+
+# builtins and modules whose first legitimate appearance is a specific unit
+_NAME_FEATURES = {
+    "map": "map", "filter": "filter", "reduce": "reduce", "zip": "zip",
+    "enumerate": "enumerate", "sorted": "sorted", "sum": "sum", "any": "any",
+    "all": "all", "next": "next", "iter": "iter", "id": "id", "hash": "hash",
+    "set": "set", "frozenset": "frozenset", "setattr": "setattr",
+    "getattr": "getattr", "repr": "repr", "callable": "callable",
+    "property": "property", "classmethod": "classmethod",
+    "staticmethod": "staticmethod", "super": "super", "compile": "compile",
+    "eval": "eval", "round": "round", "breakpoint": "breakpoint",
+    "dataclass": "dataclass", "defaultdict": "defaultdict",
+    "namedtuple": "namedtuple", "Counter": "counter", "deque": "deque",
+    "setdefault": "setdefault", "wraps": "wraps", "partial": "partial",
+    "cache": "cache", "lru_cache": "cache", "deepcopy": "deepcopy",
+}
+_MODULE_FEATURES = {
+    "math": "math", "copy": "copy_module", "itertools": "itertools",
+    "functools": "functools", "collections": "counter", "heapq": "heapq",
+    "bisect": "bisect", "dataclasses": "dataclass", "enum": "enum",
+    "ast": "ast", "dis": "dis", "inspect": "inspect", "logging": "logging",
+    "weakref": "weakref", "gc": "gc", "pathlib": "pathlib", "re": "re",
+    "subprocess": "subprocess", "threading": "thread", "asyncio": "async_def",
+    "typing": "optional", "pdb": "pdb", "timeit": "timeit",
+}
+
+
+def features_used(source: str) -> set[str]:
+    """Every gated construct appearing in a snippet."""
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return set()          # a deliberately unparseable starter gates nothing
+
+    found: set[str] = set()
+    for node in ast.walk(tree):
+        for types, name in _NODE_FEATURES:
+            if isinstance(node, types):
+                found.add(name)
+        if isinstance(node, ast.Name) and node.id in _NAME_FEATURES:
+            found.add(_NAME_FEATURES[node.id])
+        if isinstance(node, ast.Attribute) and node.attr in _NAME_FEATURES:
+            found.add(_NAME_FEATURES[node.attr])
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name in _MODULE_FEATURES:
+                    found.add(_MODULE_FEATURES[alias.name])
+        if isinstance(node, ast.ImportFrom) and node.module in _MODULE_FEATURES:
+            found.add(_MODULE_FEATURES[node.module])
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and node.decorator_list:
+            found.add("decorator")
+    return found
+
+
+def available_by(slug: str) -> set[str]:
+    """Everything a reader has met by the time they reach this unit's exercises."""
+    order = [s for s, *_ in TRACK]
+    if slug not in order:
+        return set(BASELINE)
+    upto = order[: order.index(slug) + 1]
+    out = set(BASELINE)
+    for s in upto:
+        out |= INTRODUCES.get(s, set())
+    return out
+
+
+def gate(path: Path) -> list[str]:
+    """Complaints about an exercise file using constructs from further down the track."""
+    slug = path.stem
+    allowed = available_by(slug)
+    problems = []
+    for ex in parse_exercises(path):
+        for kind in ("starter", "solution"):   # the reader never writes the tests
+            used = features_used(ex[kind])
+            early = sorted(used - allowed)
+            if early:
+                problems.append(
+                    f"{slug} #{ex['n']} {ex['title']}: {kind} uses {', '.join(early)} "
+                    f"before the reader has met it")
+    return problems
+
+
 # ---------------------------------------------------------------- build
 
 def build() -> int:
@@ -488,6 +655,12 @@ def check(target: Path) -> int:
     if not parser:
         die(target, f"do not know how to check a file in {kind}/")
     result = parser(target)
+    if kind == "ex":
+        problems = gate(target)
+        for problem in problems:
+            print(f"VOCABULARY  {problem}", file=sys.stderr)
+        if problems:
+            return 1
     n = len(result) if isinstance(result, list) else 1
     print(f"{n} clean")
     return 0
@@ -500,6 +673,22 @@ def _judges_available() -> bool:
 
 def _run(cmd: list[str], **kw) -> subprocess.CompletedProcess:
     return subprocess.run(cmd, capture_output=True, text=True, **kw)
+
+
+# Mirrors _ph_import in the browser runner. Appended after the reader's code so
+# that their imports stay at the top of the file and ruff's E402 is not provoked.
+_IMPORT_SHIM = '''
+
+def _ph_import(_src=_PH_SOURCE):
+    mod = {"__name__": "your_code"}
+    exec(compile(_src, "your_code.py", "exec"), mod)
+    return mod
+'''
+
+
+def _combine(source: str, tests: str) -> str:
+    """The reader's code, the import shim, then the hidden tests."""
+    return f"{source}\n\n_PH_SOURCE = {source!r}\n{_IMPORT_SHIM}\n{tests}"
 
 
 def _judge(source: str) -> dict:
@@ -577,7 +766,7 @@ def validate() -> int:
                               f"but there is no @diagnose {code}")
                         failures += 1
 
-            broken = _judge(ex["starter"] + "\n\n" + ex["tests"])
+            broken = _judge(_combine(ex["starter"], ex["tests"]))
             if not broken["raises"]:
                 print(f"FAIL starter  {label}: starter already passes its own tests")
                 failures += 1
@@ -588,7 +777,7 @@ def validate() -> int:
                 failures += 1
 
             # 3. the solution must pass the tests and be clean
-            sol = _judge(ex["solution"] + "\n\n" + ex["tests"])
+            sol = _judge(_combine(ex["solution"], ex["tests"]))
             if sol["raises"]:
                 print(f"FAIL solution {label}: solution+tests raised {sol['raises']}")
                 failures += 1

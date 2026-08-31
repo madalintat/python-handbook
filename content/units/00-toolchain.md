@@ -130,6 +130,14 @@ if __name__ == "__main__":
 
 Run the file directly and `__name__` is `"__main__"`, so `main()` runs. Import the same file from somewhere else and `__name__` is the module's own name instead, so it does not. One file, two behaviours, and the guard is what separates a library you can import from a script that does something the moment you touch it.
 
+## Two arithmetic surprises, up front
+
+Both of these catch people in their first week, and both are the runtime doing exactly what it was specified to do.
+
+`round(0.5)` is `0`, and `round(1.5)` is `2`. Python rounds a value exactly between two integers to the **even** one, which is called banker's rounding. Rounding halves consistently upward biases the total of a long column of numbers upward; going to even cancels out. It is the right default and the wrong behaviour for a function documented to round halves up, which therefore has to implement that itself.
+
+`0.1 + 0.2 == 0.3` is `False`. A `float` is a binary fraction, and one tenth has no exact binary form any more than one third has an exact decimal one, so the sum is `0.30000000000000004`. This is IEEE 754 and every language with floats has it. Compare with `math.isclose`, and for money do not use floats at all — use `decimal.Decimal`, or count in whole pennies and divide only when you print.
+
 ## Reading what went wrong
 
 When something does fail, Python prints a traceback: the chain of calls that were in progress when the exception was raised, oldest first, with the exception itself on the last line.

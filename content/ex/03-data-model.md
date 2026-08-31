@@ -134,7 +134,13 @@ class Basket:
 ~~~starter
 def describe_all(values):
     """Label each value 'callable' or 'value'."""
-    return ["callable" if hasattr(v, "__call__") else "value" for v in values]
+    labels = []
+    for value in values:
+        if hasattr(value, "__call__"):
+            labels.append("callable")
+        else:
+            labels.append("value")
+    return labels
 ~~~
 
 ~~~tests
@@ -152,7 +158,13 @@ assert describe_all([s]) == ["value"], "an object with a fake __call__ was calle
 ~~~solution
 def describe_all(values):
     """Label each value 'callable' or 'value'."""
-    return ["callable" if callable(v) else "value" for v in values]
+    labels = []
+    for value in values:
+        if callable(value):
+            labels.append("callable")
+        else:
+            labels.append("value")
+    return labels
 ~~~
 
 ## `in` needs to be told how

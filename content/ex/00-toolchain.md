@@ -9,7 +9,7 @@ slug: 00-toolchain
 @expect silent
 @hint Compare `"3.9"` and `"3.10"` as text, character by character, and say which one sorts first.
 @hint The parts are numbers. Compare them as numbers.
-@diagnose silent Nothing raised, because comparing two strings is a perfectly legal thing to do — it just answers a different question than you meant. Text comparison goes character by character, so `"3.9"` and `"3.10"` are decided at the third character, where `9` beats `1`. Every version below 3.10 is therefore reported as newer than every version above it. Split on the dot and compare integers, or use the tuple the interpreter already hands you as `sys.version_info`.
+@diagnose silent Nothing raised, because comparing two strings is a perfectly legal thing to do — it just answers a different question than you meant. Text comparison goes character by character, so `"3.9"` and `"3.10"` are decided at the third character, where `9` beats `1`. Every version below 3.10 is therefore reported as newer than every version above it. Split on the dot, turn each part into an integer, and compare the tuples — tuples compare elementwise, so `(3, 9)` correctly sorts below `(3, 10)`. Or skip the parsing entirely and use `sys.version_info`, which the interpreter already provides in exactly that form.
 
 ~~~starter
 def modern_enough(version):
@@ -27,7 +27,10 @@ assert modern_enough("2.7") is False
 ~~~solution
 def modern_enough(version):
     """True if version is 3.10 or newer."""
-    return tuple(int(part) for part in version.split(".")) >= (3, 10)
+    parts = []
+    for part in version.split("."):
+        parts.append(int(part))
+    return tuple(parts) >= (3, 10)
 ~~~
 
 ## Two ways to compile
@@ -170,35 +173,53 @@ def describe(value):
     return f"value={value!r}"
 ~~~
 
-## Rounding does not do what you were taught
+## The line everybody copies without reading
 
-`to_nearest` is documented as rounding half upward, the way you learned in school. `round` does something else, deliberately, and the tests pick the two values where the difference shows.
+`report.py` is a script that also wants to be importable. Right now importing it does the work, which means anything that so much as reads a function out of this file has already written to the log. The hidden tests import it and check.
 
 @expect silent
-@hint Try `round(0.5)` and `round(1.5)` in your head, then check whether you were right.
-@hint The rule Python uses is called round-half-to-even, and it is a deliberate choice about bias, not a bug.
-@diagnose silent It runs and it is wrong at exactly the halfway points. `round` implements round-half-to-even, also called banker's rounding: a value exactly between two integers goes to the even one, so `round(0.5)` is `0` and `round(1.5)` is `2`. Rounding halves consistently upward biases the sum of a long column of numbers upward; going to even cancels out. It is the right default and the wrong one for a function documented to round halves up, which has to say so itself.
+@hint When you run a file directly, what is its `__name__`? When you import the same file, what is it then?
+@hint A `def` builds a function object when reached. A bare call at the bottom of the file *runs* when reached — including on import.
+@diagnose silent Nothing raised, and that is the whole problem: the work happened at import time. Everything at module level executes top to bottom when the module is first loaded, and a bare `main()` at the bottom is module level. So `import report` runs it — as does `from report import summarise`, which loads the entire module to get at one name. The guard is the fix, and now you can see exactly what it guards: Python sets `__name__` to the string `"__main__"` only for the file you ran directly, and to the module's own name for anything imported. So `if __name__ == "__main__": main()` means *do the work only when I am the program, not when I am a library*. That one line is what separates a file you can import from a file that does something the moment you touch it.
 
 ~~~starter
-def to_nearest(value):
-    """Round to the nearest integer, with .5 always going up."""
-    return round(value)
+LOG: list[str] = []
+
+
+def summarise(rows):
+    """Return a one-line summary. Safe to import and use on its own."""
+    return f"{len(rows)} rows"
+
+
+def main():
+    LOG.append(summarise([1, 2, 3]))
+
+
+main()
 ~~~
 
 ~~~tests
-assert to_nearest(1.4) == 1
-assert to_nearest(1.6) == 2
-assert to_nearest(0.5) == 1, "0.5 did not round up"
-assert to_nearest(2.5) == 3, "2.5 did not round up"
+imported = _ph_import()
+assert imported["LOG"] == [], f"importing the module already did the work: {imported['LOG']}"
+assert imported["summarise"]([1, 2]) == "2 rows", "the function must still be importable"
+assert LOG == ["3 rows"], "running the file directly should still do the work"
 ~~~
 
 ~~~solution
-import math
+LOG: list[str] = []
 
 
-def to_nearest(value):
-    """Round to the nearest integer, with .5 always going up."""
-    return math.floor(value + 0.5)
+def summarise(rows):
+    """Return a one-line summary. Safe to import and use on its own."""
+    return f"{len(rows)} rows"
+
+
+def main():
+    LOG.append(summarise([1, 2, 3]))
+
+
+if __name__ == "__main__":
+    main()
 ~~~
 
 ## Asking what type something is
