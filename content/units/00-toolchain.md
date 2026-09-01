@@ -150,4 +150,4 @@ The temptation, faced with forty lines of traceback, is to skim it and start gue
 
 Your source is compiled to bytecode before anything runs, so syntax errors stop the whole file while every other error waits until its line is reached. `dis` shows you what the compiler produced, and it is the fastest way to end a disagreement. `__pycache__` is a cache, tied to the interpreter version, safe to delete. Every project gets its own environment. And the REPL is there to be asked.
 
-The rest of this book leans on the first of those more than anything else: Python will happily compile and run something that makes no sense, which is precisely why finding out what it actually did is a skill worth building deliberately.
+The rest of this book leans on the first of those more than anything else. Python will happily compile and run something that makes no sense, so knowing what it is really doing is not a nicety. It is the skill the rest of the language rests on.

@@ -197,10 +197,10 @@ const WRAP_KEY = "ph.wrap";
 /* A textarea with transparent text laid exactly over a highlighted <pre>. The
    caret and the selection are the textarea's; every visible glyph is the pre's.
    They stay aligned only while they agree on font, size, line-height, padding,
-   tab-size and wrapping — all asserted in the stylesheet, not here. The one
+   tab-size and wrapping, all asserted in the stylesheet, not here. The one
    metric CSS cannot settle is width, because a textarea cannot size itself to
    its longest line, so that gets pushed across after each paint. */
-function buildEditor(host, initial, onRun) {
+function buildEditor(host, initial, onRun, starter = initial) {
   host.innerHTML = `
     <div class="ed-toolbar">
       <span class="mono faint">your_code.py</span>
@@ -227,7 +227,7 @@ function buildEditor(host, initial, onRun) {
   const badge = host.querySelector(".vimbadge");
 
   let errLines = new Set();
-  let lastHl = null, lastLines = -1, lastErrs = "";
+  let lastHl = null, lastLines = -1, lastErrs = "", lastWrap = null;
   let relTo = null;          // cursor line for vim's relative numbering, or null
 
   ta.value = initial;
@@ -271,11 +271,13 @@ function buildEditor(host, initial, onRun) {
     }
     // Reading scrollWidth straight after writing the highlight forces a
     // synchronous layout, so it is deferred; and it only needs doing when the
-    // text actually changed, not on every motion key.
-    if (textChanged) {
-      requestAnimationFrame(() => {
-        ta.style.width = ed.classList.contains("softwrap") ? "" : pre.scrollWidth + "px";
-      });
+    // text changed or the wrap mode did, not on every motion key. Leaving the
+    // wrap case out means the textarea keeps a pixel width it cannot fold at,
+    // inside a container that now clips.
+    const wrapping = ed.classList.contains("softwrap");
+    if (textChanged || wrapping !== lastWrap) {
+      lastWrap = wrapping;
+      requestAnimationFrame(() => { ta.style.width = wrapping ? "" : pre.scrollWidth + "px"; });
     }
   }
 
@@ -389,7 +391,10 @@ function buildEditor(host, initial, onRun) {
     ta,
     paint,
     el: ed,
-    reset: () => { ta.value = initial; vim.sync(); paint(); },
+    // Back to the exercise's starter, NOT to whatever the editor happened to
+    // open with: after an edit and a reload those are the same value, and reset
+    // would hand back the edit it was asked to discard.
+    reset: () => { ta.value = starter; vim.sync(); paint(); },
     setErrorLines(lines) { errLines = new Set(lines); paint(); },
   };
 }
@@ -414,7 +419,7 @@ export function mountWorkbench(host, ctx) {
     <div id="verdict"></div>
     <div id="reading"></div>`;
 
-  const editor = buildEditor(host.querySelector("#edhost"), saved || ex.starter, () => run());
+  const editor = buildEditor(host.querySelector("#edhost"), saved || ex.starter, () => run(), ex.starter);
   const status = host.querySelector("#wbstatus");
   const verdict = host.querySelector("#verdict");
   const reading = host.querySelector("#reading");
@@ -543,7 +548,7 @@ function renderReading({ ex, ruff, mypy, run, reading, host, onPass, next }) {
     onPass?.();
     parts.unshift(`<div class="reading"><h4>${ruff.length || mypy.length ? "Correct, but not clean" : "Green"}</h4>
       <p>${ruff.length || mypy.length
-        ? "The hidden tests pass, so the behaviour is right. The static judges still have something to say — read them, because on a real codebase that is the difference between code that works today and code that works next year."
+        ? "The hidden tests pass, so the behaviour is right. The static judges still have something to say, and they are worth reading: on a real codebase that is the difference between code that works today and code that still works next year."
         : "The tests pass and both static judges are clean. That is the whole traffic light green at once."}</p>
       ${next ? `<p><a class="btn sm" href="${next}">Next →</a></p>` : ""}</div>`);
   }
@@ -553,7 +558,7 @@ function renderReading({ ex, ruff, mypy, run, reading, host, onPass, next }) {
   if (!parts.length && (run?.exc || ruff.length || mypy.length)) {
     parts.push(`<div class="reading"><h4>Not one of this exercise's errors</h4>
       <p>The judges are objecting to something the exercise does not have a written
-      reading for — usually a typo, or a change further from the starter than the
+      reading for, usually a typo or a change further from the starter than the
       exercise expects. Read their messages above; they are the real ones, not a
       simplification. <b>reset</b> restores the starter if you want to begin again.</p></div>`);
   }

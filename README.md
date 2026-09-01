@@ -1,11 +1,12 @@
 # The Python Handbook
 
-> Learn Python by finding out what it actually did.
+> Python doesn't stop you.
 
-Rust stops you. Python agrees with you and then does something else, and that
-is the whole difficulty of the language. So this handbook runs your code past
-**three judges that disagree with each other**, and treats the disagreement as
-the lesson.
+A compiler refuses code it cannot make sense of. Python takes almost anything
+you write, runs it, and finds the mistake when it reaches that line, or hands
+back a wrong answer and says nothing at all. That gap is the whole difficulty of
+the language, so this handbook runs your code past **three judges that disagree
+with each other**, and treats the disagreement as the lesson.
 
 | Judge | Speed | Answers with | Runs |
 | --- | --- | --- | --- |

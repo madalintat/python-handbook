@@ -1,4 +1,4 @@
-/* The Python Handbook — routing, views, progress. No framework, no build step. */
+/* The Python Handbook: routing, views, progress. No framework, no build step. */
 
 import { highlightPython, mountWorkbench, esc, inline, cached, flag, setFlag } from "./workbench.js";
 
@@ -108,15 +108,20 @@ async function viewHome() {
   const units = m.track.length;
   const done = m.track.filter(u => u.hasNote && u.hasEx && u.hasDrills).length;
   const hours = Math.round(m.totalMinutes / 60);
+  // What exists, not what the manifest plans. Advertising a number the reader
+  // cannot reach is the one thing a progress figure must never do.
+  const writtenEx = m.track.reduce((n, u) => n + u.hasEx, 0);
+  const writtenDrills = m.track.reduce((n, u) => n + u.hasDrills, 0);
 
   main.innerHTML = `
   <section class="hero"><div class="wrap hero-grid">
     <div>
       <p class="eyebrow">${units} units · ${m.projects.length} projects · CPython 3.14</p>
-      <h1>Learn Python by finding out what it actually did.</h1>
-      <p class="lede">Rust stops you. Python agrees with you and then does something else.
-      Every exercise here runs for real in your browser and is judged three times over —
-      and the interesting part is where the three judges disagree.</p>
+      <h1>Python doesn't stop you.</h1>
+      <p class="lede">A compiler refuses code it cannot make sense of. Python takes almost
+      anything you write, runs it, and finds the mistake when it reaches that line, or hands
+      back a wrong answer and says nothing at all. Every exercise here runs for real in your
+      own browser, judged by three tools that disagree with each other.</p>
       <div class="hero-cta">
         <a class="btn" href="#/unit/01-names">Start at unit 01</a>
         <a class="btn ghost" href="#/track">See the whole track</a>
@@ -128,16 +133,16 @@ async function viewHome() {
   <div class="wrap">
     <div class="stats">
       <div class="stat"><b>${units}</b><span>units, in dependency order</span></div>
-      <div class="stat"><b>${units * 8}</b><span>exercises that really run</span></div>
-      <div class="stat"><b>${units * 15}</b><span>drills</span></div>
+      <div class="stat"><b>${writtenEx}</b><span>exercises that really run</span></div>
+      <div class="stat"><b>${writtenDrills}</b><span>drills</span></div>
       <div class="stat"><b>${m.projects.length}</b><span>projects, ~${hours}h of building</span></div>
-      <div class="stat"><b>${done}</b><span>units written so far</span></div>
+      <div class="stat"><b>${done}</b><span>units written of ${units}</span></div>
     </div>
 
     <div class="section-head"><h2>Three judges</h2></div>
     <p class="muted" style="max-width:64ch;margin-top:-0.4rem">
-      Your code is checked by a linter, a type checker and the interpreter itself — all
-      running locally in this tab. They do not always agree, and a exercise can be
+      Your code is checked by a linter, a type checker and the interpreter itself, all
+      running locally in this tab. They do not always agree, and an exercise can be
       <em>correct but yellow</em>, which is a state a compiler cannot express.</p>
     <div class="judges">
       <div class="judge"><h4><i class="dot ok"></i>ruff</h4><p>Lint codes like <code>B006</code>, in about a millisecond. Catches the mistakes that have a visible shape.</p></div>
@@ -186,7 +191,7 @@ async function viewTrack() {
     <p class="eyebrow">The track</p>
     <h1 style="margin:0.4rem 0 0.6rem">${m.track.length} units, in order</h1>
     <p class="lede muted" style="max-width:60ch">Each unit depends on the ones before it. There are no optional
-    units and no shortcuts — the ordering is the argument.</p>
+    units and no shortcuts: the ordering is the argument.</p>
     ${(() => { const seen = store.read(); return m.phases.map(ph => `
       <div class="phase-head"><h3>${esc(ph.title)}</h3><p>${esc(ph.blurb)}</p></div>
       <div class="grid">${m.track.filter(u => u.phase === ph.n).map(u => unitCard(u, seen)).join("")}</div>
@@ -248,7 +253,10 @@ async function viewUnit(slug, anchor) {
   sheetBody.innerHTML = `<p class="eyebrow" style="margin-bottom:.7rem">${esc(unit.title)}</p>` +
     unit.sections.map(s => `<a class="sheetlink" href="#/unit/${slug}/${s.id}">${esc(s.title)}</a>`).join("");
   sheetBtn.hidden = false;
-  if (anchor) document.getElementById(anchor)?.scrollIntoView({ behavior: "instant", block: "start" });
+  if (anchor) {
+    document.getElementById(anchor)?.scrollIntoView({ behavior: "instant", block: "start" });
+    dispatchEvent(new Event("scroll"));      // so the rail marks where we landed
+  }
 }
 
 let unwireRail = null;
@@ -427,8 +435,12 @@ async function viewProgress() {
   </div>`;
   $("#reset").onclick = () => {
     if (confirm("Erase every note read, exercise passed and saved snippet?")) {
-      Object.keys(localStorage).filter(k => k.startsWith("ph.")).forEach(k => localStorage.removeItem(k));
-      touchStreak();
+      // Progress and saved code only. The theme, vim mode, soft wrap and the
+      // rail's state are preferences, and erasing those is not what the button
+      // says it does. Nor is re-seeding a streak the reader just erased.
+      Object.keys(localStorage)
+        .filter(k => k === "ph.progress" || k.startsWith("ph.code."))
+        .forEach(k => localStorage.removeItem(k));
 
 // The footer states which judges the book was verified against. Rendered from
 // data/judges.json so it cannot claim a version nothing pins.
@@ -646,6 +658,9 @@ async function route() {
   if (sheetBtn) sheetBtn.hidden = !path.startsWith("/unit/");
   sheet?.classList.remove("open");
   if (!path.startsWith("/unit/")) { unwireRail?.(); unwireRail = null; }
+  // Before the view renders, not after: a view that jumps to a section would
+  // otherwise have that jump undone the moment it finished.
+  scrollTo(0, 0);
   const hit = routes.find(([re]) => re.test(path));
   if (!hit) {
     notFound();
@@ -662,7 +677,6 @@ async function route() {
     if (href === "/" ? path === "/" : path.startsWith(href)) a.setAttribute("aria-current", "page");
     else a.removeAttribute("aria-current");
   });
-  scrollTo(0, 0);
   maybeCompanion();
 }
 
