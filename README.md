@@ -131,6 +131,17 @@ every axis.
 was a near-duplicate of the authoring contract until it was noticed, which is
 exactly how long that kind of thing survives.
 
+**A number in prose is a number that will be wrong.** Comments here quoted the
+shape of one project stage to explain why the editor works as it does. They
+went stale inside a single session, because a change to how the work is worked
+out moved them and nothing was watching. Any figure worth writing down is worth
+a check that fails when it changes, and the check should name the files to fix.
+
+**Check the cheap thing first.** Two of the hot-path fixes in this repository
+are the same shape: compute the expensive answer only after a free comparison
+says it might have changed. It is easy to write the guard the other way round
+and never notice, because the code is correct, only wasteful.
+
 ## Writing content
 
 The contract every unit, project, drill and glossary file follows is in
