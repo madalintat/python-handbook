@@ -85,6 +85,7 @@ async function getRuff() {
     const settings = {
       "line-length": ruff.lineLength,
       "indent-width": 4,
+      "target-version": ruff.targetVersion,
       lint: { select: ruff.select, ignore: ruff.ignore },
     };
     // 0.16 takes a position encoding; older builds take one argument. Try both.

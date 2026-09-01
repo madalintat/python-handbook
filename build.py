@@ -170,6 +170,9 @@ JUDGES = {
         # line length is a formatting opinion, not a teaching signal
         "ignore": ["E501"],
         "lineLength": 88,
+        # without this, ruff assumes an older Python and reports 3.11+ builtins
+        # such as ExceptionGroup as undefined names
+        "targetVersion": "py314",
     },
     "mypy": {
         "flags": ["--no-color-output", "--no-error-summary", "--hide-error-context"],
@@ -788,7 +791,8 @@ def _judge_all(sources: dict[str, str]) -> dict[str, dict]:
                      "--output-format", "json", "--isolated", "--no-cache",
                      "--select", ",".join(JUDGES["ruff"]["select"]),
                      "--ignore", ",".join(JUDGES["ruff"]["ignore"]),
-                     "--line-length", str(JUDGES["ruff"]["lineLength"]), str(root)])
+                     "--line-length", str(JUDGES["ruff"]["lineLength"]),
+                     "--target-version", JUDGES["ruff"]["targetVersion"], str(root)])
         try:
             for d in json.loads(ruff.stdout or "[]"):
                 name = paths.get(Path(d.get("filename", "")).name)
