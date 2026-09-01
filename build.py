@@ -502,8 +502,13 @@ _NAME_FEATURES = {
     "dataclass": "dataclass", "defaultdict": "defaultdict",
     "namedtuple": "namedtuple", "Counter": "counter", "deque": "deque",
     "setdefault": "setdefault", "wraps": "wraps", "partial": "partial",
-    "cache": "cache", "lru_cache": "cache", "deepcopy": "deepcopy",
+    "deepcopy": "deepcopy",
 }
+# Reached only as an attribute (functools.cache) or a from-import, never as a
+# bare name, so matching them as bare names only produced false positives on
+# ordinary variables called `cache`.
+_ATTR_FEATURES = {"cache": "cache", "lru_cache": "cache"}
+
 _MODULE_FEATURES = {
     "math": "math", "copy": "copy_module", "itertools": "itertools",
     "functools": "functools", "heapq": "heapq",
@@ -520,6 +525,7 @@ _MODULE_FEATURES = {
 # but never detected gated nothing, and a detected feature named in no unit gated
 # everything forever. Both are now build failures.
 DETECTABLE = ({name for _, name in _NODE_FEATURES} | _SYNTHETIC_FEATURES
+              | set(_ATTR_FEATURES.values())
               | set(_NAME_FEATURES.values()) | set(_MODULE_FEATURES.values()))
 
 
@@ -551,8 +557,15 @@ def features_used(source: str) -> set[str]:
                 found.add(name)
         if isinstance(node, ast.Name) and node.id in _NAME_FEATURES:
             found.add(_NAME_FEATURES[node.id])
-        if isinstance(node, ast.Attribute) and node.attr in _NAME_FEATURES:
-            found.add(_NAME_FEATURES[node.attr])
+        if isinstance(node, ast.Attribute):
+            if node.attr in _NAME_FEATURES:
+                found.add(_NAME_FEATURES[node.attr])
+            if node.attr in _ATTR_FEATURES:
+                found.add(_ATTR_FEATURES[node.attr])
+        if isinstance(node, ast.ImportFrom):
+            for alias in node.names:
+                if alias.name in _ATTR_FEATURES:
+                    found.add(_ATTR_FEATURES[alias.name])
         if isinstance(node, ast.Import):
             for alias in node.names:
                 if alias.name in _MODULE_FEATURES:
