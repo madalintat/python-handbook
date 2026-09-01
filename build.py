@@ -776,31 +776,40 @@ def _run(cmd: list[str], **kw) -> subprocess.CompletedProcess:
     return subprocess.run(cmd, capture_output=True, text=True, **kw)
 
 
-# Mirrors _ph_import in the browser runner. Appended after the reader's code so
-# that their imports stay at the top of the file and ruff's E402 is not provoked.
-_IMPORT_SHIM = '''
-
-def _ph_import(_src=_PH_SOURCE):
-    mod = {"__name__": "your_code"}
-    exec(compile(_src, "your_code.py", "exec"), mod)
-    return mod
-'''
+RUNNER = ROOT / "assets" / "runner.py"
 
 
-def _combine(source: str, tests: str) -> str:
-    """The reader's code, the import shim, then the hidden tests."""
-    return f"{source}\n\n_PH_SOURCE = {source!r}\n{_IMPORT_SHIM}\n{tests}"
+def _run_all(cases: dict[str, tuple[str, str]]) -> dict[str, dict]:
+    """Run each (source, tests) pair through assets/runner.py.
+
+    The same file the browser executes inside Pyodide, so the filenames, the line
+    numbers and the exception names are one definition rather than two that have
+    to be kept in step by hand. One subprocess per case, because each runs
+    arbitrary code, but they are independent and go through a thread pool.
+    """
+    def one(item):
+        name, (src, tests) = item
+        out = _run([sys.executable, str(RUNNER), "--stdin"],
+                   input=json.dumps({"src": src, "tests": tests}))
+        try:
+            return name, json.loads(out.stdout)
+        except json.JSONDecodeError:
+            return name, {"ok": False, "out": "", "exc": "RunnerFailed",
+                          "msg": out.stderr.strip()[-400:], "tb": ""}
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+        return dict(pool.map(one, cases.items()))
 
 
 def _judge_all(sources: dict[str, str]) -> dict[str, dict]:
-    """Judge many snippets at once.
+    """Run ruff and mypy over many snippets at once.
 
-    ruff and mypy cost almost nothing per file and a great deal per invocation,
-    so both run once over the whole set rather than once per snippet. CPython has
-    to stay one process per snippet, since each one runs arbitrary code, but they
-    are independent and go through a thread pool.
+    Both cost almost nothing per file and a great deal per invocation, so each
+    runs once over the whole set. Each snippet is judged ALONE, which is what the
+    browser lints: the reader's editor contents, without the hidden tests
+    appended. Running the code is `_run_all`.
     """
-    verdicts = {name: {"ruff": [], "mypy": [], "raises": ""} for name in sources}
+    verdicts = {name: {"ruff": [], "mypy": []} for name in sources}
 
     with tempfile.TemporaryDirectory() as td:
         root = Path(td)
@@ -835,24 +844,6 @@ def _judge_all(sources: dict[str, str]) -> dict[str, dict]:
                 if name:
                     verdicts[name]["mypy"].append(m.group(2))
 
-        def run_one(item):
-            name, _ = item
-            out = _run([sys.executable, str(root / f"{name}.py")])
-            if out.returncode == 0:
-                return name, ""
-            tail = [ln for ln in out.stderr.strip().splitlines() if ln and not ln[0].isspace()]
-            if not tail:
-                return name, ""
-            # A traceback prints the qualified name (json.decoder.JSONDecodeError)
-            # while the browser reports type(e).__name__ (JSONDecodeError), its
-            # last component. Without this the two judges disagree about every
-            # exception not defined in builtins, and an exercise expecting one
-            # would validate here and fail for the reader, or the reverse.
-            return name, tail[-1].split(":")[0].strip().rsplit(".", 1)[-1]
-
-        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
-            for name, raised in pool.map(run_one, sources.items()):
-                verdicts[name]["raises"] = raised
 
     for v in verdicts.values():
         v["ruff"] = sorted(set(v["ruff"]))
@@ -860,19 +851,26 @@ def _judge_all(sources: dict[str, str]) -> dict[str, dict]:
     return verdicts
 
 
-def _satisfies(expects: list[dict], verdict: dict) -> list[str]:
-    """Return a list of failure messages; empty means the starter behaves as documented."""
+def _satisfies(expects: list[dict], static: dict, run: dict) -> list[str]:
+    """Failures to meet an exercise's declared verdict, in the browser's terms.
+
+    One run of the reader's code with its hidden tests, exactly as the workbench
+    does it: if the starter raises, the tests never execute and the exception is
+    what both sides see; if it does not, an AssertionError means the tests
+    caught it, which is what `silent` describes.
+    """
     problems = []
     for e in expects:
         judge, code = e["judge"], e["code"]
         if judge == "silent":
-            if verdict["raises"]:
-                problems.append(f"@expect silent but it raised {verdict['raises']}")
+            if run["exc"] != "AssertionError":
+                problems.append("@expect silent, so the hidden tests should catch it, "
+                                f"but it raised {run['exc'] or 'nothing at all'}")
         elif judge == "raises":
-            if verdict["raises"] != code:
-                problems.append(f"@expect raises:{code} but got {verdict['raises'] or 'no exception'}")
-        elif code not in verdict[judge]:
-            problems.append(f"@expect {judge}:{code} but {judge} said {verdict[judge] or 'nothing'}")
+            if run["exc"] != code:
+                problems.append(f"@expect raises:{code} but got {run['exc'] or 'no exception'}")
+        elif code not in static[judge]:
+            problems.append(f"@expect {judge}:{code} but {judge} said {static[judge] or 'nothing'}")
     return problems
 
 
@@ -891,43 +889,48 @@ def validate() -> int:
         print("validate needs uv with ruff and mypy available", file=sys.stderr)
         return 2
 
-    # Build every snippet the run needs, judge them all in one go, then check.
-    labels, sources = {}, {}
+    labels, sources, cases = {}, {}, {}
     for path in sorted(CONTENT.glob("ex/*.md")):
         slug = path.stem.replace("-", "_")
         for ex in parse_exercises(path):
             base = f"ex_{slug}__{ex['n']}"
             labels[base] = (f"{path.stem} #{ex['n']} {ex['title']}", ex)
+            # ruff and mypy see the code alone, which is what the browser lints.
             sources[f"{base}__starter"] = ex["starter"]
-            sources[f"{base}__broken"] = _combine(ex["starter"], ex["tests"])
-            sources[f"{base}__solution"] = _combine(ex["solution"], ex["tests"])
+            sources[f"{base}__solution"] = ex["solution"]
+            # CPython sees the code with its hidden tests, which is what the
+            # browser runs.
+            cases[f"{base}__starter"] = (ex["starter"], ex["tests"])
+            cases[f"{base}__solution"] = (ex["solution"], ex["tests"])
 
     # Judged alongside the exercises, so the two runners cannot drift apart on
     # what an exception is called without a check failing.
-    sources.update({k: src for k, (src, _) in _NAME_CASES.items()})
-    verdicts = _judge_all(sources)
+    cases.update({k: (src, "") for k, (src, _) in _NAME_CASES.items()})
+
+    static = _judge_all(sources)
+    runs = _run_all(cases)
 
     failures = 0
     for key, (_, expected) in _NAME_CASES.items():
-        got = verdicts[key]["raises"]
+        got = runs[key]["exc"]
         if got != expected:
             print(f"FAIL judges: an exception the browser calls {expected!r} "
                   f"is reported here as {got!r}")
             failures += 1
-    for base, (label, ex) in sorted(labels.items()):
-        starter = verdicts[f"{base}__starter"]
-        broken = verdicts[f"{base}__broken"]
-        sol = verdicts[f"{base}__solution"]
 
-        # 1. the starter, alone, produces the verdict its prose describes
-        for problem in _satisfies(ex["expects"], starter):
+    for base, (label, ex) in sorted(labels.items()):
+        s_static, s_run = static[f"{base}__starter"], runs[f"{base}__starter"]
+        v_static, v_run = static[f"{base}__solution"], runs[f"{base}__solution"]
+
+        # 1. the starter produces the verdict its prose describes
+        for problem in _satisfies(ex["expects"], s_static, s_run):
             print(f"FAIL starter  {label}: {problem}")
             failures += 1
 
         # 2. every code a judge reports has prose explaining it, or the reader
         #    meets a coloured row with no reading beside it
         for judge in ("ruff", "mypy"):
-            for code in starter[judge]:
+            for code in s_static[judge]:
                 if code not in ex["diagnose"]:
                     print(f"FAIL starter  {label}: {judge} reported {code} "
                           f"but there is no @diagnose {code}")
@@ -935,25 +938,19 @@ def validate() -> int:
 
         # 3. the starter must actually FAIL its own hidden tests, or the exercise
         #    is already solved and nobody would notice
-        if not broken["raises"]:
+        if s_run["ok"]:
             print(f"FAIL starter  {label}: starter already passes its own tests")
             failures += 1
-        elif any(e["judge"] == "silent" for e in ex["expects"]) \
-                and broken["raises"] != "AssertionError":
-            print(f"FAIL starter  {label}: @expect silent, so starter+tests should "
-                  f"fail an assert, but it raised {broken['raises']}")
-            failures += 1
 
-        # 4. the solution passes the tests and is clean under both static judges
-        if sol["raises"]:
-            print(f"FAIL solution {label}: solution+tests raised {sol['raises']}")
+        # 4. the solution passes, and is clean under both static judges
+        if not v_run["ok"]:
+            print(f"FAIL solution {label}: solution+tests raised "
+                  f"{v_run['exc']}: {v_run['msg'][:120]}")
             failures += 1
-        if sol["ruff"]:
-            print(f"FAIL solution {label}: solution is not ruff clean: {sol['ruff']}")
-            failures += 1
-        if sol["mypy"]:
-            print(f"FAIL solution {label}: solution is not mypy clean: {sol['mypy']}")
-            failures += 1
+        for judge in ("ruff", "mypy"):
+            if v_static[judge]:
+                print(f"FAIL solution {label}: solution is not {judge} clean: {v_static[judge]}")
+                failures += 1
 
     print(f"\nvalidated {len(labels)} exercises against ruff + mypy + CPython: "
           f"{'ALL CLEAN' if not failures else f'{failures} FAILURES'}")

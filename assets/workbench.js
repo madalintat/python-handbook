@@ -108,45 +108,22 @@ async function getPyodide(say) {
   return cached("py", async () => {
     say?.("fetching CPython…");
     const { cpython } = await judges();
-    const { loadPyodide } = await import(`${cpython.cdn}pyodide.mjs`);
+    // assets/runner.py is the one definition of what running the reader's code
+    // means. build.py --validate executes the same file in a subprocess, so the
+    // filenames, the line numbers and the exception names cannot drift apart.
+    const [{ loadPyodide }, runner] = await Promise.all([
+      import(`${cpython.cdn}pyodide.mjs`),
+      fetch("assets/runner.py").then(r => r.text()),
+    ]);
     const py = await loadPyodide({ indexURL: cpython.cdn });
-    py.runPython(RUNNER);
+    py.runPython(runner);
     return py;
   });
 }
 
-// Lives inside Pyodide. Runs the snippet and its hidden tests in one namespace so
-// a failing assert and a failing snippet come back through the same channel.
-const RUNNER = `
-import io, json, sys, traceback
-
-def _ph_run(src, tests):
-    # The reader's file is run the way "python your_code.py" runs it, so
-    # __name__ is "__main__". Some exercises need to know what would happen on
-    # an import instead, so the hidden tests get _ph_import() to find out.
-    def _ph_import():
-        mod = {"__name__": "your_code"}
-        exec(compile(src, "your_code.py", "exec"), mod)
-        return mod
-
-    ns = {"__name__": "__main__", "_ph_import": _ph_import}
-    buf = io.StringIO()
-    real, sys.stdout = sys.stdout, buf
-    try:
-        exec(compile(src, "your_code.py", "exec"), ns)
-        exec(compile(tests, "hidden_tests.py", "exec"), ns)
-        return json.dumps({"ok": True, "out": buf.getvalue(), "exc": None, "msg": "", "tb": ""})
-    except BaseException as e:
-        tb = "".join(traceback.format_exception(type(e), e, e.__traceback__.tb_next))
-        return json.dumps({"ok": False, "out": buf.getvalue(),
-                           "exc": type(e).__name__, "msg": str(e), "tb": tb})
-    finally:
-        sys.stdout = real
-`;
-
 async function judgeRun(src, tests, say) {
   const py = await getPyodide(say);
-  const fn = py.globals.get("_ph_run");
+  const fn = py.globals.get("run_json");
   try { return JSON.parse(fn(src, tests)); }
   finally { fn.destroy?.(); }
 }

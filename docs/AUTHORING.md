@@ -150,6 +150,29 @@ Where the idiomatic solution needs a later tool, say so in the `@diagnose` prose
 and point forward: "unit 12 shows the one-line version". That turns a limitation
 into a thread the reader can follow.
 
+## One runner, two judges
+
+`assets/runner.py` is the single definition of what running a reader's code
+means: it compiles the code as `your_code.py` and the hidden tests as
+`hidden_tests.py`, executes both in one namespace, and reports what happened.
+
+The browser runs that file inside Pyodide and calls `run_json`. `build.py
+--validate` runs the same file in a subprocess. Nothing about the two paths is
+written twice, which matters because anything that differed between them, the
+filenames a traceback names, the line numbers it reports, how an exception is
+spelled, would mean the validator was not judging the artefact the reader runs.
+
+That equivalence is checked rather than assumed. `--validate` judges four
+snippets alongside the exercises whose exceptions could be named differently by
+the two paths (a builtin, a qualified name, a user-defined class, a nested
+module), and `./qa-browser.sh` compares every exercise's browser verdict against
+the `@expect` its prose is written for.
+
+The division of labour follows the workbench exactly: **ruff and mypy see the
+code alone**, which is what a reader has in the editor, and **CPython sees the
+code with its hidden tests**, which is what pressing Run does. A solution that
+is "ruff clean" is therefore a claim about the file the reader ends up with.
+
 ## `_ph_import`, for exercises about import time
 
 The reader's code runs the way `python your_code.py` runs it, so `__name__` is
@@ -162,7 +185,7 @@ imported = _ph_import()
 assert imported["LOG"] == [], "importing the module already did the work"
 ```
 
-Both the browser runner and `--validate` provide it. Unit 00's `__main__` guard
+It lives in `assets/runner.py`, so both paths have it for free. Unit 00's `__main__` guard
 exercise is the reason it exists: without it, the guard can only be described,
 never demonstrated.
 
