@@ -433,8 +433,8 @@ INTRODUCES = {
     "09-exceptions": {"try"},
     "10-sequences": set(),
     "11-strings": set(),
-    "12-dicts": {"defaultdict", "dict_comprehension", "setdefault"},
-    "13-comprehensions": {"counter", "deque"},
+    "12-dicts": {"counter", "defaultdict", "dict_comprehension", "setdefault"},
+    "13-comprehensions": {"deque"},
     "14-sorting": {"bisect", "heapq"},
     "15-iterators": set(),
     "16-generators": {"yield"},
@@ -505,7 +505,7 @@ _NAME_FEATURES = {
 }
 _MODULE_FEATURES = {
     "math": "math", "copy": "copy_module", "itertools": "itertools",
-    "functools": "functools", "collections": "counter", "heapq": "heapq",
+    "functools": "functools", "heapq": "heapq",
     "bisect": "bisect", "dataclasses": "dataclass", "enum": "enum",
     "ast": "ast", "dis": "dis", "inspect": "inspect", "logging": "logging",
     "weakref": "weakref", "gc": "gc", "pathlib": "pathlib", "re": "re",
