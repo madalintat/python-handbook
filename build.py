@@ -411,15 +411,10 @@ def parse_project(path: Path) -> dict:
 # each unit declares what it introduces and the build refuses any exercise whose
 # code uses something from further down the track.
 
-# Assumed from the first page: this is a book for people who can already write a
-# little code, and a unit-00 exercise that could not call a function or write an
-# f-string would be unteachable.
-BASELINE = {
-    "def", "call", "attribute", "if", "for", "while", "return", "assign",
-    "compare", "boolop", "arithmetic", "subscript", "fstring", "annotation",
-    "import", "list", "dict", "tuple", "print", "len", "str", "int", "float",
-    "bool", "range", "isinstance", "type",
-}
+# Assumed from the first page and therefore never gated: statements, calls,
+# attribute access, f-strings, annotations and the four container literals. They
+# are not listed, because a list of names no detector emits would imply a gate
+# that does not exist. Only what appears below is enforced.
 
 # slug -> what that unit's note teaches, and therefore what its exercises and
 # every later unit's exercises may use. This lists only features the detector
@@ -452,7 +447,7 @@ INTRODUCES = {
     "23-dataclasses": {"dataclass", "enum", "namedtuple"},
     "24-typing": {"optional"},
     "25-typecheck": set(),
-    "26-decorators": {"wraps"},
+    "26-decorators": {"decorator", "wraps"},
     "27-metaclasses": set(),
     "28-ast": {"ast", "dis", "inspect"},
     "29-modules": set(),
@@ -490,6 +485,10 @@ _NODE_FEATURES = [
 ]
 
 # builtins and modules whose first legitimate appearance is a specific unit
+# Emitted from syntax rather than from a name or a node type, so it needs saying
+# here or the consistency check below cannot see it.
+_SYNTHETIC_FEATURES = {"decorator"}
+
 _NAME_FEATURES = {
     "map": "map", "filter": "filter", "reduce": "reduce", "zip": "zip",
     "enumerate": "enumerate", "sorted": "sorted", "sum": "sum", "any": "any",
@@ -519,14 +518,14 @@ _MODULE_FEATURES = {
 # can actually find. Nothing connected the two, so a feature named in INTRODUCES
 # but never detected gated nothing, and a detected feature named in no unit gated
 # everything forever. Both are now build failures.
-DETECTABLE = ({name for _, name in _NODE_FEATURES}
+DETECTABLE = ({name for _, name in _NODE_FEATURES} | _SYNTHETIC_FEATURES
               | set(_NAME_FEATURES.values()) | set(_MODULE_FEATURES.values()))
 
 
 def _check_feature_tables() -> None:
     introduced = {f for feats in INTRODUCES.values() for f in feats}
-    undetectable = introduced - DETECTABLE - BASELINE
-    ungated = DETECTABLE - introduced - BASELINE
+    undetectable = introduced - DETECTABLE
+    ungated = DETECTABLE - introduced
     if undetectable:
         raise SystemExit(f"INTRODUCES names features no detector finds: {sorted(undetectable)}")
     if ungated:
@@ -570,7 +569,7 @@ def available_by(slug: str) -> set[str]:
     if slug not in order:
         return set(BASELINE)
     upto = order[: order.index(slug) + 1]
-    out = set(BASELINE)
+    out: set[str] = set()
     for s in upto:
         out |= INTRODUCES.get(s, set())
     return out
@@ -622,6 +621,13 @@ def build() -> int:
         by_slug[unit["slug"]]["hasNote"] = True
         (DATA / f"unit-{unit['slug']}.json").write_text(json.dumps(unit))
         written += 1
+
+    # The gate belongs to the build, not to a shell script a contributor may
+    # never run. The exercises are already parsed, so this costs nothing.
+    _check_feature_tables()
+    vocabulary = [p for path in exercises for p in gate(path)]
+    for problem in vocabulary:
+        print(f"VOCABULARY  {problem}", file=sys.stderr)
 
     for path, ex in exercises.items():
         slug = path.stem
@@ -716,11 +722,7 @@ def build() -> int:
         "track": track,
         "phases": [{"n": i, "title": t, "blurb": b} for i, (t, b) in enumerate(PHASES)],
         "projects": projects,
-        "accents": ACCENTS,
         "totalMinutes": sum(p[4] for p in PROJECTS),
-        "exercisesPerUnit": EXERCISES_PER_UNIT,
-        "drillsPerUnit": DRILLS_PER_UNIT,
-        "judges": JUDGES,
     }))
     written += 1
 
@@ -742,7 +744,7 @@ def build() -> int:
           f"{sum(1 for p in projects if p['hasBody'])}/{len(projects)}")
     print(f"errors indexed: {len(errors)}   glossary terms: {len(gloss)}   "
           f"search entries: {len(index)}")
-    return 1 if partial else 0
+    return 1 if (partial or vocabulary) else 0
 
 
 # ---------------------------------------------------------------- check / validate

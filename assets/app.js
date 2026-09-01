@@ -1,6 +1,6 @@
 /* The Python Handbook: routing, views, progress. No framework, no build step. */
 
-import { highlightPython, mountWorkbench, esc, inline, cached, flag, setFlag } from "./workbench.js";
+import { highlightPython, mountWorkbench, esc, inline, cached, flag, setFlag, judges } from "./workbench.js";
 
 const main = document.getElementById("main");
 const $ = (s, r = document) => r.querySelector(s);
@@ -158,7 +158,10 @@ async function viewHome() {
     <div style="height:3rem"></div>
   </div>`;
 
-  $("#preview").innerHTML = m.track.slice(0, 6).map(unitCard).join("");
+  // not .map(unitCard): map passes the index as the second argument, which
+  // would land in readSet and silence the "read" badge
+  const seen = store.read();
+  $("#preview").innerHTML = m.track.slice(0, 6).map(u => unitCard(u, seen)).join("");
   $("#projpreview").innerHTML = m.projects.slice(0, 3).map(projectCard).join("");
   stagger([...main.querySelectorAll(".card")]);
 }
@@ -200,7 +203,18 @@ async function viewTrack() {
   stagger([...main.querySelectorAll(".card")]);
 }
 
+// Which unit is currently rendered, so a rail click that only changes the
+// anchor scrolls instead of re-parsing the markdown and rebuilding the DOM.
+let renderedUnit = null;
+
 async function viewUnit(slug, anchor) {
+  if (renderedUnit === slug) {
+    if (anchor) {
+      document.getElementById(anchor)?.scrollIntoView({ behavior: "instant", block: "start" });
+      dispatchEvent(new Event("scroll"));
+    }
+    return;
+  }
   const m = await load("manifest");
   const meta = m.track.find(u => u.slug === slug);
   if (!meta) return notFound();
@@ -238,6 +252,7 @@ async function viewUnit(slug, anchor) {
     </div>
   </div>`;
 
+  renderedUnit = slug;
   store.set("read", slug, true);
   wireRail(unit.sections);
 
@@ -278,8 +293,11 @@ function wireRail(sections) {
       a.classList.toggle("seen", n <= current);
       if (n === current) a.setAttribute("aria-current", "true"); else a.removeAttribute("aria-current");
     });
-    const rail = $("#rail");
-    if (rail) fill.style.height = `${((current + 1) / heads.length) * (rail.offsetHeight - 12)}px`;
+    // scaleY rather than height: the spine is full height and only transformed,
+    // which the compositor does without touching layout. Animating height here
+    // dirtied layout every frame, and the next tick's rect reads then had to
+    // force a synchronous re-layout to answer.
+    fill.style.transform = `scaleY(${(current + 1) / heads.length})`;
   };
   update();
   addEventListener("scroll", update, { passive: true });
@@ -430,7 +448,7 @@ async function viewProgress() {
       <div class="stat"><b>${Object.keys(p.drills || {}).length}</b><span>drill sets done</span></div>
       <div class="stat"><b>${(p.streak || {}).run || 0}</b><span>day streak, best ${(p.streak || {}).best || 0}</span></div>
     </div>
-    <div class="grid">${m.track.filter(u => u.hasNote).map(unitCard).join("")}</div>
+    <div class="grid">${(() => { const seen = store.read(); return m.track.filter(u => u.hasNote).map(u => unitCard(u, seen)).join(""); })()}</div>
     <div style="margin-top:2rem"><button class="btn ghost sm" id="reset">Erase all progress</button></div>
   </div>`;
   $("#reset").onclick = () => {
@@ -441,17 +459,7 @@ async function viewProgress() {
       Object.keys(localStorage)
         .filter(k => k === "ph.progress" || k.startsWith("ph.code."))
         .forEach(k => localStorage.removeItem(k));
-
-// The footer states which judges the book was verified against. Rendered from
-// data/judges.json so it cannot claim a version nothing pins.
-load("judges").then(j => {
-  const el = $("#footversions");
-  if (!el) return;
-  el.innerHTML = `Built and verified against CPython ${esc(j.cpython.version)} and `
-    + `ruff ${esc(j.ruff.version)}, with mypy installed from PyPI at run time.<br>` + el.innerHTML;
-}).catch(() => {});
-
-route();
+      route();
     }
   };
 }
@@ -657,10 +665,11 @@ async function route() {
   const path = location.hash.slice(1) || "/";
   if (sheetBtn) sheetBtn.hidden = !path.startsWith("/unit/");
   sheet?.classList.remove("open");
-  if (!path.startsWith("/unit/")) { unwireRail?.(); unwireRail = null; }
+  if (!path.startsWith("/unit/")) { unwireRail?.(); unwireRail = null; renderedUnit = null; }
   // Before the view renders, not after: a view that jumps to a section would
-  // otherwise have that jump undone the moment it finished.
-  scrollTo(0, 0);
+  // otherwise have that jump undone the moment it finished. Skipped when we are
+  // already on this unit, because then the view only scrolls to an anchor.
+  if (!(renderedUnit && path.startsWith(`/unit/${renderedUnit}`))) scrollTo(0, 0);
   const hit = routes.find(([re]) => re.test(path));
   if (!hit) {
     notFound();
@@ -708,7 +717,7 @@ touchStreak();
 
 // The footer states which judges the book was verified against. Rendered from
 // data/judges.json so it cannot claim a version nothing pins.
-load("judges").then(j => {
+judges().then(j => {
   const el = $("#footversions");
   if (!el) return;
   el.innerHTML = `Built and verified against CPython ${esc(j.cpython.version)} and `

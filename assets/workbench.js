@@ -7,7 +7,7 @@ import Vim from "./vim.js";
 // The three judges are described once, by build.py, and shipped as
 // data/judges.json. Fetching it rather than restating it here is what stops the
 // browser calling something clean that --validate would have failed.
-const judges = () => cached("judges", () => fetch("data/judges.json").then(r => r.json()));
+export const judges = () => cached("judges", () => fetch("data/judges.json").then(r => r.json()));
 
 /* ------------------------------------------------------------------ tokenizer */
 
@@ -22,7 +22,8 @@ const BUILTINS = new Set(("abs aiter all any ascii bin bool bytearray bytes call
   "super tuple type vars zip Exception ValueError TypeError KeyError IndexError AttributeError NameError " +
   "RuntimeError StopIteration AssertionError ZeroDivisionError UnboundLocalError").split(" "));
 
-export const esc = s => s.replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+const ESC = { "&": "&amp;", "<": "&lt;", ">": "&gt;" };
+export const esc = s => s.replace(/[&<>]/g, c => ESC[c]);
 
 // Markdown-ish inline formatting, used by the notes, the exercise prompts and
 // the diagnose readings. One definition: a second copy drifts.
@@ -227,7 +228,7 @@ function buildEditor(host, initial, onRun, starter = initial) {
   const badge = host.querySelector(".vimbadge");
 
   let errLines = new Set();
-  let lastHl = null, lastLines = -1, lastErrs = "", lastWrap = null;
+  let lastHl = null, lastLines = -1, lastMarks = "";
   let relTo = null;          // cursor line for vim's relative numbering, or null
 
   ta.value = initial;
@@ -244,17 +245,15 @@ function buildEditor(host, initial, onRun, starter = initial) {
       pre.innerHTML = highlightPython(v) + (v.endsWith("\n") ? " " : "");
       lastHl = v;
     }
-    const n = v.split("\n").length;
-    const errs = [...errLines].join(",") + "|" + relTo;
+    // The line count can only have changed if the text did.
+    const n = textChanged ? v.split("\n").length : lastLines;
     if (n !== lastLines) {
-      // The line count changed, so the gutter has to be rebuilt.
-      let g = "";
-      for (let i = 1; i <= n; i++) g += `<div class="gl">${i}</div>`;
-      gutterEl.innerHTML = g;
+      gutterEl.innerHTML = '<div class="gl"></div>'.repeat(n);
       lastLines = n;
-      lastErrs = null;
+      lastMarks = null;          // the loop below fills in every label and mark
     }
-    if (errs !== lastErrs) {
+    const marks = [...errLines].join(",") + "|" + relTo;
+    if (marks !== lastMarks) {
       // Only the marks moved. Vim calls paint() on every motion key, so
       // re-parsing the gutter's HTML for a cursor move was the bulk of the cost
       // of pressing j. Walk the existing nodes instead.
@@ -263,20 +262,20 @@ function buildEditor(host, initial, onRun, starter = initial) {
         const el = rows[i - 1];
         if (!el) break;
         const cur = relTo !== null && i === relTo + 1;
-        el.className = "gl" + (errLines.has(i) ? " err" : "") + (cur ? " cur" : "");
+        const cls = "gl" + (errLines.has(i) ? " err" : "") + (cur ? " cur" : "");
+        if (el.className !== cls) el.className = cls;   // assigning invalidates style even when equal
         const label = relTo === null || cur ? i : Math.abs(i - 1 - relTo);
         if (el.textContent !== String(label)) el.textContent = label;
       }
-      lastErrs = errs;
+      lastMarks = marks;
     }
     // Reading scrollWidth straight after writing the highlight forces a
     // synchronous layout, so it is deferred; and it only needs doing when the
     // text changed or the wrap mode did, not on every motion key. Leaving the
     // wrap case out means the textarea keeps a pixel width it cannot fold at,
     // inside a container that now clips.
-    const wrapping = ed.classList.contains("softwrap");
-    if (textChanged || wrapping !== lastWrap) {
-      lastWrap = wrapping;
+    if (textChanged) {
+      const wrapping = ed.classList.contains("softwrap");
       requestAnimationFrame(() => { ta.style.width = wrapping ? "" : pre.scrollWidth + "px"; });
     }
   }
@@ -321,7 +320,7 @@ function buildEditor(host, initial, onRun, starter = initial) {
     if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); onRun?.(); return; }
 
     const { selectionStart: a, selectionEnd: b, value: v } = ta;
-    const lineStart = v.lastIndexOf("\n", a - 1) + 1;
+    const lineStart = Vim._t.lineStart(v, a);
     const plain = !e.metaKey && !e.altKey && !e.ctrlKey;
 
     // Enter carries the current line's indentation down, and adds a level after
@@ -356,8 +355,8 @@ function buildEditor(host, initial, onRun, starter = initial) {
       // Indent or dedent every line the selection touches; the two differ only
       // in the per-line map. The block stays selected so a second Tab indents
       // again rather than typing spaces into the first line.
-      const from = v.lastIndexOf("\n", a - 1) + 1;
-      const to = v.indexOf("\n", b) === -1 ? v.length : v.indexOf("\n", b);
+      const from = Vim._t.lineStart(v, a);
+      const to = Vim._t.lineEnd(v, b);
       const block = v.slice(from, to).split("\n");
       const out = block.map(l => e.shiftKey ? l.replace(/^ {1,4}/, "") : TAB + l).join("\n");
       replaceRange(from, to, out, from, from + out.length);
@@ -383,7 +382,12 @@ function buildEditor(host, initial, onRun, starter = initial) {
     wrapBtn.classList.toggle("on", on);
     wrapBtn.setAttribute("aria-pressed", String(on));
   };
-  wrapBtn.onclick = () => { setFlag(WRAP_KEY, !flag(WRAP_KEY)); paintWrap(); paint(); };
+  wrapBtn.onclick = () => {
+    setFlag(WRAP_KEY, !flag(WRAP_KEY));
+    paintWrap();
+    lastHl = null;    // no text changed, but the width must be recomputed
+    paint();
+  };
   paintWrap();
 
   paint();
@@ -424,9 +428,17 @@ export function mountWorkbench(host, ctx) {
   const verdict = host.querySelector("#verdict");
   const reading = host.querySelector("#reading");
 
+  // localStorage is synchronous and disk-backed, so writing on every keystroke
+  // is the one blocking call on the typing path. Save shortly after typing
+  // stops, and flush before anything that could lose the buffer.
+  let saveTimer = null;
+  const save = () => { try { localStorage.setItem(storageKey, editor.ta.value); } catch {} };
   editor.ta.addEventListener("input", () => {
-    try { localStorage.setItem(storageKey, editor.ta.value); } catch {}
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(save, 400);
   });
+  editor.ta.addEventListener("blur", () => { clearTimeout(saveTimer); save(); });
+  addEventListener("beforeunload", save);
   host.querySelector("#resetcode").onclick = () => {
     editor.reset();
     try { localStorage.removeItem(storageKey); } catch {}
@@ -497,8 +509,9 @@ export function mountWorkbench(host, ctx) {
     for (const m of (exec?.tb || "").matchAll(/your_code\.py", line (\d+)/g)) lines.add(Number(m[1]));
     editor.setErrorLines([...lines].filter(Boolean));
 
-    // The QA harness reads this to compare the browser's verdict against the one
-    // build.py --validate reached offline. Nothing in the page uses it.
+    // Read by ./qa-browser.sh, which compares this against the verdict
+    // build.py --validate reaches offline through a different path. Nothing in
+    // the page itself uses it.
     globalThis.__phVerdict = { ruff, mypy, raises: exec?.exc || "", ok: !!exec?.ok };
 
     editor.el.classList.remove("running");
@@ -520,20 +533,17 @@ function renderReading({ ex, ruff, mypy, run, reading, host, onPass, next }) {
   // `silent` verdict describes. But an exercise can legitimately expect the
   // reader's own code to raise one, and then AssertionError is the key.
   const declaresSilent = ex.expects.some(e => e.judge === "silent");
+  const notes = ruff.length > 0 || mypy.length > 0;   // did either static judge speak
   const keys = [];
   if (run && run.exc) {
     keys.push(run.exc === "AssertionError" && declaresSilent ? "silent" : run.exc);
   }
   ruff.forEach(d => keys.push(d.code));
   mypy.forEach(d => keys.push(d.code));
-  if (passed && !ruff.length && !mypy.length) keys.length = 0;
-
-  const seen = new Set();
-  for (const k of keys) {
-    if (seen.has(k) || !ex.diagnose[k]) continue;
-    seen.add(k);
+  for (const k of new Set(keys)) {
+    if (!ex.diagnose[k]) continue;
     const heading = k !== "silent" ? k
-      : (ruff.length || mypy.length) ? "Nothing raised" : "Every judge was happy";
+      : notes ? "Nothing raised" : "Every judge was happy";
     parts.push(`<div class="reading"><h4>${heading}</h4>
       <p>${inline(ex.diagnose[k])}</p></div>`);
   }
@@ -555,11 +565,11 @@ function renderReading({ ex, ruff, mypy, run, reading, host, onPass, next }) {
   }
 
   if (passed) {
-    const stamp = `<span class="stamp">passed${ruff.length || mypy.length ? " · with notes" : ""}</span>`;
+    const stamp = `<span class="stamp">passed${notes ? " · with notes" : ""}</span>`;
     host.querySelector("#passslot").innerHTML = stamp;
     onPass?.();
-    parts.unshift(`<div class="reading"><h4>${ruff.length || mypy.length ? "Correct, but not clean" : "Green"}</h4>
-      <p>${ruff.length || mypy.length
+    parts.unshift(`<div class="reading"><h4>${notes ? "Correct, but not clean" : "Green"}</h4>
+      <p>${notes
         ? "The hidden tests pass, so the behaviour is right. The static judges still have something to say, and they are worth reading: on a real codebase that is the difference between code that works today and code that still works next year."
         : "The tests pass and both static judges are clean. That is the whole traffic light green at once."}</p>
       ${next ? `<p><a class="btn sm" href="${next}">Next →</a></p>` : ""}</div>`);

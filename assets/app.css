@@ -54,6 +54,7 @@
   --sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
+  --gutter: 2.5rem;
   --r-1: 4px; --r-2: 6px; --r-3: 8px; --r-4: 16px;
   --drop: 2px;
   --rail: 232px;
@@ -131,7 +132,7 @@ code, pre, kbd { font-family: var(--mono); }
 
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--r-1); }
 
-.wrap { width: min(1240px, 100% - 2.5rem); margin-inline: auto; }
+.wrap { width: min(1240px, 100% - var(--gutter)); margin-inline: auto; }
 .muted { color: var(--ink-3); }
 .faint { color: var(--ink-4); }
 .mono  { font-family: var(--mono); }
@@ -271,8 +272,10 @@ code, pre, kbd { font-family: var(--mono); }
   background: var(--border-soft); border-radius: 1px;
 }
 .rail .fill {
-  position: absolute; left: 3px; top: 6px; width: 2px; background: var(--accent);
-  border-radius: 1px; transition: height var(--slow) ease;
+  position: absolute; left: 3px; top: 6px; bottom: 6px; width: 2px;
+  background: var(--accent); border-radius: 1px;
+  transform-origin: top; transform: scaleY(0);
+  transition: transform var(--slow) ease;
 }
 .rail li { position: relative; }
 .rail a {
@@ -290,7 +293,9 @@ code, pre, kbd { font-family: var(--mono); }
 .rail a[aria-current] { color: var(--ink); font-weight: 700; }
 .rail a[aria-current]::before { border-color: var(--accent); transform: scale(1.25); }
 
-.rail { position: relative; }
+/* No `position` here: the rule above already makes this sticky, and sticky is
+   itself a containing block for the absolutely positioned toggle. Re-declaring
+   it as relative silently un-stuck the rail. */
 .railtoggle {
   position: absolute; top: -2px; right: -6px; z-index: 2;
   width: 20px; height: 20px; display: grid; place-items: center;
@@ -593,9 +598,9 @@ pre.raw {
   width: 190px; padding: 0.34rem 0.6rem; font-size: var(--t-sm);
   border: 1px solid var(--border-soft); border-radius: var(--r-2);
   background: var(--surface); color: var(--ink);
+  transition: width var(--mid) ease, border-color var(--fast) ease;
 }
 .nav-search:focus { outline: none; border-color: var(--accent); width: 240px; }
-.nav-search { transition: width var(--mid) ease, border-color var(--fast) ease; }
 
 .hit {
   display: block; padding: 0.75rem 0.9rem; margin-bottom: 0.5rem;
@@ -680,7 +685,7 @@ mark { background: color-mix(in srgb, var(--accent) 30%, transparent); color: in
 }
 
 @media (max-width: 620px) {
-  .wrap { width: min(1240px, 100% - 1.6rem); }
+  :root { --gutter: 1.6rem; }
   .stats { gap: 1.4rem; }
   .grid { grid-template-columns: 1fr; }
 }

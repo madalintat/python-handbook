@@ -30,33 +30,9 @@ vimout=$(node test_vim.mjs); rc=$?
 echo "$vimout" | tail -1
 note $rc
 
-# One interpreter for every content file: build.py --check per file meant fifty
-# starts, each re-importing the whole module and its tables. --check on an
-# exercise already runs the vocabulary gate, so there is no second step.
-step "every content file parses, and no exercise runs ahead of the reader"
-python3 - <<'PY'
-import sys
-from pathlib import Path
-sys.path.insert(0, ".")
-import build
-
-bad = 0
-for kind, parse in (("units", build.parse_unit), ("ex", build.parse_exercises),
-                    ("drills", build.parse_drills), ("gloss", build.parse_gloss),
-                    ("projects", build.parse_project)):
-    for f in sorted((Path("content") / kind).glob("*.md")):
-        try:
-            parse(f)
-        except SystemExit as e:
-            print(f"   {f}: {e}"); bad += 1
-            continue
-        if kind == "ex":
-            for problem in build.gate(f):
-                print(f"   VOCABULARY {problem}"); bad += 1
-print(f"   {bad} problems")
-sys.exit(1 if bad else 0)
-PY
-note $?
+# No separate parse step: `python3 build.py` above already parses every content
+# file, runs the vocabulary gate and refuses a half-written unit. A second loop
+# here was a hand-copy of build.py's own kind-to-parser dispatch.
 
 if [ "${*}" != "${*/--net/}" ]; then
   step "every starter and solution, against all three judges"
