@@ -166,7 +166,7 @@ print(tally(["a", "b", "a"]))
 @expect silent
 @hint `pop()` from the end is constant. `pop(0)` from the front moves everything else.
 @hint There is a type in `collections` built for fast operations at both ends.
-@diagnose silent It runs and gives the right answer slowly. A list stores its elements contiguously, so removing the first one shifts every other element down a position; doing that for each of n items is quadratic. `collections.deque` is the type built for this: `popleft` and `appendleft` are constant time, which makes it the right choice for a queue, for a sliding window, and with `maxlen` for keeping the last n of something. A hand-written queue that calls `pop(0)` or `insert(0, x)` is a `deque` waiting to be several times faster.
+@diagnose silent It gives the right answer, and the test counted how it got there: one `pop(0)` per item. A list stores its elements contiguously, so removing the first one shifts every other element down a position; doing that for each of n items is quadratic. `collections.deque` is the type built for this: `popleft` and `appendleft` are constant time, which makes it the right choice for a queue, for a sliding window, and with `maxlen` for keeping the last n of something. A hand-written queue that calls `pop(0)` or `insert(0, x)` is a `deque` waiting to be several times faster.
 
 ~~~starter
 def drain(items):
@@ -178,17 +178,24 @@ def drain(items):
 ~~~
 
 ~~~tests
-import time
+class Watched(list):
+    """A list that records how often something took from its front."""
 
-assert drain([1, 2, 3]) == [1, 2, 3]
-assert drain([]) == []
+    front_pops = 0
 
-big = list(range(200000))
-start = time.monotonic()
-drained = drain(big)
-elapsed = time.monotonic() - start
-assert len(drained) == 200000
-assert elapsed < 0.5, f"took {elapsed:.1f}s: taking from the front is shifting the whole list"
+    def pop(self, index=-1):
+        if index == 0:
+            Watched.front_pops += 1
+        return list.pop(self, index)
+
+
+assert drain(Watched([1, 2, 3])) == [1, 2, 3]
+assert drain(Watched([])) == []
+assert drain(Watched(range(20000))) == list(range(20000))
+assert Watched.front_pops == 0, (
+    f"took from the front {Watched.front_pops} times, "
+    "and each one shifts every remaining element down a place"
+)
 ~~~
 
 ~~~solution

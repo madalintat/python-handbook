@@ -9,7 +9,7 @@ slug: 12-dicts
 @expect silent
 @hint `item in some_list` scans. `item in some_set` hashes.
 @hint There is a set operation that answers "what do these two have in common" in one pass.
-@diagnose silent Nothing raised, and the answer is right. The cost is the problem: `name in known` scans the list until it matches, so checking every name against every known name is quadratic, and the tests make that slow enough to fail. Converting the collection you search into a set is usually a one-line change that turns a quadratic function linear, and it pays for itself after about two lookups. Here the intent has a name of its own: `set(a) & set(b)` is the intersection, computed in one pass, and it says what the loop was for.
+@diagnose silent Nothing raised, and the answer is right. The cost is the problem: `name in known` scans the list until it matches, so checking every name against every known name is quadratic, and the test counted the scans rather than timing them, so the verdict is the same on any machine. Converting the collection you search into a set is usually a one-line change that turns a quadratic function linear, and it pays for itself after about two lookups. Here the intent has a name of its own: `set(a) & set(b)` is the intersection, computed in one pass, and it says what the loop was for.
 
 ~~~starter
 def shared_names(names, known):
@@ -22,18 +22,26 @@ def shared_names(names, known):
 ~~~
 
 ~~~tests
-import time
+class Watched(list):
+    """A list that records how often something searched it end to end."""
 
-assert sorted(shared_names(["a", "b", "c"], ["b", "c", "d"])) == ["b", "c"]
-assert shared_names([], ["a"]) == []
+    scans = 0
+
+    def __contains__(self, item):
+        Watched.scans += 1
+        return list.__contains__(self, item)
+
+
+assert sorted(shared_names(["a", "b", "c"], Watched(["b", "c", "d"]))) == ["b", "c"]
+assert shared_names([], Watched(["a"])) == []
 
 big = [str(i) for i in range(20000)]
-other = [str(i) for i in range(10000, 30000)]
-start = time.monotonic()
-result = shared_names(big, other)
-elapsed = time.monotonic() - start
-assert len(result) == 10000
-assert elapsed < 0.5, f"took {elapsed:.1f}s: the membership test is scanning a list"
+other = Watched(str(i) for i in range(10000, 30000))
+assert len(shared_names(big, other)) == 10000
+assert Watched.scans == 0, (
+    f"searched the list {Watched.scans} times, "
+    "and each search walks it from the start"
+)
 ~~~
 
 ~~~solution

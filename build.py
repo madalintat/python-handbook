@@ -2,7 +2,7 @@
 """content/ -> data/.  No dependencies, no network (except --validate).
 
     python3 build.py                 build everything into data/
-    python3 build.py --check FILE    validate one content file, print "N clean"
+    python3 build.py --check FILE...  validate content files, print "N clean" each
     python3 build.py --validate      run every starter and solution past all three judges
 """
 from __future__ import annotations
@@ -994,11 +994,11 @@ def validate() -> int:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--check", metavar="FILE")
+    ap.add_argument("--check", metavar="FILE", nargs="+")
     ap.add_argument("--validate", action="store_true")
     args = ap.parse_args()
     if args.check:
-        return check(Path(args.check))
+        return max(check(Path(f)) for f in args.check)
     if args.validate:
         return validate()
     return build()
