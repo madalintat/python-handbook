@@ -1,0 +1,268 @@
+---
+slug: 13-comprehensions
+---
+
+## Filtering with the wrong `if`
+
+`positives` should keep only the positive numbers. It uses the conditional expression form, which decides what each item becomes rather than whether it is included at all.
+
+@expect silent
+@hint A trailing `if` filters. A leading `if/else` transforms.
+@hint Count the elements that come back and compare with how many went in.
+@diagnose silent Nothing raised, and every element survived. `[x if cond else other for x in items]` is a conditional expression in the value position: it runs for every item and produces something for every item, so the result is always the same length as the input. The filtering form puts a bare `if` at the **end**, after the `for`, where it decides membership. The two look alike and do different jobs, and there is no way to filter with the leading form because a conditional expression has to produce a value. When you want both, they compose: `[f(x) for x in items if keep(x)]`.
+
+~~~starter
+def positives(numbers):
+    """Return only the numbers greater than zero."""
+    return [n if n > 0 else 0 for n in numbers]
+~~~
+
+~~~tests
+assert positives([1, -2, 3]) == [1, 3]
+assert positives([-1, -2]) == []
+assert positives([]) == []
+~~~
+
+~~~solution
+def positives(numbers):
+    """Return only the numbers greater than zero."""
+    return [n for n in numbers if n > 0]
+~~~
+
+## Two loops, or one inside another
+
+`flatten` should turn a grid into one flat list of cells. It puts a comprehension inside a comprehension, which produces a list of lists rather than a list.
+
+@expect silent
+@hint Two `for` clauses in one comprehension flatten. A comprehension inside another one nests.
+@hint Write out the loops you would have written and match the order of the clauses.
+@diagnose silent It runs and hands back the same shape it was given. A comprehension inside another comprehension's expression builds a collection per outer item, so the result is a sequence of sequences. Two `for` clauses in a *single* comprehension nest in the order you would write the loops, outermost first, and produce one flat sequence: `[cell for row in grid for cell in row]`. Getting these the wrong way round is the commonest way a comprehension produces something of the wrong shape, and the tell is a result whose nesting matches the input when you wanted it flattened, or the reverse.
+
+~~~starter
+def flatten(grid):
+    """Return every cell of the grid in one flat list."""
+    return [[cell for cell in row] for row in grid]
+~~~
+
+~~~tests
+assert flatten([[1, 2], [3]]) == [1, 2, 3]
+assert flatten([]) == []
+assert flatten([[], [1]]) == [1]
+~~~
+
+~~~solution
+def flatten(grid):
+    """Return every cell of the grid in one flat list."""
+    return [cell for row in grid for cell in row]
+~~~
+
+## A comprehension for its effect
+
+`record_all` logs the non-empty items and reports how many it logged. It does the work in a comprehension, throws away the one thing the comprehension actually produced, and then counts the wrong collection.
+
+@expect silent
+@hint A comprehension produces a value. Find where this one's value goes.
+@hint The count it returns is of the items it was given, not the items it logged.
+@diagnose silent It runs, the logging is correct, and the count is wrong for any input containing a blank. That is the shape to recognise: a comprehension written for its side effects builds a list nobody wants, so the natural thing to do is discard it, and the moment you discard it you have to recompute anything it knew. Here the comprehension's own length was the answer. A `for` statement says the loop is being run for its effect, and gives you somewhere to keep the count as you go.
+
+~~~starter
+def record_all(items, log):
+    """Append every non-empty item to the log, and return how many were added."""
+    [log.append(item) for item in items if item]
+    return len(items)
+~~~
+
+~~~tests
+log = []
+added = record_all(["a", "", "b"], log)
+assert log == ["a", "b"]
+assert added == 2, f"reported {added} added, but only two were"
+assert record_all([], []) == 0
+~~~
+
+~~~solution
+def record_all(items, log):
+    """Append every non-empty item to the log, and return how many were added."""
+    added = 0
+    for item in items:
+        if item:
+            log.append(item)
+            added += 1
+    return added
+~~~
+
+## The generator that was already spent
+
+`report` builds a generator of the matching rows and then uses it twice. A generator yields its values once and is then exhausted, so the second pass finds nothing.
+
+@expect silent
+@hint Round brackets make a generator, not a tuple. It produces values once.
+@hint Count how many times the result is walked.
+@diagnose silent Nothing raised, and the second use saw an empty sequence. A generator expression produces values lazily and keeps no history, so once `sum` has walked it to the end there is nothing left for `max` to see, and `max` on an empty generator would raise if it had not been given a default. This is the trade the parentheses buy: no memory and one pass. When a result is needed more than once, or indexed, or measured, build a list. The tell is a generator bound to a name and then mentioned twice.
+
+~~~starter
+def report(rows):
+    """Return the total and the largest of the positive values."""
+    positives = (r for r in rows if r > 0)
+    return sum(positives), max(positives, default=0)
+~~~
+
+~~~tests
+assert report([1, -2, 5]) == (6, 5)
+assert report([-1]) == (0, 0)
+assert report([3]) == (3, 3)
+~~~
+
+~~~solution
+def report(rows):
+    """Return the total and the largest of the positive values."""
+    positives = [r for r in rows if r > 0]
+    return sum(positives), max(positives, default=0)
+~~~
+
+## Counting by hand
+
+`tally` counts how often each word appears, with a lookup and an addition per word. `collections` has a type whose entire job this is, and the hand-rolled version has a bug in its default.
+
+@expect raises:KeyError
+@hint The first time a word is seen there is no entry to add one to.
+@hint `Counter` starts every key at zero and counts an iterable in one pass.
+@diagnose KeyError The first occurrence of a word looks up a key that is not there yet. The usual hand-rolled fixes are `counts.get(word, 0) + 1` or a `defaultdict(int)`, and both work. But a tally is common enough to have its own type: `collections.Counter(words)` does the whole function in one pass, `most_common(n)` ranks the results, and it supports arithmetic so that `Counter(a) - Counter(b)` tells you what is in one beyond the other. A hand-written `d[k] = d.get(k, 0) + 1` is nearly always a `Counter` that has not been recognised yet.
+
+~~~starter
+def tally(words):
+    """Return a mapping of word to how many times it appears."""
+    counts = {}
+    for word in words:
+        counts[word] += 1
+    return counts
+
+
+print(tally(["a", "b", "a"]))
+~~~
+
+~~~tests
+assert tally(["a", "b", "a"]) == {"a": 2, "b": 1}
+assert tally([]) == {}
+assert tally(["x"]) == {"x": 1}
+~~~
+
+~~~solution
+from collections import Counter
+
+
+def tally(words):
+    """Return a mapping of word to how many times it appears."""
+    return dict(Counter(words))
+
+
+print(tally(["a", "b", "a"]))
+~~~
+
+## A queue that shifts everything
+
+`drain` takes items off the front of a list one at a time. `list.pop(0)` moves every remaining element down by one, so draining a list is quadratic, and the tests give it enough items to notice.
+
+@expect silent
+@hint `pop()` from the end is constant. `pop(0)` from the front moves everything else.
+@hint There is a type in `collections` built for fast operations at both ends.
+@diagnose silent It runs and gives the right answer slowly. A list stores its elements contiguously, so removing the first one shifts every other element down a position; doing that for each of n items is quadratic. `collections.deque` is the type built for this: `popleft` and `appendleft` are constant time, which makes it the right choice for a queue, for a sliding window, and with `maxlen` for keeping the last n of something. A hand-written queue that calls `pop(0)` or `insert(0, x)` is a `deque` waiting to be several times faster.
+
+~~~starter
+def drain(items):
+    """Return the items in order, consuming them from the front."""
+    out = []
+    while items:
+        out.append(items.pop(0))
+    return out
+~~~
+
+~~~tests
+import time
+
+assert drain([1, 2, 3]) == [1, 2, 3]
+assert drain([]) == []
+
+big = list(range(200000))
+start = time.monotonic()
+drained = drain(big)
+elapsed = time.monotonic() - start
+assert len(drained) == 200000
+assert elapsed < 0.5, f"took {elapsed:.1f}s: taking from the front is shifting the whole list"
+~~~
+
+~~~solution
+from collections import deque
+
+
+def drain(items):
+    """Return the items in order, consuming them from the front."""
+    queue = deque(items)
+    out = []
+    while queue:
+        out.append(queue.popleft())
+    return out
+~~~
+
+## Asking a builtin's question the long way
+
+`any_failed` reports whether any row failed. It writes the loop by hand, which ruff suggests replacing, and it asks the wrong question: whether the key is present rather than what it holds.
+
+@expect ruff:SIM110
+@expect silent
+@hint `"failed" in row` asks whether the key exists. It says nothing about the value.
+@hint There is a builtin that answers this and stops at the first true value.
+@diagnose SIM110 ruff's `SIM110` is "use `return any(...)` instead of a `for` loop". It has recognised the shape, walk and return early, that `any` exists for, and the rewrite short-circuits exactly as the loop does while stating the question in one line.
+@diagnose silent It runs and reports failure for a row that recorded `failed: False`, because `"failed" in row` asks whether the key is present and never looks at what it holds. The two questions are easy to conflate when the key is usually absent for the negative case, and then one row that spells the negative out explicitly breaks it. `any(row.get("failed") for row in rows)` asks about the value, short-circuits on the first true one, and builds nothing on the way. The generator inside matters: a list comprehension there would walk every row and allocate, where `any` wants to stop early.
+
+~~~starter
+def any_failed(rows):
+    """True if any row recorded a failure."""
+    for row in rows:
+        if "failed" in row:
+            return True
+    return False
+~~~
+
+~~~tests
+assert any_failed([{"failed": False}, {"failed": True}]) is True
+assert any_failed([{"failed": False}]) is False, "a row that failed nothing was counted as a failure"
+assert any_failed([]) is False
+assert any_failed([{}]) is False
+~~~
+
+~~~solution
+def any_failed(rows):
+    """True if any row recorded a failure."""
+    return any(row.get("failed") for row in rows)
+~~~
+
+## Inverting a mapping that was not one-to-one
+
+`by_value` turns a mapping of name to team into a mapping of team to name. Several names share a team, and a dict comprehension keeps only the last of them.
+
+@expect silent
+@hint A dict has one value per key. What happens when two items produce the same key?
+@hint If several inputs can share a key, the value has to be a collection.
+@diagnose silent Nothing raised, and every team ended up with one name: the last one the comprehension saw. Inverting a mapping assumes the values are unique, and silently keeps the final winner when they are not, which is the sort of loss that shows up much later as a missing record. When the relationship is one-to-many, say so in the shape: group into lists. `setdefault` does it in one line, and a `defaultdict(list)` does it without the check, which is what unit 12 was for.
+
+~~~starter
+def by_value(mapping):
+    """Return a mapping from each team to the names on it."""
+    return {team: name for name, team in mapping.items()}
+~~~
+
+~~~tests
+out = by_value({"ada": "red", "bob": "blue", "cat": "red"})
+assert out == {"red": ["ada", "cat"], "blue": ["bob"]}, f"names were lost: {out}"
+assert by_value({}) == {}
+~~~
+
+~~~solution
+def by_value(mapping):
+    """Return a mapping from each team to the names on it."""
+    out = {}
+    for name, team in mapping.items():
+        out.setdefault(team, []).append(name)
+    return out
+~~~
