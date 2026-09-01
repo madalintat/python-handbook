@@ -914,17 +914,22 @@ def _nothing(grad):
     """What a leaf does on the way back, which is nothing."""
 
 
-def dot(row, column):
-    """The sum of the products, started from the first one.
+def vsum(values):
+    """Values added left to right, starting from the first rather than zero.
 
-    `sum` would begin at the integer zero and build one extra node per element,
+    `sum` would begin at the integer zero and build one extra node per call,
     and in a graph this size that is thousands of nodes doing nothing. Starting
-    from the first product costs the same arithmetic and half the graph.
+    from the first value costs the same arithmetic and half the graph.
     """
-    total = row[0] * column[0]
-    for a, b in zip(row[1:], column[1:], strict=True):
-        total = total + a * b
+    total = values[0]
+    for value in values[1:]:
+        total = total + value
     return total
+
+
+def dot(row, column):
+    """The sum of the products of two rows."""
+    return vsum([a * b for a, b in zip(row, column, strict=True)])
 
 
 class Tensor:
@@ -1020,11 +1025,7 @@ class Tensor:
         return [v for row in self.data for v in row]
 
     def total(self):
-        values = self.values()
-        out = values[0]
-        for value in values[1:]:
-            out = out + value
-        return out
+        return vsum(self.values())
 
     def mean(self):
         return self.total() * (1.0 / (self.rows * self.cols))
@@ -1213,17 +1214,22 @@ def _nothing(grad):
     """What a leaf does on the way back, which is nothing."""
 
 
-def dot(row, column):
-    """The sum of the products, started from the first one.
+def vsum(values):
+    """Values added left to right, starting from the first rather than zero.
 
-    `sum` would begin at the integer zero and build one extra node per element,
+    `sum` would begin at the integer zero and build one extra node per call,
     and in a graph this size that is thousands of nodes doing nothing. Starting
-    from the first product costs the same arithmetic and half the graph.
+    from the first value costs the same arithmetic and half the graph.
     """
-    total = row[0] * column[0]
-    for a, b in zip(row[1:], column[1:], strict=True):
-        total = total + a * b
+    total = values[0]
+    for value in values[1:]:
+        total = total + value
     return total
+
+
+def dot(row, column):
+    """The sum of the products of two rows."""
+    return vsum([a * b for a, b in zip(row, column, strict=True)])
 
 
 class Tensor:
@@ -1319,11 +1325,7 @@ class Tensor:
         return [v for row in self.data for v in row]
 
     def total(self):
-        values = self.values()
-        out = values[0]
-        for value in values[1:]:
-            out = out + value
-        return out
+        return vsum(self.values())
 
     def mean(self):
         return self.total() * (1.0 / (self.rows * self.cols))
@@ -1644,17 +1646,22 @@ def _nothing(grad):
     """What a leaf does on the way back, which is nothing."""
 
 
-def dot(row, column):
-    """The sum of the products, started from the first one.
+def vsum(values):
+    """Values added left to right, starting from the first rather than zero.
 
-    `sum` would begin at the integer zero and build one extra node per element,
+    `sum` would begin at the integer zero and build one extra node per call,
     and in a graph this size that is thousands of nodes doing nothing. Starting
-    from the first product costs the same arithmetic and half the graph.
+    from the first value costs the same arithmetic and half the graph.
     """
-    total = row[0] * column[0]
-    for a, b in zip(row[1:], column[1:], strict=True):
-        total = total + a * b
+    total = values[0]
+    for value in values[1:]:
+        total = total + value
     return total
+
+
+def dot(row, column):
+    """The sum of the products of two rows."""
+    return vsum([a * b for a, b in zip(row, column, strict=True)])
 
 
 class Tensor:
@@ -1750,11 +1757,7 @@ class Tensor:
         return [v for row in self.data for v in row]
 
     def total(self):
-        values = self.values()
-        out = values[0]
-        for value in values[1:]:
-            out = out + value
-        return out
+        return vsum(self.values())
 
     def mean(self):
         return self.total() * (1.0 / (self.rows * self.cols))
@@ -2063,17 +2066,22 @@ def _nothing(grad):
     """What a leaf does on the way back, which is nothing."""
 
 
-def dot(row, column):
-    """The sum of the products, started from the first one.
+def vsum(values):
+    """Values added left to right, starting from the first rather than zero.
 
-    `sum` would begin at the integer zero and build one extra node per element,
+    `sum` would begin at the integer zero and build one extra node per call,
     and in a graph this size that is thousands of nodes doing nothing. Starting
-    from the first product costs the same arithmetic and half the graph.
+    from the first value costs the same arithmetic and half the graph.
     """
-    total = row[0] * column[0]
-    for a, b in zip(row[1:], column[1:], strict=True):
-        total = total + a * b
+    total = values[0]
+    for value in values[1:]:
+        total = total + value
     return total
+
+
+def dot(row, column):
+    """The sum of the products of two rows."""
+    return vsum([a * b for a, b in zip(row, column, strict=True)])
 
 
 class Tensor:
@@ -2169,11 +2177,7 @@ class Tensor:
         return [v for row in self.data for v in row]
 
     def total(self):
-        values = self.values()
-        out = values[0]
-        for value in values[1:]:
-            out = out + value
-        return out
+        return vsum(self.values())
 
     def mean(self):
         return self.total() * (1.0 / (self.rows * self.cols))
@@ -2600,17 +2604,22 @@ def _nothing(grad):
     """What a leaf does on the way back, which is nothing."""
 
 
-def dot(row, column):
-    """The sum of the products, started from the first one.
+def vsum(values):
+    """Values added left to right, starting from the first rather than zero.
 
-    `sum` would begin at the integer zero and build one extra node per element,
+    `sum` would begin at the integer zero and build one extra node per call,
     and in a graph this size that is thousands of nodes doing nothing. Starting
-    from the first product costs the same arithmetic and half the graph.
+    from the first value costs the same arithmetic and half the graph.
     """
-    total = row[0] * column[0]
-    for a, b in zip(row[1:], column[1:], strict=True):
-        total = total + a * b
+    total = values[0]
+    for value in values[1:]:
+        total = total + value
     return total
+
+
+def dot(row, column):
+    """The sum of the products of two rows."""
+    return vsum([a * b for a, b in zip(row, column, strict=True)])
 
 
 class Tensor:
@@ -2706,11 +2715,7 @@ class Tensor:
         return [v for row in self.data for v in row]
 
     def total(self):
-        values = self.values()
-        out = values[0]
-        for value in values[1:]:
-            out = out + value
-        return out
+        return vsum(self.values())
 
     def mean(self):
         return self.total() * (1.0 / (self.rows * self.cols))
@@ -3100,17 +3105,22 @@ def _nothing(grad):
     """What a leaf does on the way back, which is nothing."""
 
 
-def dot(row, column):
-    """The sum of the products, started from the first one.
+def vsum(values):
+    """Values added left to right, starting from the first rather than zero.
 
-    `sum` would begin at the integer zero and build one extra node per element,
+    `sum` would begin at the integer zero and build one extra node per call,
     and in a graph this size that is thousands of nodes doing nothing. Starting
-    from the first product costs the same arithmetic and half the graph.
+    from the first value costs the same arithmetic and half the graph.
     """
-    total = row[0] * column[0]
-    for a, b in zip(row[1:], column[1:], strict=True):
-        total = total + a * b
+    total = values[0]
+    for value in values[1:]:
+        total = total + value
     return total
+
+
+def dot(row, column):
+    """The sum of the products of two rows."""
+    return vsum([a * b for a, b in zip(row, column, strict=True)])
 
 
 class Tensor:
@@ -3206,11 +3216,7 @@ class Tensor:
         return [v for row in self.data for v in row]
 
     def total(self):
-        values = self.values()
-        out = values[0]
-        for value in values[1:]:
-            out = out + value
-        return out
+        return vsum(self.values())
 
     def mean(self):
         return self.total() * (1.0 / (self.rows * self.cols))
@@ -3708,17 +3714,22 @@ def _nothing(grad):
     """What a leaf does on the way back, which is nothing."""
 
 
-def dot(row, column):
-    """The sum of the products, started from the first one.
+def vsum(values):
+    """Values added left to right, starting from the first rather than zero.
 
-    `sum` would begin at the integer zero and build one extra node per element,
+    `sum` would begin at the integer zero and build one extra node per call,
     and in a graph this size that is thousands of nodes doing nothing. Starting
-    from the first product costs the same arithmetic and half the graph.
+    from the first value costs the same arithmetic and half the graph.
     """
-    total = row[0] * column[0]
-    for a, b in zip(row[1:], column[1:], strict=True):
-        total = total + a * b
+    total = values[0]
+    for value in values[1:]:
+        total = total + value
     return total
+
+
+def dot(row, column):
+    """The sum of the products of two rows."""
+    return vsum([a * b for a, b in zip(row, column, strict=True)])
 
 
 class Tensor:
@@ -3814,11 +3825,7 @@ class Tensor:
         return [v for row in self.data for v in row]
 
     def total(self):
-        values = self.values()
-        out = values[0]
-        for value in values[1:]:
-            out = out + value
-        return out
+        return vsum(self.values())
 
     def mean(self):
         return self.total() * (1.0 / (self.rows * self.cols))
@@ -4283,17 +4290,22 @@ def _nothing(grad):
     """What a leaf does on the way back, which is nothing."""
 
 
-def dot(row, column):
-    """The sum of the products, started from the first one.
+def vsum(values):
+    """Values added left to right, starting from the first rather than zero.
 
-    `sum` would begin at the integer zero and build one extra node per element,
+    `sum` would begin at the integer zero and build one extra node per call,
     and in a graph this size that is thousands of nodes doing nothing. Starting
-    from the first product costs the same arithmetic and half the graph.
+    from the first value costs the same arithmetic and half the graph.
     """
-    total = row[0] * column[0]
-    for a, b in zip(row[1:], column[1:], strict=True):
-        total = total + a * b
+    total = values[0]
+    for value in values[1:]:
+        total = total + value
     return total
+
+
+def dot(row, column):
+    """The sum of the products of two rows."""
+    return vsum([a * b for a, b in zip(row, column, strict=True)])
 
 
 class Tensor:
@@ -4389,11 +4401,7 @@ class Tensor:
         return [v for row in self.data for v in row]
 
     def total(self):
-        values = self.values()
-        out = values[0]
-        for value in values[1:]:
-            out = out + value
-        return out
+        return vsum(self.values())
 
     def mean(self):
         return self.total() * (1.0 / (self.rows * self.cols))
@@ -4962,17 +4970,22 @@ def _nothing(grad):
     """What a leaf does on the way back, which is nothing."""
 
 
-def dot(row, column):
-    """The sum of the products, started from the first one.
+def vsum(values):
+    """Values added left to right, starting from the first rather than zero.
 
-    `sum` would begin at the integer zero and build one extra node per element,
+    `sum` would begin at the integer zero and build one extra node per call,
     and in a graph this size that is thousands of nodes doing nothing. Starting
-    from the first product costs the same arithmetic and half the graph.
+    from the first value costs the same arithmetic and half the graph.
     """
-    total = row[0] * column[0]
-    for a, b in zip(row[1:], column[1:], strict=True):
-        total = total + a * b
+    total = values[0]
+    for value in values[1:]:
+        total = total + value
     return total
+
+
+def dot(row, column):
+    """The sum of the products of two rows."""
+    return vsum([a * b for a, b in zip(row, column, strict=True)])
 
 
 class Tensor:
@@ -5068,11 +5081,7 @@ class Tensor:
         return [v for row in self.data for v in row]
 
     def total(self):
-        values = self.values()
-        out = values[0]
-        for value in values[1:]:
-            out = out + value
-        return out
+        return vsum(self.values())
 
     def mean(self):
         return self.total() * (1.0 / (self.rows * self.cols))
@@ -5365,9 +5374,7 @@ def softmax(row):
     """
     biggest = max(v.data for v in row)
     exps = [(v - biggest).exp() for v in row]
-    total = exps[0]
-    for value in exps[1:]:
-        total = total + value
+    total = vsum(exps)
     return [value / total for value in exps]
 
 
@@ -5375,10 +5382,7 @@ def log_softmax(row):
     """The log of the same thing, without ever taking a log of a small number."""
     biggest = max(v.data for v in row)
     shifted = [v - biggest for v in row]
-    total = shifted[0].exp()
-    for value in shifted[1:]:
-        total = total + value.exp()
-    log_total = total.log()
+    log_total = vsum([value.exp() for value in shifted]).log()
     return [value - log_total for value in shifted]
 
 
@@ -5591,17 +5595,22 @@ def _nothing(grad):
     """What a leaf does on the way back, which is nothing."""
 
 
-def dot(row, column):
-    """The sum of the products, started from the first one.
+def vsum(values):
+    """Values added left to right, starting from the first rather than zero.
 
-    `sum` would begin at the integer zero and build one extra node per element,
+    `sum` would begin at the integer zero and build one extra node per call,
     and in a graph this size that is thousands of nodes doing nothing. Starting
-    from the first product costs the same arithmetic and half the graph.
+    from the first value costs the same arithmetic and half the graph.
     """
-    total = row[0] * column[0]
-    for a, b in zip(row[1:], column[1:], strict=True):
-        total = total + a * b
+    total = values[0]
+    for value in values[1:]:
+        total = total + value
     return total
+
+
+def dot(row, column):
+    """The sum of the products of two rows."""
+    return vsum([a * b for a, b in zip(row, column, strict=True)])
 
 
 class Tensor:
@@ -5697,11 +5706,7 @@ class Tensor:
         return [v for row in self.data for v in row]
 
     def total(self):
-        values = self.values()
-        out = values[0]
-        for value in values[1:]:
-            out = out + value
-        return out
+        return vsum(self.values())
 
     def mean(self):
         return self.total() * (1.0 / (self.rows * self.cols))
@@ -5994,9 +5999,7 @@ def softmax(row):
     """
     biggest = max(v.data for v in row)
     exps = [(v - biggest).exp() for v in row]
-    total = exps[0]
-    for value in exps[1:]:
-        total = total + value
+    total = vsum(exps)
     return [value / total for value in exps]
 
 
@@ -6004,10 +6007,7 @@ def log_softmax(row):
     """The log of the same thing, without ever taking a log of a small number."""
     biggest = max(v.data for v in row)
     shifted = [v - biggest for v in row]
-    total = shifted[0].exp()
-    for value in shifted[1:]:
-        total = total + value.exp()
-    log_total = total.log()
+    log_total = vsum([value.exp() for value in shifted]).log()
     return [value - log_total for value in shifted]
 
 
@@ -6339,17 +6339,22 @@ def _nothing(grad):
     """What a leaf does on the way back, which is nothing."""
 
 
-def dot(row, column):
-    """The sum of the products, started from the first one.
+def vsum(values):
+    """Values added left to right, starting from the first rather than zero.
 
-    `sum` would begin at the integer zero and build one extra node per element,
+    `sum` would begin at the integer zero and build one extra node per call,
     and in a graph this size that is thousands of nodes doing nothing. Starting
-    from the first product costs the same arithmetic and half the graph.
+    from the first value costs the same arithmetic and half the graph.
     """
-    total = row[0] * column[0]
-    for a, b in zip(row[1:], column[1:], strict=True):
-        total = total + a * b
+    total = values[0]
+    for value in values[1:]:
+        total = total + value
     return total
+
+
+def dot(row, column):
+    """The sum of the products of two rows."""
+    return vsum([a * b for a, b in zip(row, column, strict=True)])
 
 
 class Tensor:
@@ -6445,11 +6450,7 @@ class Tensor:
         return [v for row in self.data for v in row]
 
     def total(self):
-        values = self.values()
-        out = values[0]
-        for value in values[1:]:
-            out = out + value
-        return out
+        return vsum(self.values())
 
     def mean(self):
         return self.total() * (1.0 / (self.rows * self.cols))
@@ -6742,9 +6743,7 @@ def softmax(row):
     """
     biggest = max(v.data for v in row)
     exps = [(v - biggest).exp() for v in row]
-    total = exps[0]
-    for value in exps[1:]:
-        total = total + value
+    total = vsum(exps)
     return [value / total for value in exps]
 
 
@@ -6752,10 +6751,7 @@ def log_softmax(row):
     """The log of the same thing, without ever taking a log of a small number."""
     biggest = max(v.data for v in row)
     shifted = [v - biggest for v in row]
-    total = shifted[0].exp()
-    for value in shifted[1:]:
-        total = total + value.exp()
-    log_total = total.log()
+    log_total = vsum([value.exp() for value in shifted]).log()
     return [value - log_total for value in shifted]
 
 
@@ -7036,17 +7032,22 @@ def _nothing(grad):
     """What a leaf does on the way back, which is nothing."""
 
 
-def dot(row, column):
-    """The sum of the products, started from the first one.
+def vsum(values):
+    """Values added left to right, starting from the first rather than zero.
 
-    `sum` would begin at the integer zero and build one extra node per element,
+    `sum` would begin at the integer zero and build one extra node per call,
     and in a graph this size that is thousands of nodes doing nothing. Starting
-    from the first product costs the same arithmetic and half the graph.
+    from the first value costs the same arithmetic and half the graph.
     """
-    total = row[0] * column[0]
-    for a, b in zip(row[1:], column[1:], strict=True):
-        total = total + a * b
+    total = values[0]
+    for value in values[1:]:
+        total = total + value
     return total
+
+
+def dot(row, column):
+    """The sum of the products of two rows."""
+    return vsum([a * b for a, b in zip(row, column, strict=True)])
 
 
 class Tensor:
@@ -7142,11 +7143,7 @@ class Tensor:
         return [v for row in self.data for v in row]
 
     def total(self):
-        values = self.values()
-        out = values[0]
-        for value in values[1:]:
-            out = out + value
-        return out
+        return vsum(self.values())
 
     def mean(self):
         return self.total() * (1.0 / (self.rows * self.cols))
@@ -7439,9 +7436,7 @@ def softmax(row):
     """
     biggest = max(v.data for v in row)
     exps = [(v - biggest).exp() for v in row]
-    total = exps[0]
-    for value in exps[1:]:
-        total = total + value
+    total = vsum(exps)
     return [value / total for value in exps]
 
 
@@ -7449,10 +7444,7 @@ def log_softmax(row):
     """The log of the same thing, without ever taking a log of a small number."""
     biggest = max(v.data for v in row)
     shifted = [v - biggest for v in row]
-    total = shifted[0].exp()
-    for value in shifted[1:]:
-        total = total + value.exp()
-    log_total = total.log()
+    log_total = vsum([value.exp() for value in shifted]).log()
     return [value - log_total for value in shifted]
 
 
@@ -7809,17 +7801,22 @@ def _nothing(grad):
     """What a leaf does on the way back, which is nothing."""
 
 
-def dot(row, column):
-    """The sum of the products, started from the first one.
+def vsum(values):
+    """Values added left to right, starting from the first rather than zero.
 
-    `sum` would begin at the integer zero and build one extra node per element,
+    `sum` would begin at the integer zero and build one extra node per call,
     and in a graph this size that is thousands of nodes doing nothing. Starting
-    from the first product costs the same arithmetic and half the graph.
+    from the first value costs the same arithmetic and half the graph.
     """
-    total = row[0] * column[0]
-    for a, b in zip(row[1:], column[1:], strict=True):
-        total = total + a * b
+    total = values[0]
+    for value in values[1:]:
+        total = total + value
     return total
+
+
+def dot(row, column):
+    """The sum of the products of two rows."""
+    return vsum([a * b for a, b in zip(row, column, strict=True)])
 
 
 class Tensor:
@@ -7915,11 +7912,7 @@ class Tensor:
         return [v for row in self.data for v in row]
 
     def total(self):
-        values = self.values()
-        out = values[0]
-        for value in values[1:]:
-            out = out + value
-        return out
+        return vsum(self.values())
 
     def mean(self):
         return self.total() * (1.0 / (self.rows * self.cols))
@@ -8212,9 +8205,7 @@ def softmax(row):
     """
     biggest = max(v.data for v in row)
     exps = [(v - biggest).exp() for v in row]
-    total = exps[0]
-    for value in exps[1:]:
-        total = total + value
+    total = vsum(exps)
     return [value / total for value in exps]
 
 
@@ -8222,10 +8213,7 @@ def log_softmax(row):
     """The log of the same thing, without ever taking a log of a small number."""
     biggest = max(v.data for v in row)
     shifted = [v - biggest for v in row]
-    total = shifted[0].exp()
-    for value in shifted[1:]:
-        total = total + value.exp()
-    log_total = total.log()
+    log_total = vsum([value.exp() for value in shifted]).log()
     return [value - log_total for value in shifted]
 
 
@@ -8557,17 +8545,22 @@ def _nothing(grad):
     """What a leaf does on the way back, which is nothing."""
 
 
-def dot(row, column):
-    """The sum of the products, started from the first one.
+def vsum(values):
+    """Values added left to right, starting from the first rather than zero.
 
-    `sum` would begin at the integer zero and build one extra node per element,
+    `sum` would begin at the integer zero and build one extra node per call,
     and in a graph this size that is thousands of nodes doing nothing. Starting
-    from the first product costs the same arithmetic and half the graph.
+    from the first value costs the same arithmetic and half the graph.
     """
-    total = row[0] * column[0]
-    for a, b in zip(row[1:], column[1:], strict=True):
-        total = total + a * b
+    total = values[0]
+    for value in values[1:]:
+        total = total + value
     return total
+
+
+def dot(row, column):
+    """The sum of the products of two rows."""
+    return vsum([a * b for a, b in zip(row, column, strict=True)])
 
 
 class Tensor:
@@ -8663,11 +8656,7 @@ class Tensor:
         return [v for row in self.data for v in row]
 
     def total(self):
-        values = self.values()
-        out = values[0]
-        for value in values[1:]:
-            out = out + value
-        return out
+        return vsum(self.values())
 
     def mean(self):
         return self.total() * (1.0 / (self.rows * self.cols))
@@ -8960,9 +8949,7 @@ def softmax(row):
     """
     biggest = max(v.data for v in row)
     exps = [(v - biggest).exp() for v in row]
-    total = exps[0]
-    for value in exps[1:]:
-        total = total + value
+    total = vsum(exps)
     return [value / total for value in exps]
 
 
@@ -8970,10 +8957,7 @@ def log_softmax(row):
     """The log of the same thing, without ever taking a log of a small number."""
     biggest = max(v.data for v in row)
     shifted = [v - biggest for v in row]
-    total = shifted[0].exp()
-    for value in shifted[1:]:
-        total = total + value.exp()
-    log_total = total.log()
+    log_total = vsum([value.exp() for value in shifted]).log()
     return [value - log_total for value in shifted]
 
 
@@ -9420,17 +9404,22 @@ def _nothing(grad):
     """What a leaf does on the way back, which is nothing."""
 
 
-def dot(row, column):
-    """The sum of the products, started from the first one.
+def vsum(values):
+    """Values added left to right, starting from the first rather than zero.
 
-    `sum` would begin at the integer zero and build one extra node per element,
+    `sum` would begin at the integer zero and build one extra node per call,
     and in a graph this size that is thousands of nodes doing nothing. Starting
-    from the first product costs the same arithmetic and half the graph.
+    from the first value costs the same arithmetic and half the graph.
     """
-    total = row[0] * column[0]
-    for a, b in zip(row[1:], column[1:], strict=True):
-        total = total + a * b
+    total = values[0]
+    for value in values[1:]:
+        total = total + value
     return total
+
+
+def dot(row, column):
+    """The sum of the products of two rows."""
+    return vsum([a * b for a, b in zip(row, column, strict=True)])
 
 
 class Tensor:
@@ -9526,11 +9515,7 @@ class Tensor:
         return [v for row in self.data for v in row]
 
     def total(self):
-        values = self.values()
-        out = values[0]
-        for value in values[1:]:
-            out = out + value
-        return out
+        return vsum(self.values())
 
     def mean(self):
         return self.total() * (1.0 / (self.rows * self.cols))
@@ -9823,9 +9808,7 @@ def softmax(row):
     """
     biggest = max(v.data for v in row)
     exps = [(v - biggest).exp() for v in row]
-    total = exps[0]
-    for value in exps[1:]:
-        total = total + value
+    total = vsum(exps)
     return [value / total for value in exps]
 
 
@@ -9833,10 +9816,7 @@ def log_softmax(row):
     """The log of the same thing, without ever taking a log of a small number."""
     biggest = max(v.data for v in row)
     shifted = [v - biggest for v in row]
-    total = shifted[0].exp()
-    for value in shifted[1:]:
-        total = total + value.exp()
-    log_total = total.log()
+    log_total = vsum([value.exp() for value in shifted]).log()
     return [value - log_total for value in shifted]
 
 
@@ -10016,15 +9996,10 @@ class LayerNorm(Module):
         scale = 1.0 / self.dim
         rows = []
         for row in x:
-            mean = row[0]
-            for value in row[1:]:
-                mean = mean + value
-            mean = mean * scale
+            mean = vsum(row) * scale
             centred = [value - mean for value in row]
-            variance = centred[0] * centred[0]
-            for value in centred[1:]:
-                variance = variance + value * value
-            inverse = (variance * scale + self.eps) ** -0.5
+            variance = vsum([value * value for value in centred]) * scale
+            inverse = (variance + self.eps) ** -0.5
             rows.append([
                 value * inverse * gain + bias
                 for value, gain, bias in zip(centred, self.gain[0], self.bias[0],
@@ -10264,17 +10239,22 @@ def _nothing(grad):
     """What a leaf does on the way back, which is nothing."""
 
 
-def dot(row, column):
-    """The sum of the products, started from the first one.
+def vsum(values):
+    """Values added left to right, starting from the first rather than zero.
 
-    `sum` would begin at the integer zero and build one extra node per element,
+    `sum` would begin at the integer zero and build one extra node per call,
     and in a graph this size that is thousands of nodes doing nothing. Starting
-    from the first product costs the same arithmetic and half the graph.
+    from the first value costs the same arithmetic and half the graph.
     """
-    total = row[0] * column[0]
-    for a, b in zip(row[1:], column[1:], strict=True):
-        total = total + a * b
+    total = values[0]
+    for value in values[1:]:
+        total = total + value
     return total
+
+
+def dot(row, column):
+    """The sum of the products of two rows."""
+    return vsum([a * b for a, b in zip(row, column, strict=True)])
 
 
 class Tensor:
@@ -10370,11 +10350,7 @@ class Tensor:
         return [v for row in self.data for v in row]
 
     def total(self):
-        values = self.values()
-        out = values[0]
-        for value in values[1:]:
-            out = out + value
-        return out
+        return vsum(self.values())
 
     def mean(self):
         return self.total() * (1.0 / (self.rows * self.cols))
@@ -10667,9 +10643,7 @@ def softmax(row):
     """
     biggest = max(v.data for v in row)
     exps = [(v - biggest).exp() for v in row]
-    total = exps[0]
-    for value in exps[1:]:
-        total = total + value
+    total = vsum(exps)
     return [value / total for value in exps]
 
 
@@ -10677,10 +10651,7 @@ def log_softmax(row):
     """The log of the same thing, without ever taking a log of a small number."""
     biggest = max(v.data for v in row)
     shifted = [v - biggest for v in row]
-    total = shifted[0].exp()
-    for value in shifted[1:]:
-        total = total + value.exp()
-    log_total = total.log()
+    log_total = vsum([value.exp() for value in shifted]).log()
     return [value - log_total for value in shifted]
 
 
@@ -10860,15 +10831,10 @@ class LayerNorm(Module):
         scale = 1.0 / self.dim
         rows = []
         for row in x:
-            mean = row[0]
-            for value in row[1:]:
-                mean = mean + value
-            mean = mean * scale
+            mean = vsum(row) * scale
             centred = [value - mean for value in row]
-            variance = centred[0] * centred[0]
-            for value in centred[1:]:
-                variance = variance + value * value
-            inverse = (variance * scale + self.eps) ** -0.5
+            variance = vsum([value * value for value in centred]) * scale
+            inverse = (variance + self.eps) ** -0.5
             rows.append([
                 value * inverse * gain + bias
                 for value, gain, bias in zip(centred, self.gain[0], self.bias[0],
@@ -11218,17 +11184,22 @@ def _nothing(grad):
     """What a leaf does on the way back, which is nothing."""
 
 
-def dot(row, column):
-    """The sum of the products, started from the first one.
+def vsum(values):
+    """Values added left to right, starting from the first rather than zero.
 
-    `sum` would begin at the integer zero and build one extra node per element,
+    `sum` would begin at the integer zero and build one extra node per call,
     and in a graph this size that is thousands of nodes doing nothing. Starting
-    from the first product costs the same arithmetic and half the graph.
+    from the first value costs the same arithmetic and half the graph.
     """
-    total = row[0] * column[0]
-    for a, b in zip(row[1:], column[1:], strict=True):
-        total = total + a * b
+    total = values[0]
+    for value in values[1:]:
+        total = total + value
     return total
+
+
+def dot(row, column):
+    """The sum of the products of two rows."""
+    return vsum([a * b for a, b in zip(row, column, strict=True)])
 
 
 class Tensor:
@@ -11324,11 +11295,7 @@ class Tensor:
         return [v for row in self.data for v in row]
 
     def total(self):
-        values = self.values()
-        out = values[0]
-        for value in values[1:]:
-            out = out + value
-        return out
+        return vsum(self.values())
 
     def mean(self):
         return self.total() * (1.0 / (self.rows * self.cols))
@@ -11621,9 +11588,7 @@ def softmax(row):
     """
     biggest = max(v.data for v in row)
     exps = [(v - biggest).exp() for v in row]
-    total = exps[0]
-    for value in exps[1:]:
-        total = total + value
+    total = vsum(exps)
     return [value / total for value in exps]
 
 
@@ -11631,10 +11596,7 @@ def log_softmax(row):
     """The log of the same thing, without ever taking a log of a small number."""
     biggest = max(v.data for v in row)
     shifted = [v - biggest for v in row]
-    total = shifted[0].exp()
-    for value in shifted[1:]:
-        total = total + value.exp()
-    log_total = total.log()
+    log_total = vsum([value.exp() for value in shifted]).log()
     return [value - log_total for value in shifted]
 
 
@@ -11814,15 +11776,10 @@ class LayerNorm(Module):
         scale = 1.0 / self.dim
         rows = []
         for row in x:
-            mean = row[0]
-            for value in row[1:]:
-                mean = mean + value
-            mean = mean * scale
+            mean = vsum(row) * scale
             centred = [value - mean for value in row]
-            variance = centred[0] * centred[0]
-            for value in centred[1:]:
-                variance = variance + value * value
-            inverse = (variance * scale + self.eps) ** -0.5
+            variance = vsum([value * value for value in centred]) * scale
+            inverse = (variance + self.eps) ** -0.5
             rows.append([
                 value * inverse * gain + bias
                 for value, gain, bias in zip(centred, self.gain[0], self.bias[0],
@@ -12153,17 +12110,22 @@ def _nothing(grad):
     """What a leaf does on the way back, which is nothing."""
 
 
-def dot(row, column):
-    """The sum of the products, started from the first one.
+def vsum(values):
+    """Values added left to right, starting from the first rather than zero.
 
-    `sum` would begin at the integer zero and build one extra node per element,
+    `sum` would begin at the integer zero and build one extra node per call,
     and in a graph this size that is thousands of nodes doing nothing. Starting
-    from the first product costs the same arithmetic and half the graph.
+    from the first value costs the same arithmetic and half the graph.
     """
-    total = row[0] * column[0]
-    for a, b in zip(row[1:], column[1:], strict=True):
-        total = total + a * b
+    total = values[0]
+    for value in values[1:]:
+        total = total + value
     return total
+
+
+def dot(row, column):
+    """The sum of the products of two rows."""
+    return vsum([a * b for a, b in zip(row, column, strict=True)])
 
 
 class Tensor:
@@ -12259,11 +12221,7 @@ class Tensor:
         return [v for row in self.data for v in row]
 
     def total(self):
-        values = self.values()
-        out = values[0]
-        for value in values[1:]:
-            out = out + value
-        return out
+        return vsum(self.values())
 
     def mean(self):
         return self.total() * (1.0 / (self.rows * self.cols))
@@ -12556,9 +12514,7 @@ def softmax(row):
     """
     biggest = max(v.data for v in row)
     exps = [(v - biggest).exp() for v in row]
-    total = exps[0]
-    for value in exps[1:]:
-        total = total + value
+    total = vsum(exps)
     return [value / total for value in exps]
 
 
@@ -12566,10 +12522,7 @@ def log_softmax(row):
     """The log of the same thing, without ever taking a log of a small number."""
     biggest = max(v.data for v in row)
     shifted = [v - biggest for v in row]
-    total = shifted[0].exp()
-    for value in shifted[1:]:
-        total = total + value.exp()
-    log_total = total.log()
+    log_total = vsum([value.exp() for value in shifted]).log()
     return [value - log_total for value in shifted]
 
 
@@ -12749,15 +12702,10 @@ class LayerNorm(Module):
         scale = 1.0 / self.dim
         rows = []
         for row in x:
-            mean = row[0]
-            for value in row[1:]:
-                mean = mean + value
-            mean = mean * scale
+            mean = vsum(row) * scale
             centred = [value - mean for value in row]
-            variance = centred[0] * centred[0]
-            for value in centred[1:]:
-                variance = variance + value * value
-            inverse = (variance * scale + self.eps) ** -0.5
+            variance = vsum([value * value for value in centred]) * scale
+            inverse = (variance + self.eps) ** -0.5
             rows.append([
                 value * inverse * gain + bias
                 for value, gain, bias in zip(centred, self.gain[0], self.bias[0],
@@ -13231,17 +13179,22 @@ def _nothing(grad):
     """What a leaf does on the way back, which is nothing."""
 
 
-def dot(row, column):
-    """The sum of the products, started from the first one.
+def vsum(values):
+    """Values added left to right, starting from the first rather than zero.
 
-    `sum` would begin at the integer zero and build one extra node per element,
+    `sum` would begin at the integer zero and build one extra node per call,
     and in a graph this size that is thousands of nodes doing nothing. Starting
-    from the first product costs the same arithmetic and half the graph.
+    from the first value costs the same arithmetic and half the graph.
     """
-    total = row[0] * column[0]
-    for a, b in zip(row[1:], column[1:], strict=True):
-        total = total + a * b
+    total = values[0]
+    for value in values[1:]:
+        total = total + value
     return total
+
+
+def dot(row, column):
+    """The sum of the products of two rows."""
+    return vsum([a * b for a, b in zip(row, column, strict=True)])
 
 
 class Tensor:
@@ -13337,11 +13290,7 @@ class Tensor:
         return [v for row in self.data for v in row]
 
     def total(self):
-        values = self.values()
-        out = values[0]
-        for value in values[1:]:
-            out = out + value
-        return out
+        return vsum(self.values())
 
     def mean(self):
         return self.total() * (1.0 / (self.rows * self.cols))
@@ -13634,9 +13583,7 @@ def softmax(row):
     """
     biggest = max(v.data for v in row)
     exps = [(v - biggest).exp() for v in row]
-    total = exps[0]
-    for value in exps[1:]:
-        total = total + value
+    total = vsum(exps)
     return [value / total for value in exps]
 
 
@@ -13644,10 +13591,7 @@ def log_softmax(row):
     """The log of the same thing, without ever taking a log of a small number."""
     biggest = max(v.data for v in row)
     shifted = [v - biggest for v in row]
-    total = shifted[0].exp()
-    for value in shifted[1:]:
-        total = total + value.exp()
-    log_total = total.log()
+    log_total = vsum([value.exp() for value in shifted]).log()
     return [value - log_total for value in shifted]
 
 
@@ -13827,15 +13771,10 @@ class LayerNorm(Module):
         scale = 1.0 / self.dim
         rows = []
         for row in x:
-            mean = row[0]
-            for value in row[1:]:
-                mean = mean + value
-            mean = mean * scale
+            mean = vsum(row) * scale
             centred = [value - mean for value in row]
-            variance = centred[0] * centred[0]
-            for value in centred[1:]:
-                variance = variance + value * value
-            inverse = (variance * scale + self.eps) ** -0.5
+            variance = vsum([value * value for value in centred]) * scale
+            inverse = (variance + self.eps) ** -0.5
             rows.append([
                 value * inverse * gain + bias
                 for value, gain, bias in zip(centred, self.gain[0], self.bias[0],
@@ -14251,17 +14190,22 @@ def _nothing(grad):
     """What a leaf does on the way back, which is nothing."""
 
 
-def dot(row, column):
-    """The sum of the products, started from the first one.
+def vsum(values):
+    """Values added left to right, starting from the first rather than zero.
 
-    `sum` would begin at the integer zero and build one extra node per element,
+    `sum` would begin at the integer zero and build one extra node per call,
     and in a graph this size that is thousands of nodes doing nothing. Starting
-    from the first product costs the same arithmetic and half the graph.
+    from the first value costs the same arithmetic and half the graph.
     """
-    total = row[0] * column[0]
-    for a, b in zip(row[1:], column[1:], strict=True):
-        total = total + a * b
+    total = values[0]
+    for value in values[1:]:
+        total = total + value
     return total
+
+
+def dot(row, column):
+    """The sum of the products of two rows."""
+    return vsum([a * b for a, b in zip(row, column, strict=True)])
 
 
 class Tensor:
@@ -14357,11 +14301,7 @@ class Tensor:
         return [v for row in self.data for v in row]
 
     def total(self):
-        values = self.values()
-        out = values[0]
-        for value in values[1:]:
-            out = out + value
-        return out
+        return vsum(self.values())
 
     def mean(self):
         return self.total() * (1.0 / (self.rows * self.cols))
@@ -14654,9 +14594,7 @@ def softmax(row):
     """
     biggest = max(v.data for v in row)
     exps = [(v - biggest).exp() for v in row]
-    total = exps[0]
-    for value in exps[1:]:
-        total = total + value
+    total = vsum(exps)
     return [value / total for value in exps]
 
 
@@ -14664,10 +14602,7 @@ def log_softmax(row):
     """The log of the same thing, without ever taking a log of a small number."""
     biggest = max(v.data for v in row)
     shifted = [v - biggest for v in row]
-    total = shifted[0].exp()
-    for value in shifted[1:]:
-        total = total + value.exp()
-    log_total = total.log()
+    log_total = vsum([value.exp() for value in shifted]).log()
     return [value - log_total for value in shifted]
 
 
@@ -14847,15 +14782,10 @@ class LayerNorm(Module):
         scale = 1.0 / self.dim
         rows = []
         for row in x:
-            mean = row[0]
-            for value in row[1:]:
-                mean = mean + value
-            mean = mean * scale
+            mean = vsum(row) * scale
             centred = [value - mean for value in row]
-            variance = centred[0] * centred[0]
-            for value in centred[1:]:
-                variance = variance + value * value
-            inverse = (variance * scale + self.eps) ** -0.5
+            variance = vsum([value * value for value in centred]) * scale
+            inverse = (variance + self.eps) ** -0.5
             rows.append([
                 value * inverse * gain + bias
                 for value, gain, bias in zip(centred, self.gain[0], self.bias[0],
@@ -15410,17 +15340,22 @@ def _nothing(grad):
     """What a leaf does on the way back, which is nothing."""
 
 
-def dot(row, column):
-    """The sum of the products, started from the first one.
+def vsum(values):
+    """Values added left to right, starting from the first rather than zero.
 
-    `sum` would begin at the integer zero and build one extra node per element,
+    `sum` would begin at the integer zero and build one extra node per call,
     and in a graph this size that is thousands of nodes doing nothing. Starting
-    from the first product costs the same arithmetic and half the graph.
+    from the first value costs the same arithmetic and half the graph.
     """
-    total = row[0] * column[0]
-    for a, b in zip(row[1:], column[1:], strict=True):
-        total = total + a * b
+    total = values[0]
+    for value in values[1:]:
+        total = total + value
     return total
+
+
+def dot(row, column):
+    """The sum of the products of two rows."""
+    return vsum([a * b for a, b in zip(row, column, strict=True)])
 
 
 class Tensor:
@@ -15516,11 +15451,7 @@ class Tensor:
         return [v for row in self.data for v in row]
 
     def total(self):
-        values = self.values()
-        out = values[0]
-        for value in values[1:]:
-            out = out + value
-        return out
+        return vsum(self.values())
 
     def mean(self):
         return self.total() * (1.0 / (self.rows * self.cols))
@@ -15813,9 +15744,7 @@ def softmax(row):
     """
     biggest = max(v.data for v in row)
     exps = [(v - biggest).exp() for v in row]
-    total = exps[0]
-    for value in exps[1:]:
-        total = total + value
+    total = vsum(exps)
     return [value / total for value in exps]
 
 
@@ -15823,10 +15752,7 @@ def log_softmax(row):
     """The log of the same thing, without ever taking a log of a small number."""
     biggest = max(v.data for v in row)
     shifted = [v - biggest for v in row]
-    total = shifted[0].exp()
-    for value in shifted[1:]:
-        total = total + value.exp()
-    log_total = total.log()
+    log_total = vsum([value.exp() for value in shifted]).log()
     return [value - log_total for value in shifted]
 
 
@@ -16006,15 +15932,10 @@ class LayerNorm(Module):
         scale = 1.0 / self.dim
         rows = []
         for row in x:
-            mean = row[0]
-            for value in row[1:]:
-                mean = mean + value
-            mean = mean * scale
+            mean = vsum(row) * scale
             centred = [value - mean for value in row]
-            variance = centred[0] * centred[0]
-            for value in centred[1:]:
-                variance = variance + value * value
-            inverse = (variance * scale + self.eps) ** -0.5
+            variance = vsum([value * value for value in centred]) * scale
+            inverse = (variance + self.eps) ** -0.5
             rows.append([
                 value * inverse * gain + bias
                 for value, gain, bias in zip(centred, self.gain[0], self.bias[0],

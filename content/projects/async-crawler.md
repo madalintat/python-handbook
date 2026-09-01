@@ -1632,6 +1632,15 @@ class RateLimiter:
                 self.tokens -= 1
 
 
+    def _track_frontier(self, queue):
+        """The high water mark, counted in one place.
+
+        Two callers keeping one number in step by hand is how the number stops
+        being true, and what counts as the frontier is a definition rather than
+        an expression: everything queued plus everything waiting to be.
+        """
+        self._track_frontier(queue)
+
     def _drain(self, queue):
         """Move deferred urls into the queue while there is room for them."""
         raise NotImplementedError
@@ -1887,6 +1896,15 @@ class Crawler:
             finally:
                 self._drain(queue)
                 queue.task_done()
+
+    def _track_frontier(self, queue):
+        """The high water mark, counted in one place.
+
+        Two callers keeping one number in step by hand is how the number stops
+        being true, and what counts as the frontier is a definition rather than
+        an expression: everything queued plus everything waiting to be.
+        """
+        self._track_frontier(queue)
 
     def _drain(self, queue):
         """Move deferred urls into the queue while there is room for them."""
@@ -2177,6 +2195,15 @@ class Crawler:
             finally:
                 self._drain(queue)
                 queue.task_done()
+
+    def _track_frontier(self, queue):
+        """The high water mark, counted in one place.
+
+        Two callers keeping one number in step by hand is how the number stops
+        being true, and what counts as the frontier is a definition rather than
+        an expression: everything queued plus everything waiting to be.
+        """
+        self._track_frontier(queue)
 
     def _drain(self, queue):
         """Move deferred urls into the queue while there is room for them."""
@@ -2535,6 +2562,15 @@ class Crawler:
                 self._drain(queue)
             queue.task_done()
 
+    def _track_frontier(self, queue):
+        """The high water mark, counted in one place.
+
+        Two callers keeping one number in step by hand is how the number stops
+        being true, and what counts as the frontier is a definition rather than
+        an expression: everything queued plus everything waiting to be.
+        """
+        self._track_frontier(queue)
+
     def _drain(self, queue):
         """Move deferred urls into the queue while there is room for them."""
         while self.deferred and not queue.full():
@@ -2661,6 +2697,14 @@ The start url needs checking too, and it is the one that gets missed. Every
 other url arrives as a link on a page, so a check inside the loop over links
 covers all of them and none of the first. A site whose `robots.txt` says
 `Disallow: /` would then have exactly one page fetched: the one it named.
+
+The standard library has `urllib.robotparser`, and unit 37's question is
+whether to use it. Here the answer is no, and for a specific reason rather than
+pride: its `can_fetch` returns False when nothing has been parsed, so a site
+with no `robots.txt` reads as forbidding everything, and its `crawl_delay`
+returns None for the wildcard agent even when the file declares one. Both of
+those are the opposite of what this stage is about. Reach for the library when
+its answers are the ones you want, and this is the case where they are not.
 
 @goal `robots.txt` is honoured, longest match wins, and a crawl delay sets the rate.
 
@@ -2856,6 +2900,15 @@ class Crawler:
             finally:
                 self._drain(queue)
             queue.task_done()
+
+    def _track_frontier(self, queue):
+        """The high water mark, counted in one place.
+
+        Two callers keeping one number in step by hand is how the number stops
+        being true, and what counts as the frontier is a definition rather than
+        an expression: everything queued plus everything waiting to be.
+        """
+        self._track_frontier(queue)
 
     def _drain(self, queue):
         """Move deferred urls into the queue while there is room for them."""
@@ -3228,18 +3281,17 @@ class Crawler:
         if self.robots.crawl_delay and self.limiter is None:
             self.limiter = RateLimiter(rate=1 / self.robots.crawl_delay, burst=1)
 
-    async def crawl(self, start):
-        """Every page reachable from `start`, as a mapping of url to Page."""
-        root = normalise(start)
-        if root is None:
-            raise ValueError(f"{start!r} is not a crawlable url")
-        # Everything a crawl accumulates, cleared before anything can add to
-        # it. All of it, rather than the parts that came to mind: half of these
-        # used to carry over, so a crawler used twice reported the first run's
-        # retries added to the second run's and called it one number.
-        self.seen = {root}
+    def _reset(self, root=None):
+        """Everything a crawl accumulates, cleared before anything adds to it.
+
+        Called from `__init__` and again from `crawl`, so the two cannot
+        disagree about what a fresh crawl means. Half of these used to be
+        cleared in one place and not the other, and a crawler used twice
+        reported the first run's retries added to the second run's.
+        """
+        self.seen = {root} if root is not None else set()
         self.pages = {}
-        self.depth = {root: 0}
+        self.depth = {root: 0} if root is not None else {}
         self.deferred = collections.deque()
         self.peak_frontier = 0
         self.retried = 0
@@ -3248,6 +3300,13 @@ class Crawler:
         self.in_flight = 0
         self.peak_in_flight = 0
         self.cancelled = False
+
+    async def crawl(self, start):
+        """Every page reachable from `start`, as a mapping of url to Page."""
+        root = normalise(start)
+        if root is None:
+            raise ValueError(f"{start!r} is not a crawlable url")
+        self._reset(root)
 
         if self.obey_robots:
             await self._load_robots(root)
@@ -3286,6 +3345,15 @@ class Crawler:
             finally:
                 self._drain(queue)
             queue.task_done()
+
+    def _track_frontier(self, queue):
+        """The high water mark, counted in one place.
+
+        Two callers keeping one number in step by hand is how the number stops
+        being true, and what counts as the frontier is a definition rather than
+        an expression: everything queued plus everything waiting to be.
+        """
+        self._track_frontier(queue)
 
     def _drain(self, queue):
         """Move deferred urls into the queue while there is room for them."""
@@ -3637,18 +3705,17 @@ class Crawler:
         if self.robots.crawl_delay and self.limiter is None:
             self.limiter = RateLimiter(rate=1 / self.robots.crawl_delay, burst=1)
 
-    async def crawl(self, start):
-        """Every page reachable from `start`, as a mapping of url to Page."""
-        root = normalise(start)
-        if root is None:
-            raise ValueError(f"{start!r} is not a crawlable url")
-        # Everything a crawl accumulates, cleared before anything can add to
-        # it. All of it, rather than the parts that came to mind: half of these
-        # used to carry over, so a crawler used twice reported the first run's
-        # retries added to the second run's and called it one number.
-        self.seen = {root}
+    def _reset(self, root=None):
+        """Everything a crawl accumulates, cleared before anything adds to it.
+
+        Called from `__init__` and again from `crawl`, so the two cannot
+        disagree about what a fresh crawl means. Half of these used to be
+        cleared in one place and not the other, and a crawler used twice
+        reported the first run's retries added to the second run's.
+        """
+        self.seen = {root} if root is not None else set()
         self.pages = {}
-        self.depth = {root: 0}
+        self.depth = {root: 0} if root is not None else {}
         self.deferred = collections.deque()
         self.peak_frontier = 0
         self.retried = 0
@@ -3657,6 +3724,13 @@ class Crawler:
         self.in_flight = 0
         self.peak_in_flight = 0
         self.cancelled = False
+
+    async def crawl(self, start):
+        """Every page reachable from `start`, as a mapping of url to Page."""
+        root = normalise(start)
+        if root is None:
+            raise ValueError(f"{start!r} is not a crawlable url")
+        self._reset(root)
 
         if self.obey_robots:
             await self._load_robots(root)
@@ -3695,6 +3769,15 @@ class Crawler:
             finally:
                 self._drain(queue)
             queue.task_done()
+
+    def _track_frontier(self, queue):
+        """The high water mark, counted in one place.
+
+        Two callers keeping one number in step by hand is how the number stops
+        being true, and what counts as the frontier is a definition rather than
+        an expression: everything queued plus everything waiting to be.
+        """
+        self._track_frontier(queue)
 
     def _drain(self, queue):
         """Move deferred urls into the queue while there is room for them."""
@@ -4176,18 +4259,17 @@ class Crawler:
         if self.robots.crawl_delay and self.limiter is None:
             self.limiter = RateLimiter(rate=1 / self.robots.crawl_delay, burst=1)
 
-    async def crawl(self, start):
-        """Every page reachable from `start`, as a mapping of url to Page."""
-        root = normalise(start)
-        if root is None:
-            raise ValueError(f"{start!r} is not a crawlable url")
-        # Everything a crawl accumulates, cleared before anything can add to
-        # it. All of it, rather than the parts that came to mind: half of these
-        # used to carry over, so a crawler used twice reported the first run's
-        # retries added to the second run's and called it one number.
-        self.seen = {root}
+    def _reset(self, root=None):
+        """Everything a crawl accumulates, cleared before anything adds to it.
+
+        Called from `__init__` and again from `crawl`, so the two cannot
+        disagree about what a fresh crawl means. Half of these used to be
+        cleared in one place and not the other, and a crawler used twice
+        reported the first run's retries added to the second run's.
+        """
+        self.seen = {root} if root is not None else set()
         self.pages = {}
-        self.depth = {root: 0}
+        self.depth = {root: 0} if root is not None else {}
         self.deferred = collections.deque()
         self.peak_frontier = 0
         self.retried = 0
@@ -4196,6 +4278,13 @@ class Crawler:
         self.in_flight = 0
         self.peak_in_flight = 0
         self.cancelled = False
+
+    async def crawl(self, start):
+        """Every page reachable from `start`, as a mapping of url to Page."""
+        root = normalise(start)
+        if root is None:
+            raise ValueError(f"{start!r} is not a crawlable url")
+        self._reset(root)
 
         if self.obey_robots:
             await self._load_robots(root)
@@ -4234,6 +4323,15 @@ class Crawler:
             finally:
                 self._drain(queue)
             queue.task_done()
+
+    def _track_frontier(self, queue):
+        """The high water mark, counted in one place.
+
+        Two callers keeping one number in step by hand is how the number stops
+        being true, and what counts as the frontier is a definition rather than
+        an expression: everything queued plus everything waiting to be.
+        """
+        self._track_frontier(queue)
 
     def _drain(self, queue):
         """Move deferred urls into the queue while there is room for them."""

@@ -160,6 +160,13 @@ PROJECTS = [
 # happy and the code is still wrong.
 VERDICTS = {"ruff", "mypy", "raises", "silent"}
 
+# The tier and the domain are read straight out of PROJECTS and written into
+# the manifest, where the frontend groups by them. An unrecognised value is not
+# an error anywhere downstream: it is a heading nobody wrote and a filter
+# nothing matches, and the only way to find it is to look at the rendered page.
+TIERS = {"mini", "core", "deep"}
+DOMAINS = {"data", "systems", "tools", "languages", "ai", "web"}
+
 # The one description of the three judges. build.py runs them from here and the
 # browser fetches this as data/judges.json, so what --validate calls clean and
 # what a reader is told is clean cannot drift apart.
@@ -276,6 +283,13 @@ DRILLS_PER_UNIT = 15
 
 def parse_unit(path: Path) -> dict:
     meta, body = front_matter(path.read_text(), path)
+    # Every other kind of file is keyed by its filename. A unit declares its
+    # slug as well, so the two can disagree, and a copied front matter block
+    # would then write one unit's JSON from another unit's file and report the
+    # first as merely incomplete.
+    if meta.get("slug") != path.stem:
+        die(path, f"front matter says slug {meta.get('slug')!r}, "
+                  f"but the file is called {path.stem!r}")
     words = word_count(body)
     if not (NOTE_MIN <= words <= NOTE_MAX):
         die(path, f"note is {words} words, must be {NOTE_MIN}-{NOTE_MAX}")
@@ -674,6 +688,30 @@ def _check_cross_references(path: Path, body: str) -> None:
             die(path, f"points forward to unit {m.group(1)}, which the reader has already done")
 
 
+def _check_tables() -> None:
+    """The tables that have to agree with each other, checked once at startup.
+
+    Every one of these is a rule somebody would otherwise have to remember
+    while editing a tuple, which is the kind of rule that gets forgotten.
+    """
+    for slug, tier, domain, *_ in PROJECTS:
+        if tier not in TIERS:
+            raise SystemExit(f"project {slug}: tier {tier!r} is not one of {sorted(TIERS)}")
+        if domain not in DOMAINS:
+            raise SystemExit(
+                f"project {slug}: domain {domain!r} is not one of {sorted(DOMAINS)}"
+            )
+    for slug, phase, *_ in TRACK:
+        if not 0 <= phase < len(PHASES):
+            raise SystemExit(
+                f"unit {slug}: phase {phase} is not one of the {len(PHASES)} phases"
+            )
+    used = {phase for _, phase, *_ in TRACK}
+    empty = sorted(set(range(len(PHASES))) - used)
+    if empty:
+        raise SystemExit(f"phases with no units in them: {[PHASES[i][0] for i in empty]}")
+
+
 def _check_feature_tables() -> None:
     introduced = {f for feats in INTRODUCES.values() for f in feats}
     undetectable = introduced - DETECTABLE
@@ -771,6 +809,7 @@ def available_by(slug: str) -> set[str]:
 
 def gate(path: Path) -> list[str]:
     """Complaints about an exercise file using constructs from further down the track."""
+    _check_tables()
     _check_feature_tables()
     slug = path.stem
     allowed = available_by(slug)
@@ -818,6 +857,7 @@ def build() -> int:
 
     # The gate belongs to the build, not to a shell script a contributor may
     # never run. The exercises are already parsed, so this costs nothing.
+    _check_tables()
     _check_feature_tables()
     vocabulary = [p for path in exercises for p in gate(path)]
     for problem in vocabulary:

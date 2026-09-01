@@ -364,6 +364,19 @@ def build_parser():
     raise NotImplementedError
 
 
+def load_or_report(path, out):
+    """The project at `path`, or None having already said why not.
+
+    Every command starts this way, and the three of them agreeing on the
+    wording is the difference between a tool and three tools in a trench coat.
+    """
+    try:
+        return load_project(path)
+    except ProjectError as exc:
+        print(f"pkgit: {exc}", file=out)
+        return None
+
+
 def cmd_info(args, out):
     """Print what the project declares, and return the exit code."""
     raise NotImplementedError
@@ -587,12 +600,23 @@ def build_parser():
     return parser
 
 
-def cmd_info(args, out):
-    """Print what the project declares, and return the exit code."""
+def load_or_report(path, out):
+    """The project at `path`, or None having already said why not.
+
+    Every command starts this way, and the three of them agreeing on the
+    wording is the difference between a tool and three tools in a trench coat.
+    """
     try:
-        project = load_project(args.path)
+        return load_project(path)
     except ProjectError as exc:
         print(f"pkgit: {exc}", file=out)
+        return None
+
+
+def cmd_info(args, out):
+    """Print what the project declares, and return the exit code."""
+    project = load_or_report(args.path, out)
+    if project is None:
         return 1
     print(f"name            {project.name}", file=out)
     print(f"version         {project.version}", file=out)
@@ -760,12 +784,23 @@ def build_parser():
     return parser
 
 
-def cmd_info(args, out):
-    """Print what the project declares, and return the exit code."""
+def load_or_report(path, out):
+    """The project at `path`, or None having already said why not.
+
+    Every command starts this way, and the three of them agreeing on the
+    wording is the difference between a tool and three tools in a trench coat.
+    """
     try:
-        project = load_project(args.path)
+        return load_project(path)
     except ProjectError as exc:
         print(f"pkgit: {exc}", file=out)
+        return None
+
+
+def cmd_info(args, out):
+    """Print what the project declares, and return the exit code."""
+    project = load_or_report(args.path, out)
+    if project is None:
         return 1
     print(f"name            {project.name}", file=out)
     print(f"version         {project.version}", file=out)
@@ -1067,12 +1102,23 @@ def build_parser():
     return parser
 
 
-def cmd_info(args, out):
-    """Print what the project declares, and return the exit code."""
+def load_or_report(path, out):
+    """The project at `path`, or None having already said why not.
+
+    Every command starts this way, and the three of them agreeing on the
+    wording is the difference between a tool and three tools in a trench coat.
+    """
     try:
-        project = load_project(args.path)
+        return load_project(path)
     except ProjectError as exc:
         print(f"pkgit: {exc}", file=out)
+        return None
+
+
+def cmd_info(args, out):
+    """Print what the project declares, and return the exit code."""
+    project = load_or_report(args.path, out)
+    if project is None:
         return 1
     print(f"name            {project.name}", file=out)
     print(f"version         {project.version}", file=out)
@@ -1345,12 +1391,23 @@ def build_parser():
     return parser
 
 
-def cmd_info(args, out):
-    """Print what the project declares, and return the exit code."""
+def load_or_report(path, out):
+    """The project at `path`, or None having already said why not.
+
+    Every command starts this way, and the three of them agreeing on the
+    wording is the difference between a tool and three tools in a trench coat.
+    """
     try:
-        project = load_project(args.path)
+        return load_project(path)
     except ProjectError as exc:
         print(f"pkgit: {exc}", file=out)
+        return None
+
+
+def cmd_info(args, out):
+    """Print what the project declares, and return the exit code."""
+    project = load_or_report(args.path, out)
+    if project is None:
         return 1
     print(f"name            {project.name}", file=out)
     print(f"version         {project.version}", file=out)
@@ -1753,12 +1810,23 @@ def build_parser():
     return parser
 
 
-def cmd_info(args, out):
-    """Print what the project declares, and return the exit code."""
+def load_or_report(path, out):
+    """The project at `path`, or None having already said why not.
+
+    Every command starts this way, and the three of them agreeing on the
+    wording is the difference between a tool and three tools in a trench coat.
+    """
     try:
-        project = load_project(args.path)
+        return load_project(path)
     except ProjectError as exc:
         print(f"pkgit: {exc}", file=out)
+        return None
+
+
+def cmd_info(args, out):
+    """Print what the project declares, and return the exit code."""
+    project = load_or_report(args.path, out)
+    if project is None:
         return 1
     print(f"name            {project.name}", file=out)
     print(f"version         {project.version}", file=out)
@@ -2160,12 +2228,23 @@ def build_parser():
     return parser
 
 
-def cmd_info(args, out):
-    """Print what the project declares, and return the exit code."""
+def load_or_report(path, out):
+    """The project at `path`, or None having already said why not.
+
+    Every command starts this way, and the three of them agreeing on the
+    wording is the difference between a tool and three tools in a trench coat.
+    """
     try:
-        project = load_project(args.path)
+        return load_project(path)
     except ProjectError as exc:
         print(f"pkgit: {exc}", file=out)
+        return None
+
+
+def cmd_info(args, out):
+    """Print what the project declares, and return the exit code."""
+    project = load_or_report(args.path, out)
+    if project is None:
         return 1
     print(f"name            {project.name}", file=out)
     print(f"version         {project.version}", file=out)
@@ -2755,12 +2834,23 @@ def build_parser():
     return parser
 
 
-def cmd_info(args, out):
-    """Print what the project declares, and return the exit code."""
+def load_or_report(path, out):
+    """The project at `path`, or None having already said why not.
+
+    Every command starts this way, and the three of them agreeing on the
+    wording is the difference between a tool and three tools in a trench coat.
+    """
     try:
-        project = load_project(args.path)
+        return load_project(path)
     except ProjectError as exc:
         print(f"pkgit: {exc}", file=out)
+        return None
+
+
+def cmd_info(args, out):
+    """Print what the project declares, and return the exit code."""
+    project = load_or_report(args.path, out)
+    if project is None:
         return 1
     print(f"name            {project.name}", file=out)
     print(f"version         {project.version}", file=out)
@@ -2777,10 +2867,8 @@ def cmd_info(args, out):
 
 def cmd_matrix(args, out):
     """Print the Python versions the project supports, one per line."""
-    try:
-        project = load_project(args.path)
-    except ProjectError as exc:
-        print(f"pkgit: {exc}", file=out)
+    project = load_or_report(args.path, out)
+    if project is None:
         return 1
     supported = python_matrix(project)
     if not supported:
@@ -3302,12 +3390,23 @@ def build_parser():
     return parser
 
 
-def cmd_info(args, out):
-    """Print what the project declares, and return the exit code."""
+def load_or_report(path, out):
+    """The project at `path`, or None having already said why not.
+
+    Every command starts this way, and the three of them agreeing on the
+    wording is the difference between a tool and three tools in a trench coat.
+    """
     try:
-        project = load_project(args.path)
+        return load_project(path)
     except ProjectError as exc:
         print(f"pkgit: {exc}", file=out)
+        return None
+
+
+def cmd_info(args, out):
+    """Print what the project declares, and return the exit code."""
+    project = load_or_report(args.path, out)
+    if project is None:
         return 1
     print(f"name            {project.name}", file=out)
     print(f"version         {project.version}", file=out)
@@ -3324,10 +3423,8 @@ def cmd_info(args, out):
 
 def cmd_matrix(args, out):
     """Print the Python versions the project supports, one per line."""
-    try:
-        project = load_project(args.path)
-    except ProjectError as exc:
-        print(f"pkgit: {exc}", file=out)
+    project = load_or_report(args.path, out)
+    if project is None:
         return 1
     supported = python_matrix(project)
     if not supported:
@@ -3724,6 +3821,12 @@ def version_escape(version):
     return re.sub(r"[^\w\d.]+", "_", str(version))
 
 
+def wheel_stem(project):
+    """The escaped name and version, which every wheel artefact starts with."""
+    return (f"{wheel_escape(project.name)}-"
+            f"{version_escape(Version(project.version))}")
+
+
 def wheel_filename(project, python_tag="py3", abi_tag="none", platform_tag="any"):
     """`{name}-{version}-{python}-{abi}-{platform}.whl`, the five fields."""
     raise NotImplementedError
@@ -3980,12 +4083,23 @@ def build_parser():
     return parser
 
 
-def cmd_info(args, out):
-    """Print what the project declares, and return the exit code."""
+def load_or_report(path, out):
+    """The project at `path`, or None having already said why not.
+
+    Every command starts this way, and the three of them agreeing on the
+    wording is the difference between a tool and three tools in a trench coat.
+    """
     try:
-        project = load_project(args.path)
+        return load_project(path)
     except ProjectError as exc:
         print(f"pkgit: {exc}", file=out)
+        return None
+
+
+def cmd_info(args, out):
+    """Print what the project declares, and return the exit code."""
+    project = load_or_report(args.path, out)
+    if project is None:
         return 1
     print(f"name            {project.name}", file=out)
     print(f"version         {project.version}", file=out)
@@ -4002,10 +4116,8 @@ def cmd_info(args, out):
 
 def cmd_matrix(args, out):
     """Print the Python versions the project supports, one per line."""
-    try:
-        project = load_project(args.path)
-    except ProjectError as exc:
-        print(f"pkgit: {exc}", file=out)
+    project = load_or_report(args.path, out)
+    if project is None:
         return 1
     supported = python_matrix(project)
     if not supported:
@@ -4419,6 +4531,12 @@ def version_escape(version):
     return re.sub(r"[^\w\d.]+", "_", str(version))
 
 
+def wheel_stem(project):
+    """The escaped name and version, which every wheel artefact starts with."""
+    return (f"{wheel_escape(project.name)}-"
+            f"{version_escape(Version(project.version))}")
+
+
 def wheel_filename(project, python_tag="py3", abi_tag="none", platform_tag="any"):
     """`{name}-{version}-{python}-{abi}-{platform}.whl`, the five fields.
 
@@ -4427,15 +4545,12 @@ def wheel_filename(project, python_tag="py3", abi_tag="none", platform_tag="any"
     interpreter and the platform it was built for, which is why there are
     dozens of files behind one release of numpy and one behind most tools.
     """
-    version = version_escape(Version(project.version))
-    return (f"{wheel_escape(project.name)}-{version}"
-            f"-{python_tag}-{abi_tag}-{platform_tag}.whl")
+    return f"{wheel_stem(project)}-{python_tag}-{abi_tag}-{platform_tag}.whl"
 
 
 def dist_info_dir(project):
     """The `.dist-info` directory inside the wheel, which holds the metadata."""
-    return (f"{wheel_escape(project.name)}-"
-            f"{version_escape(Version(project.version))}.dist-info")
+    return f"{wheel_stem(project)}.dist-info"
 
 
 def metadata_text(project, candidates=DEFAULT_PYTHONS):
@@ -4609,12 +4724,23 @@ def build_parser():
     return parser
 
 
-def cmd_info(args, out):
-    """Print what the project declares, and return the exit code."""
+def load_or_report(path, out):
+    """The project at `path`, or None having already said why not.
+
+    Every command starts this way, and the three of them agreeing on the
+    wording is the difference between a tool and three tools in a trench coat.
+    """
     try:
-        project = load_project(args.path)
+        return load_project(path)
     except ProjectError as exc:
         print(f"pkgit: {exc}", file=out)
+        return None
+
+
+def cmd_info(args, out):
+    """Print what the project declares, and return the exit code."""
+    project = load_or_report(args.path, out)
+    if project is None:
         return 1
     print(f"name            {project.name}", file=out)
     print(f"version         {project.version}", file=out)
@@ -4631,10 +4757,8 @@ def cmd_info(args, out):
 
 def cmd_matrix(args, out):
     """Print the Python versions the project supports, one per line."""
-    try:
-        project = load_project(args.path)
-    except ProjectError as exc:
-        print(f"pkgit: {exc}", file=out)
+    project = load_or_report(args.path, out)
+    if project is None:
         return 1
     supported = python_matrix(project)
     if not supported:
@@ -5048,6 +5172,12 @@ def version_escape(version):
     return re.sub(r"[^\w\d.]+", "_", str(version))
 
 
+def wheel_stem(project):
+    """The escaped name and version, which every wheel artefact starts with."""
+    return (f"{wheel_escape(project.name)}-"
+            f"{version_escape(Version(project.version))}")
+
+
 def wheel_filename(project, python_tag="py3", abi_tag="none", platform_tag="any"):
     """`{name}-{version}-{python}-{abi}-{platform}.whl`, the five fields.
 
@@ -5056,15 +5186,12 @@ def wheel_filename(project, python_tag="py3", abi_tag="none", platform_tag="any"
     interpreter and the platform it was built for, which is why there are
     dozens of files behind one release of numpy and one behind most tools.
     """
-    version = version_escape(Version(project.version))
-    return (f"{wheel_escape(project.name)}-{version}"
-            f"-{python_tag}-{abi_tag}-{platform_tag}.whl")
+    return f"{wheel_stem(project)}-{python_tag}-{abi_tag}-{platform_tag}.whl"
 
 
 def dist_info_dir(project):
     """The `.dist-info` directory inside the wheel, which holds the metadata."""
-    return (f"{wheel_escape(project.name)}-"
-            f"{version_escape(Version(project.version))}.dist-info")
+    return f"{wheel_stem(project)}.dist-info"
 
 
 def metadata_text(project, candidates=DEFAULT_PYTHONS):
@@ -5377,12 +5504,23 @@ def build_parser():
     return parser
 
 
-def cmd_info(args, out):
-    """Print what the project declares, and return the exit code."""
+def load_or_report(path, out):
+    """The project at `path`, or None having already said why not.
+
+    Every command starts this way, and the three of them agreeing on the
+    wording is the difference between a tool and three tools in a trench coat.
+    """
     try:
-        project = load_project(args.path)
+        return load_project(path)
     except ProjectError as exc:
         print(f"pkgit: {exc}", file=out)
+        return None
+
+
+def cmd_info(args, out):
+    """Print what the project declares, and return the exit code."""
+    project = load_or_report(args.path, out)
+    if project is None:
         return 1
     print(f"name            {project.name}", file=out)
     print(f"version         {project.version}", file=out)
@@ -5399,10 +5537,8 @@ def cmd_info(args, out):
 
 def cmd_matrix(args, out):
     """Print the Python versions the project supports, one per line."""
-    try:
-        project = load_project(args.path)
-    except ProjectError as exc:
-        print(f"pkgit: {exc}", file=out)
+    project = load_or_report(args.path, out)
+    if project is None:
         return 1
     supported = python_matrix(project)
     if not supported:
@@ -5816,6 +5952,12 @@ def version_escape(version):
     return re.sub(r"[^\w\d.]+", "_", str(version))
 
 
+def wheel_stem(project):
+    """The escaped name and version, which every wheel artefact starts with."""
+    return (f"{wheel_escape(project.name)}-"
+            f"{version_escape(Version(project.version))}")
+
+
 def wheel_filename(project, python_tag="py3", abi_tag="none", platform_tag="any"):
     """`{name}-{version}-{python}-{abi}-{platform}.whl`, the five fields.
 
@@ -5824,15 +5966,12 @@ def wheel_filename(project, python_tag="py3", abi_tag="none", platform_tag="any"
     interpreter and the platform it was built for, which is why there are
     dozens of files behind one release of numpy and one behind most tools.
     """
-    version = version_escape(Version(project.version))
-    return (f"{wheel_escape(project.name)}-{version}"
-            f"-{python_tag}-{abi_tag}-{platform_tag}.whl")
+    return f"{wheel_stem(project)}-{python_tag}-{abi_tag}-{platform_tag}.whl"
 
 
 def dist_info_dir(project):
     """The `.dist-info` directory inside the wheel, which holds the metadata."""
-    return (f"{wheel_escape(project.name)}-"
-            f"{version_escape(Version(project.version))}.dist-info")
+    return f"{wheel_stem(project)}.dist-info"
 
 
 def metadata_text(project, candidates=DEFAULT_PYTHONS):
@@ -6123,12 +6262,23 @@ def build_parser():
     return parser
 
 
-def cmd_info(args, out):
-    """Print what the project declares, and return the exit code."""
+def load_or_report(path, out):
+    """The project at `path`, or None having already said why not.
+
+    Every command starts this way, and the three of them agreeing on the
+    wording is the difference between a tool and three tools in a trench coat.
+    """
     try:
-        project = load_project(args.path)
+        return load_project(path)
     except ProjectError as exc:
         print(f"pkgit: {exc}", file=out)
+        return None
+
+
+def cmd_info(args, out):
+    """Print what the project declares, and return the exit code."""
+    project = load_or_report(args.path, out)
+    if project is None:
         return 1
     print(f"name            {project.name}", file=out)
     print(f"version         {project.version}", file=out)
@@ -6145,10 +6295,8 @@ def cmd_info(args, out):
 
 def cmd_matrix(args, out):
     """Print the Python versions the project supports, one per line."""
-    try:
-        project = load_project(args.path)
-    except ProjectError as exc:
-        print(f"pkgit: {exc}", file=out)
+    project = load_or_report(args.path, out)
+    if project is None:
         return 1
     supported = python_matrix(project)
     if not supported:
@@ -6573,6 +6721,12 @@ def version_escape(version):
     return re.sub(r"[^\w\d.]+", "_", str(version))
 
 
+def wheel_stem(project):
+    """The escaped name and version, which every wheel artefact starts with."""
+    return (f"{wheel_escape(project.name)}-"
+            f"{version_escape(Version(project.version))}")
+
+
 def wheel_filename(project, python_tag="py3", abi_tag="none", platform_tag="any"):
     """`{name}-{version}-{python}-{abi}-{platform}.whl`, the five fields.
 
@@ -6581,15 +6735,12 @@ def wheel_filename(project, python_tag="py3", abi_tag="none", platform_tag="any"
     interpreter and the platform it was built for, which is why there are
     dozens of files behind one release of numpy and one behind most tools.
     """
-    version = version_escape(Version(project.version))
-    return (f"{wheel_escape(project.name)}-{version}"
-            f"-{python_tag}-{abi_tag}-{platform_tag}.whl")
+    return f"{wheel_stem(project)}-{python_tag}-{abi_tag}-{platform_tag}.whl"
 
 
 def dist_info_dir(project):
     """The `.dist-info` directory inside the wheel, which holds the metadata."""
-    return (f"{wheel_escape(project.name)}-"
-            f"{version_escape(Version(project.version))}.dist-info")
+    return f"{wheel_stem(project)}.dist-info"
 
 
 def metadata_text(project, candidates=DEFAULT_PYTHONS):
@@ -7061,12 +7212,23 @@ def build_parser():
     return parser
 
 
-def cmd_info(args, out):
-    """Print what the project declares, and return the exit code."""
+def load_or_report(path, out):
+    """The project at `path`, or None having already said why not.
+
+    Every command starts this way, and the three of them agreeing on the
+    wording is the difference between a tool and three tools in a trench coat.
+    """
     try:
-        project = load_project(args.path)
+        return load_project(path)
     except ProjectError as exc:
         print(f"pkgit: {exc}", file=out)
+        return None
+
+
+def cmd_info(args, out):
+    """Print what the project declares, and return the exit code."""
+    project = load_or_report(args.path, out)
+    if project is None:
         return 1
     print(f"name            {project.name}", file=out)
     print(f"version         {project.version}", file=out)
@@ -7083,10 +7245,8 @@ def cmd_info(args, out):
 
 def cmd_matrix(args, out):
     """Print the Python versions the project supports, one per line."""
-    try:
-        project = load_project(args.path)
-    except ProjectError as exc:
-        print(f"pkgit: {exc}", file=out)
+    project = load_or_report(args.path, out)
+    if project is None:
         return 1
     supported = python_matrix(project)
     if not supported:
@@ -7099,8 +7259,10 @@ def cmd_matrix(args, out):
 
 def cmd_build(args, out):
     """Build the wheel, then check what was built. Returns the exit code."""
+    project = load_or_report(args.path, out)
+    if project is None:
+        return 1
     try:
-        project = load_project(args.path)
         path = build_wheel(project, args.out)
     except ProjectError as exc:
         print(f"pkgit: {exc}", file=out)
@@ -7526,6 +7688,12 @@ def version_escape(version):
     return re.sub(r"[^\w\d.]+", "_", str(version))
 
 
+def wheel_stem(project):
+    """The escaped name and version, which every wheel artefact starts with."""
+    return (f"{wheel_escape(project.name)}-"
+            f"{version_escape(Version(project.version))}")
+
+
 def wheel_filename(project, python_tag="py3", abi_tag="none", platform_tag="any"):
     """`{name}-{version}-{python}-{abi}-{platform}.whl`, the five fields.
 
@@ -7534,15 +7702,12 @@ def wheel_filename(project, python_tag="py3", abi_tag="none", platform_tag="any"
     interpreter and the platform it was built for, which is why there are
     dozens of files behind one release of numpy and one behind most tools.
     """
-    version = version_escape(Version(project.version))
-    return (f"{wheel_escape(project.name)}-{version}"
-            f"-{python_tag}-{abi_tag}-{platform_tag}.whl")
+    return f"{wheel_stem(project)}-{python_tag}-{abi_tag}-{platform_tag}.whl"
 
 
 def dist_info_dir(project):
     """The `.dist-info` directory inside the wheel, which holds the metadata."""
-    return (f"{wheel_escape(project.name)}-"
-            f"{version_escape(Version(project.version))}.dist-info")
+    return f"{wheel_stem(project)}.dist-info"
 
 
 def metadata_text(project, candidates=DEFAULT_PYTHONS):
@@ -7783,10 +7948,14 @@ def _check_record(archive, names, info):
         return [f"RECORD cannot be read: {exc}"]
 
     problems = []
+    # A set, and made once. The membership test below runs per row and there is
+    # about one row per file, so scanning a list here made checking a wheel
+    # quadratic in the number of files in it.
+    held = set(names)
     listed = {row[0] for row in rows}
-    for missing in sorted(set(names) - listed):
+    for missing in sorted(held - listed):
         problems.append(f"{missing} is in the wheel and not in RECORD")
-    for extra in sorted(listed - set(names)):
+    for extra in sorted(listed - held):
         problems.append(f"{extra} is in RECORD and not in the wheel")
 
     for entry, digest, size in rows:
@@ -7794,7 +7963,7 @@ def _check_record(archive, names, info):
             if digest or size:
                 problems.append("RECORD lists a hash for itself, which cannot be right")
             continue
-        if entry not in names:
+        if entry not in held:
             continue
         data = archive.read(entry)
         if digest != record_hash(data):
