@@ -151,6 +151,12 @@ t('di( nests correctly',  'f(g(x), |y);',    'di(',      'f(|);');
 t('yi( then p',           'f(a|b);',         'yi($p',    'f(ab);a|b');
 t('an absent object is safe', 'let |x;',     'di(x',     'let |;');
 
+console.log('\n--- $ sticks to the end of the line ---');
+t('$ then j keeps the end',      '|abcd\nxy\nefgh', '$jj',  'abcd\nxy\nefg|h');
+t('$ then j on a short line',    '|abcd\nxy',       '$j',   'abcd\nx|y');
+t('an ordinary motion keeps its column', '|abcd\nxyzw', 'llj', 'abcd\nxy|zw');
+t('0 after $ forgets the end',   '|abcd\nxyzw',     '$j0',  'abcd\n|xyzw');
+
 console.log('\n--- gc, from Comment.nvim (Python comments) ---');
 t('gcc comments',         'x = |1',          'gcc',      '|# x = 1');
 t('gcc uncomments',       '# x = |1',        'gcc',      '|x = 1');

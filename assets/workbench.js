@@ -249,7 +249,9 @@ function buildEditor(host, initial, onRun) {
     }
     // Reading scrollWidth straight after an innerHTML write forces a synchronous
     // layout; deferring keeps that off the keystroke's critical path.
-    requestAnimationFrame(() => { ta.style.width = pre.scrollWidth + "px"; });
+    requestAnimationFrame(() => {
+      ta.style.width = ed.classList.contains("softwrap") ? "" : pre.scrollWidth + "px";
+    });
   }
 
   /* Vim mode intercepts keys before the handlers below, so Tab and Enter are
@@ -259,11 +261,49 @@ function buildEditor(host, initial, onRun) {
   ta.addEventListener("input", paint);
   ta.addEventListener("scroll", () => { pre.parentElement.scrollLeft = ta.scrollLeft; });
 
+  // Any edit we make ourselves has to be pushed back into vim: setting ta.value
+  // from script does not fire an input event, so vim's own copy of the buffer
+  // would otherwise drift out of step with what is on screen.
+  const edited = () => { vim.sync(); paint(); };
+
   ta.addEventListener("keydown", e => {
+    if (e.defaultPrevented) return;      // vim consumed it in normal or visual mode
     if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); onRun?.(); return; }
+
+    const { selectionStart: a, selectionEnd: b, value: v } = ta;
+    const lineStart = v.lastIndexOf("\n", a - 1) + 1;
+
+    // Enter carries the current line's indentation down, and adds a level after
+    // a line that opens a block. Python is the one language where getting this
+    // wrong is a syntax error rather than a formatting annoyance.
+    if (e.key === "Enter" && a === b) {
+      e.preventDefault();
+      const line = v.slice(lineStart, a);
+      const indent = /^[ \t]*/.exec(line)[0];
+      const deeper = /:\s*$/.test(line) ? TAB : "";
+      const insert = "\n" + indent + deeper;
+      ta.value = v.slice(0, a) + insert + v.slice(b);
+      ta.setSelectionRange(a + insert.length, a + insert.length);
+      edited();
+      return;
+    }
+
+    // Backspace inside leading whitespace goes back to the previous tab stop
+    // rather than removing one space at a time.
+    if (e.key === "Backspace" && a === b && a > lineStart) {
+      const before = v.slice(lineStart, a);
+      if (/^ +$/.test(before)) {
+        e.preventDefault();
+        const back = ((before.length - 1) % TAB.length) + 1;
+        ta.value = v.slice(0, a - back) + v.slice(b);
+        ta.setSelectionRange(a - back, a - back);
+        edited();
+        return;
+      }
+    }
+
     if (e.key !== "Tab") return;
     e.preventDefault();
-    const { selectionStart: a, selectionEnd: b, value: v } = ta;
 
     if (e.shiftKey || a !== b) {
       // Indent or dedent every line the selection touches; the two differ only
@@ -279,7 +319,7 @@ function buildEditor(host, initial, onRun) {
       ta.value = v.slice(0, a) + TAB + v.slice(b);
       ta.setSelectionRange(a + TAB.length, a + TAB.length);
     }
-    paint();
+    edited();
   });
 
   const vimBtn = host.querySelector("#vimbtn");

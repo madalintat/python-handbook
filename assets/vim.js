@@ -595,7 +595,10 @@ function create(opts = {}) {
         applyOp(st.op, from, to, m.linewise);
       } else {
         st.cur = st.mode === 'visual' || st.mode === 'vline' ? m.to : clampNormal(m.to);
-        if (k !== 'j' && k !== 'k') st.want = col(text, st.cur);
+        // `$` records "end of line" rather than a column number, so a run of
+        // j or k after it stays on the last character of each line the way vim
+        // does. Every other motion records the column it landed on.
+        if (k !== 'j' && k !== 'k') st.want = k === '$' ? Infinity : col(text, st.cur);
       }
       return done();
     }
@@ -844,11 +847,14 @@ function attach(ta, { paint, onRun, badge, gutter }) {
     // Let the browser's own shortcuts through untouched.
     if (e.metaKey || (e.ctrlKey && !ctrlCmd && e.key !== '[')) return;
 
+    // setCursor resets `want`, so hold on to it: a run of j or k through a short
+    // line has to keep the column it started from, and after `$` it has to keep
+    // "end of line". Everything else is entitled to a fresh column.
+    const heldWant = vim.state.want;
     vim.text = ta.value;
     vim.setCursor(ta.selectionStart);
-    // setCursor resets `want`; restore what the machine was tracking so a run of
-    // j/k through short lines keeps its column.
     const k = ctrlCmd || e.key;
+    if (k === 'j' || k === 'k') vim.state.want = heldWant;
     const allowLong = ['Escape', 'Enter', 'Backspace', 'A_INC', 'A_DEC', 'R'];
     if (k === 'Tab' && vim.state.mode !== 'insert') {
       // Not a command, but it must not reach the editor's own Tab handler
