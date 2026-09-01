@@ -186,7 +186,10 @@ code, pre, kbd { font-family: var(--mono); }
 .nav a[aria-current] { color: var(--ink); background: var(--raised); }
 
 .icon-btn {
-  display: grid; place-items: center; width: 34px; height: 34px;
+  /* flex: none because the header is a flex row: without it these are the items
+     that give when the row runs out of width, and a 39px button on a 320px
+     phone is under the size a thumb can reliably hit. */
+  display: grid; place-items: center; flex: none; width: 34px; height: 34px;
   border: 1px solid var(--border); border-radius: var(--r-2);
   background: var(--surface); color: var(--ink-2); cursor: pointer;
   transition: background var(--fast) ease;

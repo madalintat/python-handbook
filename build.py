@@ -55,7 +55,7 @@ TRACK = [
     ("05-expressions", 1, "Expressions and statements",
      "What counts as an expression, what the walrus is for, and the evaluation order you have been assuming without ever checking."),
     ("06-control-flow", 1, "Control flow",
-     "`for`/`else`, the loop that finished versus the loop that broke, and `match` — the newest control structure in the language and the least used."),
+     "`for`/`else`, the loop that finished versus the loop that broke, and `match`, the newest control structure in the language and the least used."),
     ("07-functions", 1, "Functions",
      "Positional-only, keyword-only, `*args`, `**kwargs`, and the single most important fact about defaults: when they are evaluated."),
     ("08-scope", 1, "Scope and closures",
@@ -91,7 +91,7 @@ TRACK = [
     ("23-dataclasses", 4, "Modern data modelling",
      "`dataclass`, `NamedTuple` and `Enum`, and the precise point at which `attrs` and `pydantic` start earning their dependency."),
     ("24-typing", 5, "Type hints",
-     "Annotations are runtime metadata, not enforcement. Generics, `TypeVar`, `Literal`, `TypedDict`, and `Protocol` — structural typing, finally."),
+     "Annotations are runtime metadata, not enforcement. Generics, `TypeVar`, `Literal`, `TypedDict`, and `Protocol`: structural typing, finally."),
     ("25-typecheck", 5, "Type checking in practice",
      "mypy's strictness dials, the five errors you will actually hit, how to type a codebase that has none, and the point where types stop paying."),
     ("26-decorators", 6, "Decorators",
@@ -119,7 +119,7 @@ TRACK = [
     ("37-ecosystem", 9, "The ecosystem, mapped",
      "A map, not a tutorial: the stdlib modules you will really use and the dozen packages worth knowing, each with the case where it is the wrong answer."),
     ("38-tracebacks", 9, "Reading the traceback",
-     "Every other unit teaches a topic. This one teaches reading the traceback, which is what makes the next error survivable — including errors this book never covers."),
+     "Every other unit teaches a topic. This one teaches reading the traceback, which is what makes the next error survivable, including errors this book never covers."),
 ]
 
 # (slug, tier, domain, stages, minutes, title, blurb)
@@ -244,6 +244,10 @@ DRILLS_PER_UNIT = 15
 
 def parse_unit(path: Path) -> dict:
     meta, body = front_matter(path.read_text(), path)
+    _check_prose(path, body)
+    _check_prose(path, body)
+    _check_prose(path, body)
+    _check_cross_references(path, body, int(path.stem[:2]))
     words = word_count(body)
     if not (NOTE_MIN <= words <= NOTE_MAX):
         die(path, f"note is {words} words, must be {NOTE_MIN}-{NOTE_MAX}")
@@ -286,6 +290,7 @@ DIRECTIVE = re.compile(r"^@(expect|hint|diagnose)[ \t]+(.+)$", re.M)
 
 def parse_exercises(path: Path) -> list[dict]:
     meta, body = front_matter(path.read_text(), path)
+    _check_cross_references(path, body, int(path.stem[:2]))
     chunks = re.split(r"^## ", body, flags=re.M)[1:]
     if not chunks:
         die(path, "no exercises found (need `## ` headings)")
@@ -354,6 +359,7 @@ OPTION = re.compile(r"^- \(([ x])\) (.+)$", re.M)
 
 def parse_drills(path: Path) -> list[dict]:
     meta, body = front_matter(path.read_text(), path)
+    _check_cross_references(path, body, int(path.stem[:2]))
     chunks = re.split(r"^## ", body, flags=re.M)[1:]
     out = []
     for i, chunk in enumerate(chunks, 1):
@@ -527,6 +533,62 @@ _MODULE_FEATURES = {
 DETECTABLE = ({name for _, name in _NODE_FEATURES} | _SYNTHETIC_FEATURES
               | set(_ATTR_FEATURES.values())
               | set(_NAME_FEATURES.values()) | set(_MODULE_FEATURES.values()))
+
+
+# docs/AUTHORING.md lists the prose rules, and a rule nobody checks is a rule
+# followed unevenly, which is unit 32's whole argument applied to this book's
+# own text. Code is excluded: `!r` in an f-string is not an exclamation mark,
+# and a dunder name is not a figurative underscore.
+_PROSE_BANNED = {
+    "an em or en dash": r"[\u2014\u2013]",
+    "a curly quote": r"[\u2018\u2019\u201c\u201d]",
+    "an exclamation mark": r"!",
+    '"simply"': r"\bsimply\b",
+    '"obviously"': r"\bobviously\b",
+    '"just" as a minimiser': r"\bit is just\b|\bjust use\b|\bsimply just\b",
+}
+
+
+def _strip_code(text: str) -> str:
+    """The prose only. Fenced blocks, exercise blocks and inline code all go."""
+    text = re.sub(r"^~~~.*?^~~~", " ", text, flags=re.M | re.S)
+    text = re.sub(r"^```.*?^```", " ", text, flags=re.M | re.S)
+    return re.sub(r"`[^`]*`", " ", text)
+
+
+def _check_prose(path: Path, body: str) -> None:
+    """The house style, enforced rather than remembered."""
+    prose = _strip_code(body)
+    for label, pattern in _PROSE_BANNED.items():
+        m = re.search(pattern, prose)
+        if m:
+            line = prose[:m.start()].count("\n") + 1
+            context = prose[max(0, m.start() - 40):m.end() + 40].replace("\n", " ").strip()
+            die(path, f"prose contains {label} (near line {line}): ...{context}...")
+
+
+# A unit that says "unit 21 explained" when unit 21 comes later is telling the
+# reader to have read something they have not. There are several hundred of
+# these references and nothing else checks them.
+_LOOKS_BACK = re.compile(
+    r"unit (\d{2})'?s? (?:own )?"
+    r"(covered|said|introduced|made|described|established|explained|argued|"
+    r"gave|met|answered|called|gets? you|gave you)\b")
+_LOOKS_FORWARD = re.compile(r"unit (\d{2}) (?:is about|will|covers|gets to)\b")
+
+
+def _check_cross_references(path: Path, body: str, here: int) -> None:
+    """Every reference to another unit, checked against where this one sits."""
+    for m in re.finditer(r"[Uu]nits? (\d{2})(?: and (\d{2}))?", body):
+        for group in m.groups():
+            if group is not None and not any(u[0].startswith(group) for u in TRACK):
+                die(path, f"refers to unit {group}, which is not in the track")
+    for m in _LOOKS_BACK.finditer(body):
+        if int(m.group(1)) > here:
+            die(path, f"says unit {m.group(1)} {m.group(2)}, but that unit comes later")
+    for m in _LOOKS_FORWARD.finditer(body):
+        if int(m.group(1)) < here:
+            die(path, f"points forward to unit {m.group(1)}, which the reader has already done")
 
 
 def _check_feature_tables() -> None:

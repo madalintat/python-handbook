@@ -112,6 +112,6 @@ For a running process, `memray` and `objgraph` go further, the second by drawing
 
 Most programs never need any of this. The time it matters is when a process grows without bound, when a container is being restarted for exceeding its limit, or when the data genuinely does not fit and the answer is to stream it rather than to load it.
 
-There is one more case, and it is the one people meet first without recognising it. A long-running process, a server or a worker, has a memory profile that only makes sense over hours: it climbs during warm-up as caches fill, and then should be flat. Flat is the property to check, not the absolute number. A slow, steady climb over a day is a leak whatever the number is, and a large but flat process is usually working correctly and simply needs the memory it needs.
+There is one more case, and it is the one people meet first without recognising it. A long-running process, a server or a worker, has a memory profile that only makes sense over hours: it climbs during warm-up as caches fill, and then should be flat. Flat is the property to check, not the absolute number. A slow, steady climb over a day is a leak whatever the number is, and a large but flat process is usually working correctly and needs the memory it needs.
 
 The habits that prevent nearly all of it are cheap and worth having anyway: bound your caches, prefer a generator to a list when the sequence is large, use `with` so resources are released at a point you can name, and be suspicious of any module-level container that only ever grows.

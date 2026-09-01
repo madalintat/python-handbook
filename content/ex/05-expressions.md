@@ -51,7 +51,7 @@ print(starts_with_header([]))
 ~~~tests
 assert starts_with_header(["id", "1"]) is True
 assert starts_with_header(["1", "2"]) is False
-assert starts_with_header([]) is False, "an empty table should simply have no header"
+assert starts_with_header([]) is False, "an empty table should have no header"
 ~~~
 
 ~~~solution

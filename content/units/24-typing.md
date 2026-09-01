@@ -53,7 +53,7 @@ There is one asymmetry that surprises people: `list[Dog]` is **not** acceptable 
 
 The other half of the same rule: return the concrete type. `-> list[str]` tells a caller what they can do with it. Being vague on the way out helps nobody.
 
-One more consequence of "not checked at run time" is worth stating before it bites you: annotations can be wrong. Nothing keeps them in step with the code, so an annotation that was accurate when written and is stale now is simply a lie the checker believes and repeats. This is the argument for running a checker in CI rather than occasionally by hand, and it is the reason a codebase with hints nobody verifies is in some ways worse off than one with none: the hints are read as documentation, and documentation that lies is worse than documentation that is missing.
+One more consequence of "not checked at run time" is worth stating before it bites you: annotations can be wrong. Nothing keeps them in step with the code, so an annotation that was accurate when written and is stale now is a lie the checker believes and repeats. This is the argument for running a checker in CI rather than occasionally by hand, and it is the reason a codebase with hints nobody verifies is in some ways worse off than one with none: the hints are read as documentation, and documentation that lies is worse than documentation that is missing.
 
 ## The pieces worth knowing
 

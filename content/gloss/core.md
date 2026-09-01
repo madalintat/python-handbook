@@ -54,7 +54,7 @@ An object with `__next__`, which yields the next item or raises `StopIteration`.
 The rule that a closure looks up its captured name when it runs, not when it was created. Why every function built in a loop sees the same final value, and why the fix is a default argument or `functools.partial`.
 
 ## LBYL
-"Look before you leap": check a condition before acting. Correct in places, but in Python it is often both slower and racier than simply trying the thing. Contrast [[eafp]].
+"Look before you leap": check a condition before acting. Correct in places, but in Python it is often both slower and racier than trying the thing. Contrast [[eafp]].
 
 ## Mutation
 Changing an object in place, so every name bound to it sees the change. The opposite of [[rebinding]], and telling them apart is most of what makes Python predictable.

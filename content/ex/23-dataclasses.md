@@ -265,7 +265,7 @@ class Order:
 @expect silent
 @hint A misspelled string is a valid string. What kind of type makes a misspelled member fail instead?
 @hint `Status.ACTIV` raises. `"activ"` does not.
-@diagnose silent It runs, and an active order was reported as unknown, because `"activ"` is a perfectly good string that simply never matches. This is the entire argument for an enum: a fixed set of choices, where a misspelled member raises `AttributeError` at the moment it is written rather than quietly failing forever. Members compare by identity, so `is` is the right operator, and iterating the class gives them in declaration order. `StrEnum` additionally subclasses `str` for the edges of a program, where a value gets serialised into JSON or a URL, at the cost of letting a bare string compare equal again, which is exactly the safety you came for.
+@diagnose silent It runs, and an active order was reported as unknown, because `"activ"` is a perfectly good string that never matches. This is the entire argument for an enum: a fixed set of choices, where a misspelled member raises `AttributeError` at the moment it is written rather than quietly failing forever. Members compare by identity, so `is` is the right operator, and iterating the class gives them in declaration order. `StrEnum` additionally subclasses `str` for the edges of a program, where a value gets serialised into JSON or a URL, at the cost of letting a bare string compare equal again, which is exactly the safety you came for.
 
 ~~~starter
 class Status:

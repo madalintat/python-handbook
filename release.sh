@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
 # Every check this project has, in one command.
 #
-#   ./release.sh --check        everything that runs offline
-#   ./release.sh --check --net  the above, plus every starter and solution
-#                               compiled and run past ruff, mypy and CPython
+#   ./release.sh --check          everything that runs offline
+#   ./release.sh --check --net    the above, plus every starter and solution
+#                                 compiled and run past ruff, mypy and CPython
+#   ./release.sh --check --browser  the above, plus the same exercises judged in
+#                                 a real browser, every route at every width in
+#                                 both themes, and every control pressed.
+#                                 Needs a server on 8848 and the ego-browser CLI.
 set -uo pipefail
 cd "$(dirname "$0")"
 
@@ -37,6 +41,32 @@ note $rc
 if [ "${*}" != "${*/--net/}" ]; then
   step "every starter and solution, against all three judges"
   python3 build.py --validate; note $?
+fi
+
+if [ "${*}" != "${*/--browser/}" ]; then
+  if ! curl -fsS -o /dev/null http://127.0.0.1:8848/; then
+    step "in a browser"
+    echo "   no server on 8848; run: python3 -m http.server 8848"
+    fail=1
+  else
+    step "every starter, judged in the browser"
+    out=$(./qa-browser.sh); rc=$?
+    echo "$out" | tail -1
+    echo "$out" | grep -q "0 problems" || rc=1
+    note $rc
+
+    step "every route, at every width, in both themes"
+    out=$(./qa-views.sh); rc=$?
+    echo "$out" | tail -1
+    echo "$out" | grep -q "0 problems" || rc=1
+    note $rc
+
+    step "every control"
+    out=$(./qa-controls.sh); rc=$?
+    echo "$out" | tail -1
+    echo "$out" | grep -q "0 problems" || rc=1
+    note $rc
+  fi
 fi
 
 printf '\n'

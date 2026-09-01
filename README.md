@@ -168,20 +168,35 @@ never demonstrated.
 
 ## Checking a change
 
-Three commands, in increasing order of what they cost and what they prove:
+In increasing order of what they cost and what they prove:
 
 ```sh
-python3 build.py                 # parses everything, runs the vocabulary gate
-./release.sh --check --net       # the above, plus all three judges offline
-./qa-browser.sh                  # the same judges, in the browser
+python3 build.py                    # parses everything, runs every gate
+./release.sh --check --net          # the above, plus all three judges offline
+./release.sh --check --net --browser  # the above, plus everything in a browser
 ```
 
 `build.py` alone refuses a note outside its word budget, a unit missing one of
-its three parts, an exercise using a construct from later in the track, and a
-`@diagnose` that no `@expect` accounts for. `--net` runs ruff, mypy and CPython
-over every starter and solution. `qa-browser.sh` then checks that the browser
-reaches the same verdict the offline run did, which is the only way to catch the
-two paths drifting apart.
+its three parts, an exercise using a construct from later in the track, a
+`@diagnose` that no `@expect` accounts for, a reference to a unit that comes
+later, and prose that breaks the house style. `--net` runs ruff, mypy and
+CPython over every starter and solution, each under two hash seeds.
+
+`--browser` needs a server on 8848 and the `ego-browser` CLI, and runs three
+scripts that can also be run on their own:
+
+```sh
+./qa-browser.sh [unit ...]   # every starter, judged by the browser's own copies
+./qa-views.sh                # every route, at six widths, in both themes
+./qa-controls.sh             # every control pressed, and what it remembers
+```
+
+`qa-browser.sh` is the one that matters most: it checks that the browser reaches
+the same verdict the offline run did, which is the only way to catch the two
+paths drifting apart, and it has caught three genuine divergences so far.
+`qa-views.sh` checks that nothing overflows its column and that the right chrome
+appears at each width. `qa-controls.sh` presses every button and checks what
+survives a reload.
 
 ## The drills
 

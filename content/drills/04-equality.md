@@ -84,7 +84,7 @@ slug: 04-equality
 - ( ) Returns False
 - (x) Raises TypeError
 - ( ) Compares their string forms
-> Python 2 invented an answer and caused enough sorting bugs that Python 3 removed it. Equality across types is still fine and simply returns False.
+> Python 2 invented an answer and caused enough sorting bugs that Python 3 removed it. Equality across types is still fine and returns False.
 
 ## Which of these is truthy?
 - ( ) `[]`

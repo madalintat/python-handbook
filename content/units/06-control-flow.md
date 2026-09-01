@@ -55,7 +55,7 @@ cols = list(zip(*rows))      # [(1, 3), (2, 4)]
 
 `range` is not a list. It is an object that computes values on demand, so `range(1_000_000_000)` costs nothing until you iterate it, and it supports `in`, indexing and slicing without ever materialising anything.
 
-Its stop value is exclusive, which is the same convention as slicing and is what makes `range(len(x))` cover exactly the valid indices and `range(a, b)` have `b - a` elements. Two consequences follow: adding one to the stop to "include the end" is how off-by-one index errors happen, and `range(0)` is empty rather than an error, so a loop over it simply does not run.
+Its stop value is exclusive, which is the same convention as slicing and is what makes `range(len(x))` cover exactly the valid indices and `range(a, b)` have `b - a` elements. Two consequences follow: adding one to the stop to "include the end" is how off-by-one index errors happen, and `range(0)` is empty rather than an error, so a loop over it does not run.
 
 ## `break`, `continue`, and the `else` nobody expects
 
@@ -166,7 +166,7 @@ A chain of `elif` comparisons and a `match` are not the same tool with different
 
 `elif` compares values. To pull apart a structure it needs separate code: check the type, check the length, then index into it, then bind the pieces to names, four steps that can each be wrong and none of which state the shape you were expecting.
 
-A pattern states the shape and does all four at once. `case ["move", direction]:` says: a sequence, of length two, whose first element equals `"move"`, and bind the second to `direction`. If any part fails the case simply does not match and the next one is tried. That is worth having when the data really is structured, parsed commands, JSON documents, ASTs, message envelopes.
+A pattern states the shape and does all four at once. `case ["move", direction]:` says: a sequence, of length two, whose first element equals `"move"`, and bind the second to `direction`. If any part fails the case does not match and the next one is tried. That is worth having when the data really is structured, parsed commands, JSON documents, ASTs, message envelopes.
 
 When you are comparing one value against a handful of constants, `elif` remains perfectly good and a dictionary lookup is often better still:
 

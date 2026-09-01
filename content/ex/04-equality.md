@@ -274,7 +274,7 @@ print(group_by_tags([(["a", "b"], "first")]))
 @expect silent
 @hint `bool` inherits from `int`. Check what `1 == True` and `hash(1) == hash(True)` give you.
 @hint A dictionary cannot separate two keys that are equal and hash the same. Give it something that differs.
-@diagnose silent It runs and reports one key where you expected two. `bool` is a subclass of `int`, `True == 1` and `hash(True) == hash(1)`, so a dictionary has no way to tell them apart. The second one found simply lands on the existing entry, keeping the original key object and updating the count. The same collapse happens in sets, and it is why `{1, True, 1.0}` has one element. When the distinction matters, key on something that carries the type as well, such as `(type(value).__name__, value)`.
+@diagnose silent It runs and reports one key where you expected two. `bool` is a subclass of `int`, `True == 1` and `hash(True) == hash(1)`, so a dictionary has no way to tell them apart. The second one found lands on the existing entry, keeping the original key object and updating the count. The same collapse happens in sets, and it is why `{1, True, 1.0}` has one element. When the distinction matters, key on something that carries the type as well, such as `(type(value).__name__, value)`.
 
 ~~~starter
 def tally(values):

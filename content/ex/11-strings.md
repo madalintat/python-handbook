@@ -38,7 +38,7 @@ def domain_of(host):
 @expect mypy:operator
 @hint `str` is characters and `bytes` is numbers. There is no implicit conversion in either direction.
 @hint Encode on the way out. The method is named for the direction.
-@diagnose TypeError `str` and `bytes` are two different types and Python 3 will not guess a conversion between them, which is the change from Python 2 that removed a whole family of bugs. A string is encoded on the way out with `.encode("utf-8")` and bytes are decoded on the way in with `.decode("utf-8")`. Watch for the quieter version of this mistake too: `"a" == b"a"` is not an error, it is simply `False`, so a mismatch can travel a long way before anything complains.
+@diagnose TypeError `str` and `bytes` are two different types and Python 3 will not guess a conversion between them, which is the change from Python 2 that removed a whole family of bugs. A string is encoded on the way out with `.encode("utf-8")` and bytes are decoded on the way in with `.decode("utf-8")`. Watch for the quieter version of this mistake too: `"a" == b"a"` is not an error, it is `False`, so a mismatch can travel a long way before anything complains.
 @diagnose operator mypy reports the unsupported operand types without running anything, naming `bytes` and `str` exactly. Any boundary where text meets binary is worth annotating for this reason: it is the one place the two types are easiest to mix up and the easiest for a checker to catch.
 
 ~~~starter

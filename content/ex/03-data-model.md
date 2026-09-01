@@ -88,7 +88,7 @@ print({Tag("a"), Tag("b")})
 @expect silent
 @hint `if x:` asks the object. What does it do when the object has nothing to say?
 @hint One method gives you both `len(basket)` and `if basket:` at once.
-@diagnose silent No error, and every basket is true. `if x:` consults `__bool__` first, falls back to `__len__` and calls the object true when the length is non-zero, and, when the class defines neither, simply calls it true. That default is the trap: an object that clearly represents emptiness is truthy unless you say otherwise. Implementing `__len__` fixes both `len(basket)` and `if basket:` from one method, which is why it is usually the right one to write.
+@diagnose silent No error, and every basket is true. `if x:` consults `__bool__` first, falls back to `__len__` and calls the object true when the length is non-zero, and, when the class defines neither, calls it true. That default is the trap: an object that clearly represents emptiness is truthy unless you say otherwise. Implementing `__len__` fixes both `len(basket)` and `if basket:` from one method, which is why it is usually the right one to write.
 
 ~~~starter
 class Basket:
@@ -214,7 +214,7 @@ print("Dune" in Shelf(["Dune", "Emma"]))
 @expect mypy:return-value
 @hint `len()` is documented to return an integer, and the interpreter enforces that rather than trusting you.
 @hint If you want a formatted size, that is a different method with a different name.
-@diagnose TypeError `len()` does not simply hand back whatever `__len__` returned. It requires an integer, and converts or rejects accordingly, so returning a string fails with `'str' object cannot be interpreted as an integer`. The dunder protocols carry contracts, and the interpreter enforces several of them: `__len__` must give a non-negative integer, `__bool__` must give a bool, `__hash__` must give an integer.
+@diagnose TypeError `len()` does not hand back whatever `__len__` returned. It requires an integer, and converts or rejects accordingly, so returning a string fails with `'str' object cannot be interpreted as an integer`. The dunder protocols carry contracts, and the interpreter enforces several of them: `__len__` must give a non-negative integer, `__bool__` must give a bool, `__hash__` must give an integer.
 @diagnose return-value mypy catches it without running anything, because the annotation on `__len__` in its own stubs says the return type is `int` and this override returns `str`. Overriding a method with an incompatible signature is one of the highest-value things a type checker does for you.
 
 ~~~starter

@@ -11,7 +11,7 @@ slug: 09-exceptions
 @hint A bare `except:` names no type. Work out what it therefore catches.
 @hint Catch the narrowest thing you can actually do something about.
 @diagnose E722 ruff's `E722` is "do not use bare `except`". A bare clause catches `BaseException`, which sits above `Exception` and includes `KeyboardInterrupt` and `SystemExit`. A program that cannot be interrupted with Ctrl-C is a bad program, and those two types are deliberately outside `Exception` precisely so that a reasonable handler does not take them.
-@diagnose silent It runs and returns the default for every failure, including the ones that mean your code is wrong. The tests hand it a list, so the subscript raises `TypeError`, and the handler quietly reports 8080 as though a port had simply been absent. That is a bug converted into a wrong answer with no evidence. Catch `KeyError`, which is the one thing this function can genuinely recover from, and let everything else through.
+@diagnose silent It runs and returns the default for every failure, including the ones that mean your code is wrong. The tests hand it a list, so the subscript raises `TypeError`, and the handler quietly reports 8080 as though a port had been absent. That is a bug converted into a wrong answer with no evidence. Catch `KeyError`, which is the one thing this function can genuinely recover from, and let everything else through.
 
 ~~~starter
 def load_port(config):

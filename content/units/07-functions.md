@@ -61,7 +61,7 @@ You can inspect the stored defaults directly:
 print(stamp.__defaults__)
 ```
 
-The idiom for both cases is a `None` sentinel with the real default computed in the body, where it runs per call. ruff flags the general shape as `B008`, "do not perform function call in argument defaults", with a carve-out for calls that are obviously constant.
+The idiom for both cases is a `None` sentinel with the real default computed in the body, where it runs per call. ruff flags the general shape as `B008`, "do not perform function call in argument defaults", with a carve-out for calls whose result cannot change.
 
 A related rule: a default expression cannot refer to another parameter. `def f(a, b=a)` raises `NameError`, because at the moment the defaults are evaluated no call is happening and `a` does not exist. The same sentinel pattern applies.
 

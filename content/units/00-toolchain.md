@@ -90,7 +90,7 @@ uv add httpx             # install into this project's environment
 uv run app.py            # run inside it, creating it if needed
 ```
 
-`pip` and `venv` do the same job and are what you will meet in older codebases. Unit 30 takes packaging apart properly. For now the rule is simply that a project owns its dependencies, and if you are installing libraries with no environment active you are building something that only works on your laptop.
+`pip` and `venv` do the same job and are what you will meet in older codebases. Unit 30 takes packaging apart properly. For now the rule is that a project owns its dependencies, and if you are installing libraries with no environment active you are building something that only works on your laptop.
 
 ## Two numbers, and what they promise
 

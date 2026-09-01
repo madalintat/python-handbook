@@ -131,7 +131,7 @@ def same_value(a, b):
 @hint Which of Python's built-in types can be changed in place? `str` is not among them.
 @hint This is the first exercise with type annotations on it. That is not decoration. It is what lets the second judge say anything at all.
 @hint Every string method returns a new string. None of them modify the one you called them on.
-@diagnose AttributeError At runtime, `str` objects simply have no `append` method, so the attribute lookup fails. This is the honest answer and it arrives only when that line actually executes, if `shout` sat behind an `if` that was rarely true, you would meet this in production rather than here.
+@diagnose AttributeError At runtime, `str` objects have no `append` method, so the attribute lookup fails. This is the honest answer and it arrives only when that line actually executes, if `shout` sat behind an `if` that was rarely true, you would meet this in production rather than here.
 @diagnose attr-defined mypy said the same thing without running anything. It knows the parameter is used as a `str` and it knows `str` has no `append`, so it reports `attr-defined` at check time. This is the case for type checking in one line: the same defect, found before the program ran, on a line that never had to execute.
 
 ~~~starter

@@ -120,7 +120,7 @@ def connect(host, *, timeout=30, retry=True):
 @hint `start` is a parameter, which means it only exists during a call.
 @diagnose F821 ruff reports `Undefined name start` without running anything. From a linter's point of view the default expression is just code in the enclosing scope, and `start` is not a name in that scope, which is precisely the fact the runtime error is about.
 @diagnose name-defined mypy says the same thing in its own vocabulary. All three judges agreeing here is worth noticing: the mistake is not subtle once you know where default expressions are evaluated, and every tool that knows the scoping rules can see it.
-@diagnose NameError Default expressions are evaluated once, when the `def` statement runs, at which point no call is in progress and no parameter exists, so the name `start` simply is not there. This is the same single fact as the frozen timestamp and the shared mutable list, showing its third face. Any default that has to depend on the arguments must be computed in the body, with `None` standing in for "not supplied".
+@diagnose NameError Default expressions are evaluated once, when the `def` statement runs, at which point no call is in progress and no parameter exists, so the name `start` is not there. This is the same single fact as the frozen timestamp and the shared mutable list, showing its third face. Any default that has to depend on the arguments must be computed in the body, with `None` standing in for "not supplied".
 
 ~~~starter
 def window(start, end=start + 10):

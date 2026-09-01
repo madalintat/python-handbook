@@ -288,3 +288,13 @@ and why `release.sh` fails when it is stale.
 - Prefer the specific to the general: `257 is 257` beats "identity comparisons
   can be surprising".
 - British spelling, Oxford commas off.
+
+`build.py` enforces the mechanical half of these on every build, over prose only,
+with fenced blocks and inline code excluded: no em or en dashes, no curly quotes,
+no exclamation marks, no "simply", no "obviously", no "just" used as a minimiser.
+A rule nobody checks is a rule followed unevenly, which is unit 32's argument
+applied to this book's own text.
+
+It also checks every reference to another unit. A note that says "unit 21
+explained" when unit 21 comes later is telling the reader to have read something
+they have not, and there are several hundred of these.
