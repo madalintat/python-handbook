@@ -9,7 +9,10 @@ not judging the artefact the reader actually runs.
 
 import io
 import json
+import os
+import shutil
 import sys
+import tempfile
 import traceback
 
 SOURCE_NAME = "your_code.py"
@@ -61,7 +64,14 @@ def run(src, tests):
     # would be invisible offline and permanent in the tab. An exercise that
     # shadows a standard library module is doing exactly that on purpose.
     real_modules = dict(sys.modules)
+    # A run that writes a file gets a directory of its own. Offline the judge
+    # runs cases in a thread pool under two hash seeds, so two runs of the same
+    # exercise would otherwise race on one filename; in the browser every run
+    # shares one filesystem, so litter from one would be waiting for the next.
+    real_cwd = os.getcwd()
+    workspace = tempfile.mkdtemp(prefix="ph-run-")
     try:
+        os.chdir(workspace)
         sys.stdout = captured
         sys.setrecursionlimit(RECURSION_LIMIT)
         exec(compile(src, SOURCE_NAME, "exec"), ns)
@@ -76,6 +86,8 @@ def run(src, tests):
     finally:
         sys.stdout = real_stdout
         sys.setrecursionlimit(real_limit)
+        os.chdir(real_cwd)
+        shutil.rmtree(workspace, ignore_errors=True)
         # clear-and-update rather than a diff: it is shorter, it also restores
         # anything the run deleted, and it keeps the same dict object, which is
         # what the import machinery holds a reference to.

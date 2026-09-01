@@ -305,7 +305,7 @@ def parse_unit(path: Path) -> dict:
 
 # ---------------------------------------------------------------- exercises
 
-DIRECTIVE = re.compile(r"^@(expect|hint|diagnose)[ \t]+(.+)$", re.M)
+DIRECTIVE = re.compile(r"^@(expect|hint|diagnose|goal)[ \t]+(.+)$", re.M)
 
 
 def parse_exercises(path: Path) -> list[dict]:
@@ -351,6 +351,8 @@ def parse_exercises(path: Path) -> list[dict]:
                 die(path, f"exercise {i}: @expect {key} has no matching @diagnose")
 
         prompt = FENCE.sub("", DIRECTIVE.sub("", rest)).strip()
+        if stray := re.search(r"^@(\w+)", prompt, re.M):
+            die(path, f"exercise {i}: @{stray.group(1)} is not a directive")
         if len(prompt.split()) < 15:
             die(path, f"exercise {i} ({title.strip()}) prompt is too short to be a prompt")
 
@@ -418,13 +420,59 @@ def parse_gloss(path: Path) -> list[dict]:
     return out
 
 
+# A project stage is an exercise with the verdict question turned around. An
+# exercise asks "what does this code already do"; a stage asks "make it do
+# this", so there is no @expect and no @diagnose, and the contract is simpler:
+# the starter must fail the stage's tests, the solution must pass them, and the
+# solution must be clean under all three judges.
+STAGE_BRIEF_MIN = 60
+
+_PROJECT_STAGES = {slug: stages for slug, _, _, stages, *_ in PROJECTS}
+
+
 def parse_project(path: Path) -> dict:
     meta, body = front_matter(path.read_text(), path)
+    slug = meta["slug"]
+    chunks = re.split(r"^## ", body, flags=re.M)[1:]
+    if not chunks:
+        die(path, "no stages found (need `## ` headings)")
+
     stages = []
-    for i, chunk in enumerate(re.split(r"^## ", body, flags=re.M)[1:], 1):
+    for i, chunk in enumerate(chunks, 1):
         title, _, rest = chunk.partition("\n")
-        stages.append({"n": i, "title": title.strip(), "body": rest.strip()})
-    return {"slug": meta["slug"], "stages": stages}
+        title = title.strip()
+        blocks = {m.group(1): m.group(2).rstrip() for m in FENCE.finditer(rest)}
+        for need in ("starter", "tests", "solution"):
+            if need not in blocks:
+                die(path, f"stage {i} ({title}) has no ~~~{need} block")
+
+        goals = [v.strip() for kind, v in DIRECTIVE.findall(rest) if kind == "goal"]
+        if len(goals) != 1:
+            die(path, f"stage {i} ({title}) needs exactly one @goal, found {len(goals)}")
+
+        brief = FENCE.sub("", DIRECTIVE.sub("", rest)).strip()
+        if stray := re.search(r"^@(\w+)", brief, re.M):
+            die(path, f"stage {i}: @{stray.group(1)} is not a directive")
+        if len(brief.split()) < STAGE_BRIEF_MIN:
+            die(path, f"stage {i} ({title}) brief is {len(brief.split())} words, "
+                      f"must be at least {STAGE_BRIEF_MIN}")
+
+        stages.append({
+            "n": i,
+            "title": title,
+            "brief": brief,
+            "goal": goals[0],
+            "starter": blocks["starter"],
+            "tests": blocks["tests"],
+            "solution": blocks["solution"],
+        })
+
+    want = _PROJECT_STAGES.get(slug)
+    if want is None:
+        die(path, f"project slug {slug!r} is not in PROJECTS")
+    if len(stages) != want:
+        die(path, f"{len(stages)} stages, but PROJECTS declares {want}")
+    return {"slug": slug, "stages": stages}
 
 
 
@@ -809,7 +857,12 @@ def build() -> int:
         if proj["slug"] not in by_proj:
             die(path, f"project slug {proj['slug']!r} is not in PROJECTS")
         by_proj[proj["slug"]]["hasBody"] = True
-        (DATA / f"project-{proj['slug']}.json").write_text(json.dumps(proj))
+        by_proj[proj["slug"]]["stageTitles"] = [s["title"] for s in proj["stages"]]
+        # The reference implementation stays out of the browser, for the same
+        # reason an exercise's solution does: hints, not answers.
+        shipped = {**proj, "stages": [{k: v for k, v in s.items() if k != "solution"}
+                                      for s in proj["stages"]]}
+        (DATA / f"project-{proj['slug']}.json").write_text(json.dumps(shipped))
         written += 1
 
     # The errors index is derived from every @diagnose in the book, so it cannot
@@ -1062,6 +1115,26 @@ def validate() -> int:
             cases[f"{base}__starter"] = (ex["starter"], ex["tests"])
             cases[f"{base}__solution"] = (ex["solution"], ex["tests"])
 
+    # Project stages get the same three judges. The contract differs, because a
+    # stage asks "make it do this" rather than "what does this do": the starter
+    # has to fail the stage's tests, the solution has to pass them and be clean,
+    # and stage N+1's starter has to pass stage N's tests, which is what makes
+    # "built in stages that accumulate" a checked claim rather than a promise.
+    stage_labels = {}
+    for path in sorted(CONTENT.glob("projects/*.md")):
+        proj = parse_project(path)
+        slug = proj["slug"].replace("-", "_")
+        previous = None
+        for st in proj["stages"]:
+            base = f"proj_{slug}__{st['n']}"
+            stage_labels[base] = (f"{proj['slug']} stage {st['n']} {st['title']}", st)
+            sources[f"{base}__solution"] = st["solution"]
+            cases[f"{base}__starter"] = (st["starter"], st["tests"])
+            cases[f"{base}__solution"] = (st["solution"], st["tests"])
+            if previous is not None:
+                cases[f"{base}__carried"] = (st["starter"], previous["tests"])
+            previous = st
+
     # Judged alongside the exercises, so the two runners cannot drift apart on
     # what an exception is called without a check failing.
     cases.update({k: (src, "") for k, (src, _) in _NAME_CASES.items()})
@@ -1119,7 +1192,43 @@ def validate() -> int:
                 print(f"FAIL solution {label}: solution is not {judge} clean: {v_static[judge]}")
                 failures += 1
 
-    print(f"\nvalidated {len(labels)} exercises against ruff + mypy + CPython: "
+    for base, (label, st) in sorted(stage_labels.items()):
+        starter, solution = runs[f"{base}__starter"], runs[f"{base}__solution"]
+        static_sol = static[f"{base}__solution"]
+
+        for which, verdict in (("starter", starter), ("solution", solution)):
+            if "flaky" in verdict:
+                a, b = verdict["flaky"]
+                print(f"FAIL {which:8} {label}: FLAKY. Under one hash seed it {a}, "
+                      f"under another it {b}.")
+                failures += 1
+
+        # 1. there is work to do: the starter does not already pass
+        if starter["ok"]:
+            print(f"FAIL starter  {label}: the starter already passes this stage")
+            failures += 1
+
+        # 2. the reference implementation finishes the stage
+        if not solution["ok"]:
+            print(f"FAIL solution {label}: {solution['exc']}: {solution['msg']}")
+            failures += 1
+
+        # 3. and is code worth reading
+        for judge in ("ruff", "mypy"):
+            if static_sol[judge]:
+                print(f"FAIL solution {label}: not {judge} clean: {static_sol[judge]}")
+                failures += 1
+
+        # 4. everything earlier still works, so a reader can start at any stage
+        carried = runs.get(f"{base}__carried")
+        if carried is not None and not carried["ok"]:
+            print(f"FAIL starter  {label}: does not pass the previous stage's tests "
+                  f"({carried['exc']}: {carried['msg']})")
+            failures += 1
+
+    stages = len(stage_labels)
+    print(f"\nvalidated {len(labels)} exercises and {stages} project stages "
+          f"against ruff + mypy + CPython: "
           f"{'ALL CLEAN' if not failures else f'{failures} FAILURES'}")
     return 1 if failures else 0
 
