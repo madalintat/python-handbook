@@ -58,8 +58,11 @@ for (let i = 0; i < 30 && !warm; i++) {
 }
 cliLog(warm ? 'judges warm' : 'WARNING: judges did not warm up in 300s')
 
-const HARNESS = String.raw`(async (slug, stage) => {
-  const until = async (fn, ms = 120000) => {
+/* Two short evaluates with a Node-side poll between them. One evaluate that
+   mounted, ran and waited would exceed the CDP call limit on the slower
+   stages, which is what the warm-up above already works around. */
+const MOUNT = String.raw`(async (slug, stage) => {
+  const until = async (fn, ms = 20000) => {
     const t0 = Date.now();
     for (;;) {
       try { if (fn()) return true; } catch {}
@@ -67,29 +70,21 @@ const HARNESS = String.raw`(async (slug, stage) => {
       await new Promise(r => setTimeout(r, 120));
     }
   };
-  // seed the editor with the solution before the route mounts, which is the
-  // same path a learner's saved work takes
+  // seed the editor before the route mounts, the same path saved work takes
   localStorage.setItem('ph.code.project.' + slug + '.' + stage.n, stage.solution);
   location.hash = '/project/' + slug + '/' + stage.n;
-  const mounted = await until(() =>
+  if (!await until(() =>
     document.querySelector('#run') &&
-    document.querySelector('.wb-brief h1')?.textContent === stage.title, 20000);
-  if (!mounted) return { n: stage.n, problems: ['did not mount'] };
-
-  const loaded = await until(() =>
-    (document.querySelector('#ed textarea')?.value ?? '').includes(stage.solution.slice(0, 40)), 10000);
-  if (!loaded) return { n: stage.n, problems: ['the editor did not take the solution'] };
-
+    document.querySelector('.wb-brief h1')?.textContent === stage.title)) {
+    return 'did not mount';
+  }
+  if (!await until(() =>
+    (document.querySelector('#ed textarea')?.value ?? '').includes(stage.head))) {
+    return 'the editor did not take the solution';
+  }
   globalThis.__phVerdict = null;
   document.querySelector('#run').click();
-  if (!await until(() => globalThis.__phVerdict)) return { n: stage.n, problems: ['timed out'] };
-  const v = globalThis.__phVerdict;
-
-  const problems = [];
-  if (!v.ok) problems.push('the solution FAILED its own tests: ' + (v.raises || 'assertion'));
-  if (v.ruff.length) problems.push('ruff: ' + v.ruff.map(d => d.code).join(' '));
-  if (v.mypy.length) problems.push('mypy: ' + v.mypy.map(d => d.code).join(' '));
-  return { n: stage.n, title: stage.title, problems };
+  return '';
 })`;
 
 const solutions = await js(`fetch('.qa-solutions.json', { cache: 'no-cache' }).then(r => r.json())`)
@@ -104,9 +99,28 @@ if (!slugs.length) {
   for (const slug of slugs) {
     let n = 0
     for (const stage of solutions[slug]) {
-      const r = await js(`(${HARNESS})(${JSON.stringify(slug)}, ${JSON.stringify(stage)})`)
+      const seed = { n: stage.n, title: stage.title, solution: stage.solution,
+                     head: stage.solution.slice(0, 40) }
       total++; n++
-      for (const p of r.problems || []) { bad++; cliLog(`FAIL ${slug} #${r.n} ${r.title || ''}\n       ${p}`) }
+      const problems = []
+      const failed = await js(`(${MOUNT})(${JSON.stringify(slug)}, ${JSON.stringify(seed)})`)
+      if (failed) {
+        problems.push(failed)
+      } else {
+        // polled from here so each evaluate stays well inside its own limit
+        let v = null
+        for (let i = 0; i < 60 && !v; i++) {
+          await wait(5)
+          v = await js(String.raw`globalThis.__phVerdict`)
+        }
+        if (!v) problems.push('timed out after 300s')
+        else {
+          if (!v.ok) problems.push('the solution FAILED its own tests: ' + (v.raises || 'assertion'))
+          if (v.ruff.length) problems.push('ruff: ' + v.ruff.map(d => d.code).join(' '))
+          if (v.mypy.length) problems.push('mypy: ' + v.mypy.map(d => d.code).join(' '))
+        }
+      }
+      for (const p of problems) { bad++; cliLog(`FAIL ${slug} #${stage.n} ${stage.title}\n       ${p}`) }
     }
     cliLog(`  ${slug}: ${n} stages`)
   }

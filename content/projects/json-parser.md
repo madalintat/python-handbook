@@ -3482,6 +3482,14 @@ Report the ratio rather than the durations. A ratio is comparable between
 machines where a duration is not, and take best-of-three rather than a mean,
 because noise only ever makes things slower.
 
+One trap sits underneath all of that. A run shorter than the clock's resolution
+measures the clock, and eleven small documents parsed once are shorter than the
+clock on most machines. This is why `timeit` picks its own repeat count instead
+of trusting yours: the loop has to run long enough for the timer to see it.
+Here it matters twice over, because the same tests run in a browser, and
+browsers deliberately blunt their clocks so that a page cannot use timing to
+read memory it should not see.
+
 @goal `compare_against_stdlib` proves agreement and reports the honest ratio.
 
 ~~~starter
@@ -4201,13 +4209,26 @@ def compare_against_stdlib(documents):
             raise AssertionError(f"disagrees with json on {document[:40]!r}")
 
     def best_of(parse):
-        times = []
-        for _ in range(3):
-            start = time.perf_counter()
-            for document in documents:
-                parse(document)
-            times.append(time.perf_counter() - start)
-        return min(times)
+        """Seconds per pass over the documents, best of three.
+
+        The repeat count grows until a pass takes long enough for the clock to
+        see it. A run shorter than the timer's resolution measures the timer,
+        and browsers clamp theirs on purpose, so a benchmark that does not do
+        this reports whatever the clamp happens to be.
+        """
+        reps = 1
+        while True:
+            times = []
+            for _ in range(3):
+                start = time.perf_counter()
+                for _ in range(reps):
+                    for document in documents:
+                        parse(document)
+                times.append(time.perf_counter() - start)
+            best = min(times)
+            if best >= 0.01 or reps >= 4096:
+                return best / reps
+            reps *= 8
 
     mine = best_of(loads)
     theirs = best_of(json.loads)
