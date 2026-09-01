@@ -499,7 +499,8 @@ _NAME_FEATURES = {
     "staticmethod": "staticmethod", "super": "super", "compile": "compile",
     "eval": "eval", "round": "round", "breakpoint": "breakpoint",
     "dataclass": "dataclass", "defaultdict": "defaultdict",
-    "namedtuple": "namedtuple", "Counter": "counter", "deque": "deque",
+    "namedtuple": "namedtuple", "NamedTuple": "namedtuple",
+    "Counter": "counter", "deque": "deque",
     "setdefault": "setdefault", "wraps": "wraps", "partial": "partial",
     "deepcopy": "deepcopy",
 }
@@ -541,6 +542,24 @@ def _check_feature_tables() -> None:
     if twice:
         raise SystemExit(f"features introduced by more than one unit: {sorted(twice)}")
 
+    # `from X import name` resolves per name, because one module can hold
+    # constructs from different units: typing has both NamedTuple, which is
+    # unit 23, and Optional, which is unit 24.
+    for source, want in _IMPORT_CASES:
+        got = features_used(source)
+        if got != want:
+            raise SystemExit(f"{source!r} detected {sorted(got)}, expected {sorted(want)}")
+
+
+_IMPORT_CASES = [
+    ("from typing import Optional", {"optional"}),
+    ("from typing import NamedTuple", {"namedtuple"}),
+    ("from typing import NamedTuple, Optional", {"namedtuple", "optional"}),
+    ("from dataclasses import dataclass, field", {"dataclass"}),
+    ("from itertools import chain", {"itertools"}),
+    ("import typing", {"optional"}),
+]
+
 
 def features_used(source: str) -> set[str]:
     """Every gated construct appearing in a snippet."""
@@ -569,8 +588,15 @@ def features_used(source: str) -> set[str]:
             for alias in node.names:
                 if alias.name in _MODULE_FEATURES:
                     found.add(_MODULE_FEATURES[alias.name])
-        if isinstance(node, ast.ImportFrom) and node.module in _MODULE_FEATURES:
-            found.add(_MODULE_FEATURES[node.module])
+        if isinstance(node, ast.ImportFrom):
+            # Per name, not per module. `typing` covers both Optional, which is
+            # unit 24, and NamedTuple, which is unit 23's own subject, so a
+            # blanket feature for the module gates one of them wrongly.
+            for alias in node.names:
+                if alias.name in _NAME_FEATURES:
+                    found.add(_NAME_FEATURES[alias.name])
+                elif node.module in _MODULE_FEATURES:
+                    found.add(_MODULE_FEATURES[node.module])
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and node.decorator_list:
             found.add("decorator")
     return found
