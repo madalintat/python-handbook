@@ -297,6 +297,14 @@ Write the tests against the whole artefact so far, not only the new part. That
 is what makes the continuity check meaningful, and it is what a reader wants:
 the thing either works or it does not.
 
+**A stage extends; it never restarts.** A starter must not stub out something an
+earlier stage's tests rely on, and the continuity check will refuse it if you
+try. When a stage needs a structural change to code that already works, such as
+turning a flat scanner into a recursive-descent parser, the starter shows the
+new structure already working for the old behaviour, and the reader adds the new
+behaviour to it. Handing back a `NotImplementedError` where a working function
+used to be is asking somebody to do the same work twice.
+
 ## The drills
 
 Exactly fifteen, each a `## ` question, three or more options, exactly one
