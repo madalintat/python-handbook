@@ -187,6 +187,7 @@ scripts that can also be run on their own:
 
 ```sh
 ./qa-browser.sh [unit ...]   # every starter, judged by the browser's own copies
+./qa-solutions.sh [slug ...] # every project solution, run in the browser
 ./qa-views.sh                # every route, at six widths, in both themes
 ./qa-controls.sh             # every control pressed, and what it remembers
 ```
@@ -194,9 +195,80 @@ scripts that can also be run on their own:
 `qa-browser.sh` is the one that matters most: it checks that the browser reaches
 the same verdict the offline run did, which is the only way to catch the two
 paths drifting apart, and it has caught three genuine divergences so far.
+
+`qa-solutions.sh` covers the half it cannot. A starter fails on its first stub,
+so a project's real code can pass every offline check having never executed a
+line inside Pyodide, and that is exactly where a divergence lives: event loops,
+clocks, recursion limits and the cycle collector all behave differently under
+WebAssembly. It found one that no offline run could have: a benchmark measuring
+a clock the browser deliberately blunts.
 `qa-views.sh` checks that nothing overflows its column and that the right chrome
 appears at each width. `qa-controls.sh` presses every button and checks what
 survives a reload.
+
+## The projects
+
+`content/projects/<slug>.md`, one `## ` heading per stage, and the slug plus
+the number of stages declared in `PROJECTS` in `build.py`. A mini is four
+stages, a core is eight, a deep one is twelve, and a file whose stage count
+does not match what it declared is refused.
+
+Each stage is a brief, exactly one `@goal`, and the same three blocks an
+exercise has:
+
+```
+## Saying that something is gone
+
+You cannot erase from an append-only file...
+
+@goal `delete` writes a tombstone, and a reopened store still knows about it.
+
+~~~starter
+...
+~~~
+~~~tests
+...
+~~~
+~~~solution
+...
+~~~
+```
+
+The brief is at least sixty words, because a stage that can be explained in one
+line is a step rather than a stage. The `@goal` is one sentence naming what
+will be true when the stage is done, and it is what the workbench shows beside
+a failure instead of the verdict list an exercise gets.
+
+### A stage extends; it never restarts
+
+This is the rule the whole format rests on, and it is checked rather than
+trusted. For every stage:
+
+1. the starter **fails** its own tests, or there is nothing to do
+2. the solution **passes** them, and is ruff and mypy clean
+3. **stage N+1's starter passes stage N's tests**
+
+The third is the one that bites. It means a starter may only stub out what its
+own stage is about: stubbing a function an earlier stage's tests run through
+breaks the chain, and `--validate` says which stage and which test. It also
+means a stage may improve earlier code freely, as long as everything earlier
+still passes. Several projects here do exactly that, and the refactor is part
+of the lesson.
+
+A stage may not weaken an earlier stage's tests to make its own starter pass.
+
+### Writing one
+
+The reliable order is to write the solution first, run its tests, and only then
+cut the starter out of it. A starter written first tends to describe a design
+the solution then drifts away from.
+
+Check a project on its own while writing it:
+
+```sh
+python3 build.py --check content/projects/<slug>.md   # parses and gates prose
+python3 build.py --validate                           # runs every stage of everything
+```
 
 ## The drills
 
