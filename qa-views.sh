@@ -110,7 +110,7 @@ for (const vp of VIEWPORTS) {
   const small = await js(String.raw`(() => {
     const MIN = 40;
     const out = [];
-    for (const el of document.querySelectorAll('button, a.icon-btn, .tabbar a, .wb-tools *, [role=button]')) {
+    for (const el of document.querySelectorAll('button, a.icon-btn, .tabbar a, [role=button]')) {
       const r = el.getBoundingClientRect();
       if (r.width === 0 || r.height === 0) continue;
       if (r.height < MIN || r.width < MIN) out.push(

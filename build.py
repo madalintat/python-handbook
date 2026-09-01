@@ -245,8 +245,6 @@ DRILLS_PER_UNIT = 15
 def parse_unit(path: Path) -> dict:
     meta, body = front_matter(path.read_text(), path)
     _check_prose(path, body)
-    _check_prose(path, body)
-    _check_prose(path, body)
     _check_cross_references(path, body, int(path.stem[:2]))
     words = word_count(body)
     if not (NOTE_MIN <= words <= NOTE_MAX):
@@ -290,6 +288,7 @@ DIRECTIVE = re.compile(r"^@(expect|hint|diagnose)[ \t]+(.+)$", re.M)
 
 def parse_exercises(path: Path) -> list[dict]:
     meta, body = front_matter(path.read_text(), path)
+    _check_prose(path, body)
     _check_cross_references(path, body, int(path.stem[:2]))
     chunks = re.split(r"^## ", body, flags=re.M)[1:]
     if not chunks:
@@ -359,6 +358,7 @@ OPTION = re.compile(r"^- \(([ x])\) (.+)$", re.M)
 
 def parse_drills(path: Path) -> list[dict]:
     meta, body = front_matter(path.read_text(), path)
+    _check_prose(path, body)
     _check_cross_references(path, body, int(path.stem[:2]))
     chunks = re.split(r"^## ", body, flags=re.M)[1:]
     out = []
@@ -515,6 +515,14 @@ _NAME_FEATURES = {
 # ordinary variables called `cache`.
 _ATTR_FEATURES = {"cache": "cache", "lru_cache": "cache"}
 
+# `from X import name` where the name belongs to a different unit than the
+# module as a whole, and the module's own gate should therefore not apply.
+# Only for a genuine mismatch: typing covers Optional, which is unit 24, and
+# NamedTuple, which is unit 23's own subject. Everything else adds both, because
+# `from re import compile` really does use `re` as well as `compile`, and
+# dropping the module gate there would let a unit-01 exercise import it.
+_IMPORT_OVERRIDES = {("typing", "NamedTuple"): "namedtuple"}
+
 _MODULE_FEATURES = {
     "math": "math", "copy": "copy_module", "itertools": "itertools",
     "functools": "functools", "heapq": "heapq",
@@ -550,19 +558,29 @@ _PROSE_BANNED = {
 
 
 def _strip_code(text: str) -> str:
-    """The prose only. Fenced blocks, exercise blocks and inline code all go."""
-    text = re.sub(r"^~~~.*?^~~~", " ", text, flags=re.M | re.S)
-    text = re.sub(r"^```.*?^```", " ", text, flags=re.M | re.S)
-    return re.sub(r"`[^`]*`", " ", text)
+    """The prose only, with code blanked rather than removed.
+
+    Every newline survives, so an offset into the result is still an offset into
+    the original and the line number a failure reports is the line to open.
+    """
+    blank = lambda m: re.sub(r"[^\n]", " ", m.group(0))
+    text = re.sub(r"^~~~.*?^~~~", blank, text, flags=re.M | re.S)
+    text = re.sub(r"^```.*?^```", blank, text, flags=re.M | re.S)
+    return re.sub(r"`[^`]*`", blank, text)
 
 
 def _check_prose(path: Path, body: str) -> None:
     """The house style, enforced rather than remembered."""
     prose = _strip_code(body)
+    # `body` starts after the front matter, so a line number counted in it is
+    # short by however many lines that was.
+    full = path.read_text()
+    at = full.find(body)
+    offset = full.count("\n", 0, at) if at >= 0 else 0
     for label, pattern in _PROSE_BANNED.items():
         m = re.search(pattern, prose)
         if m:
-            line = prose[:m.start()].count("\n") + 1
+            line = offset + prose[:m.start()].count("\n") + 1
             context = prose[max(0, m.start() - 40):m.end() + 40].replace("\n", " ").strip()
             die(path, f"prose contains {label} (near line {line}): ...{context}...")
 
@@ -620,6 +638,10 @@ _IMPORT_CASES = [
     ("from dataclasses import dataclass, field", {"dataclass"}),
     ("from itertools import chain", {"itertools"}),
     ("import typing", {"optional"}),
+    # the module's own gate still applies when the name is not an override
+    ("from re import compile", {"re", "compile"}),
+    ("from subprocess import run", {"subprocess"}),
+    ("from pathlib import Path", {"pathlib"}),
 ]
 
 
@@ -651,14 +673,15 @@ def features_used(source: str) -> set[str]:
                 if alias.name in _MODULE_FEATURES:
                     found.add(_MODULE_FEATURES[alias.name])
         if isinstance(node, ast.ImportFrom):
-            # Per name, not per module. `typing` covers both Optional, which is
-            # unit 24, and NamedTuple, which is unit 23's own subject, so a
-            # blanket feature for the module gates one of them wrongly.
             for alias in node.names:
+                override = _IMPORT_OVERRIDES.get((node.module, alias.name))
+                if override:
+                    found.add(override)
+                    continue
+                if node.module in _MODULE_FEATURES:
+                    found.add(_MODULE_FEATURES[node.module])
                 if alias.name in _NAME_FEATURES:
                     found.add(_NAME_FEATURES[alias.name])
-                elif node.module in _MODULE_FEATURES:
-                    found.add(_MODULE_FEATURES[node.module])
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and node.decorator_list:
             found.add("decorator")
     return found

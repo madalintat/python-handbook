@@ -142,15 +142,33 @@ async function getPyodide(say) {
    control back to the browser. That only works when Python was entered through
    a call that can suspend, which is what callPromising does; a plain call gets
    "Cannot stack switch because the Python entrypoint was a synchronous
-   function". It needs JSPI, so browsers without it take the ordinary path and
-   everything except a running event loop behaves identically. Nothing in the
-   book's own exercises depends on which path ran. */
+   function".
+
+   It needs JSPI, and the method exists whether or not the engine has it: what
+   varies is whether the call works. So the first run tries it and remembers the
+   answer, and a browser without JSPI spends one failed call and then takes the
+   ordinary path for the rest of the session. Everything except a running event
+   loop behaves identically on both, and nothing in the book's own exercises
+   depends on which path ran.
+
+   Re-running after a failed promising call is safe because run_json catches
+   every exception itself and returns JSON: a throw out of the call means the
+   call could not proceed, not that the reader's code ran and failed. */
+let canSuspend = true;
+
 async function judgeRun(src, tests, say) {
   const py = await getPyodide(say);
   const fn = py.globals.get("run_json");
   try {
-    const raw = fn.callPromising ? await fn.callPromising(src, tests) : fn(src, tests);
-    return JSON.parse(raw);
+    if (canSuspend && fn.callPromising) {
+      try {
+        return JSON.parse(await fn.callPromising(src, tests));
+      } catch (err) {
+        if (err instanceof SyntaxError) throw err;   // run_json returned, JSON.parse did not
+        canSuspend = false;
+      }
+    }
+    return JSON.parse(fn(src, tests));
   }
   catch (err) { forgetIfFatal(err); throw err; }
   finally { try { fn.destroy?.(); } catch {} }

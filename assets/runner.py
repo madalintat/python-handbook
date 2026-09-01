@@ -47,16 +47,23 @@ def run(src, tests):
 
     ns["_ph_import"] = _ph_import
 
+    # Everything the `finally` puts back is captured before the `try` opens, and
+    # nothing between here and the `try` can raise. Setting the recursion limit
+    # cannot: it raises when the current stack is already deeper than the new
+    # limit, which the browser's suspending entry path makes reachable, and if
+    # that happened out here the `finally` would never run and stdout would stay
+    # redirected for the rest of the session.
     captured = io.StringIO()
-    real_stdout, sys.stdout = sys.stdout, captured
+    real_stdout = sys.stdout
     real_limit = sys.getrecursionlimit()
-    sys.setrecursionlimit(RECURSION_LIMIT)
     # The offline judge forks a process per run and the browser reuses one
     # interpreter for the whole session, so anything a run leaves in sys.modules
     # would be invisible offline and permanent in the tab. An exercise that
     # shadows a standard library module is doing exactly that on purpose.
     real_modules = dict(sys.modules)
     try:
+        sys.stdout = captured
+        sys.setrecursionlimit(RECURSION_LIMIT)
         exec(compile(src, SOURCE_NAME, "exec"), ns)
         exec(compile(tests, TESTS_NAME, "exec"), ns)
         return {"ok": True, "out": captured.getvalue(), "exc": None, "msg": "", "tb": ""}

@@ -35,7 +35,6 @@ const railCollapsed = () => flag(RAIL_KEY);
 
 // Bound by start(), not at import: the module has to load without a document.
 let main, sheet, sheetBody, sheetBtn;
-sheet?.addEventListener("click", e => { if (e.target.closest("a")) sheet.classList.remove("open"); });
 
 /* ------------------------------------------------------------------ markdown
 
@@ -705,6 +704,10 @@ export function start() {
   sheetBody = document.getElementById("sheet-body");
   sheetBtn = document.getElementById("sheetbtn");
   sheetBtn?.addEventListener("click", () => sheet.classList.toggle("open"));
+  // Tapping a link inside the sheet closes it. route() also closes it, but only
+  // when the hash changes, and a link to the section already showing does not
+  // change it, which would leave the sheet covering the page.
+  sheet?.addEventListener("click", e => { if (e.target.closest("a")) sheet.classList.remove("open"); });
 
   addEventListener("hashchange", route);
 

@@ -16,7 +16,14 @@
 set -uo pipefail
 cd "$(dirname "$0")"
 # ego's node runtime does not inherit this shell's environment, so the filter is
-# substituted into the script before it is piped in.
+# substituted into the script before it is piped in. Unit prefixes are word
+# characters and hyphens; anything else would corrupt the substitution, so it is
+# refused rather than pasted in.
+for arg in "$@"; do
+  case "$arg" in
+    *[!A-Za-z0-9_-]*) echo "unit filters may only contain letters, digits, - and _: $arg" >&2; exit 2;;
+  esac
+done
 sed "s|@@ONLY@@|$*|" <<'EOF' | ego-browser nodejs
 await useOrCreateTaskSpace('python handbook qa')
 await gotoAndWait('http://127.0.0.1:8848/#/work/00-toolchain/1', { timeout: 30 })
@@ -104,9 +111,9 @@ for (const slug of slugs) {
   // One exercise per evaluate. A whole unit in one call can exceed the CDP
   // timeout on a slow judge, and then the sweep reports nothing at all rather
   // than the one exercise that was slow.
-  const count = (await js(`fetch('data/ex-${slug}.json').then(r => r.json()).then(l => l.length)`))
+  const numbers = await js(`fetch('data/ex-${slug}.json').then(r => r.json()).then(l => l.map(e => e.n))`)
   const rows = []
-  for (let n = 1; n <= count; n++) {
+  for (const n of numbers) {
     rows.push(...await js(HARNESS + `(${JSON.stringify(slug)}, ${n})`))
   }
   for (const r of rows) {

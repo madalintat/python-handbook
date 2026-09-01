@@ -96,6 +96,26 @@ ok(await q(`return (document.getElementById('sheet-body').textContent || '').tri
 await q(`document.getElementById('sheetbtn').click(); return 1`)
 await wait(0.4)
 ok(!await q(`return document.getElementById('sheet').classList.contains('open')`), 'the sheet closes again')
+
+// tapping a link inside the sheet closes it, including a link to the section
+// already showing, which changes no hash and so fires no route
+await q(`document.getElementById('sheetbtn').click(); return 1`)
+await wait(0.5)
+await q(`document.querySelector('#sheet-body a')?.click(); return 1`)
+await wait(0.6)
+ok(!await q(`return document.getElementById('sheet').classList.contains('open')`),
+   'tapping a link in the sheet closes it')
+const here = await q(`return location.hash`)
+await q(`document.getElementById('sheetbtn').click(); return 1`)
+await wait(0.5)
+await q(`
+  const same = [...document.querySelectorAll('#sheet-body a')]
+    .find(a => a.getAttribute('href') === ${'`'}#${'$'}{location.hash.slice(1)}${'`'});
+  (same || document.querySelector('#sheet-body a'))?.click();
+  return 1`)
+await wait(0.6)
+ok(!await q(`return document.getElementById('sheet').classList.contains('open')`),
+   'a link to the section already showing closes the sheet too')
 await cdp('Emulation.clearDeviceMetricsOverride')
 
 cliLog('=== the workbench ===')
@@ -175,7 +195,8 @@ ok(await q(`return document.querySelector('.drill-q').textContent`) !== first,
    'next moves to another question')
 
 // walk the whole set and check the score screen and what it stores
-const total = await q(`return Number(/of (\\d+)/.exec(document.querySelector('#quiz .eyebrow').textContent)[1])`)
+const total = await q(`const m = /of (\\d+)/.exec(document.querySelector('#quiz .eyebrow')?.textContent || ''); return m ? Number(m[1]) : 0`)
+ok(total > 0, `the drill set reports how many questions it has`)
 for (let i = 0; i < total + 2; i++) {
   const done = await q(`return !document.querySelector('.opt')`)
   if (done) break
