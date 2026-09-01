@@ -261,10 +261,33 @@ function buildEditor(host, initial, onRun) {
   ta.addEventListener("input", paint);
   ta.addEventListener("scroll", () => { pre.parentElement.scrollLeft = ta.scrollLeft; });
 
-  // Any edit we make ourselves has to be pushed back into vim: setting ta.value
-  // from script does not fire an input event, so vim's own copy of the buffer
-  // would otherwise drift out of step with what is on screen.
-  const edited = () => { vim.sync(); paint(); };
+  /* Replace [from, to) with text, then leave the selection where asked.
+
+     Assigning to ta.value from script clears the textarea's native undo stack
+     in every browser. Enter happens on every line, so doing that here would
+     quietly cost the reader Ctrl+Z. execCommand("insertText") edits through the
+     browser's own undo machinery and fires an input event on the way. */
+  const replaceRange = (from, to, text, selFrom, selTo = selFrom) => {
+    ta.setSelectionRange(from, to);
+    let ok = false;
+    try { ok = document.execCommand("insertText", false, text); } catch { ok = false; }
+    if (!ok) ta.value = ta.value.slice(0, from) + text + ta.value.slice(to);
+    // vim keeps its own copy of the buffer and a script edit fires no input
+    // event it would see. sync() re-reads and, when vim is on, repaints the
+    // cursor, so the selection we actually want is set after it, not before.
+    vim.sync();
+    paint();
+    ta.setSelectionRange(selFrom, selTo);
+  };
+
+  /* Does this line open a block? A colon only counts when it is real code and
+     every bracket on the line is closed, so that `# TODO: later` and a dict
+     broken across lines do not earn an indent they would choke on. */
+  const opensBlock = line => {
+    const code = line.replace(/(['"])(?:\\.|(?!\1).)*\1/g, "").replace(/#.*$/, "");
+    const depth = (code.match(/[([{]/g) || []).length - (code.match(/[)\]}]/g) || []).length;
+    return depth <= 0 && /:\s*$/.test(code);
+  };
 
   ta.addEventListener("keydown", e => {
     if (e.defaultPrevented) return;      // vim consumed it in normal or visual mode
@@ -272,54 +295,48 @@ function buildEditor(host, initial, onRun) {
 
     const { selectionStart: a, selectionEnd: b, value: v } = ta;
     const lineStart = v.lastIndexOf("\n", a - 1) + 1;
+    const plain = !e.metaKey && !e.altKey && !e.ctrlKey;
 
     // Enter carries the current line's indentation down, and adds a level after
     // a line that opens a block. Python is the one language where getting this
     // wrong is a syntax error rather than a formatting annoyance.
-    if (e.key === "Enter" && a === b) {
+    if (e.key === "Enter" && a === b && plain) {
       e.preventDefault();
       const line = v.slice(lineStart, a);
       const indent = /^[ \t]*/.exec(line)[0];
-      const deeper = /:\s*$/.test(line) ? TAB : "";
-      const insert = "\n" + indent + deeper;
-      ta.value = v.slice(0, a) + insert + v.slice(b);
-      ta.setSelectionRange(a + insert.length, a + insert.length);
-      edited();
+      const insert = "\n" + indent + (opensBlock(line) ? TAB : "");
+      replaceRange(a, b, insert, a + insert.length);
       return;
     }
 
-    // Backspace inside leading whitespace goes back to the previous tab stop
-    // rather than removing one space at a time.
-    if (e.key === "Backspace" && a === b && a > lineStart) {
+    // Backspace inside leading whitespace goes back to the previous tab stop.
+    // Only a bare Backspace: cmd and alt mean delete-to-line-start and
+    // delete-word, and swallowing those would be worse than not helping at all.
+    if (e.key === "Backspace" && a === b && a > lineStart && plain) {
       const before = v.slice(lineStart, a);
       if (/^ +$/.test(before)) {
         e.preventDefault();
         const back = ((before.length - 1) % TAB.length) + 1;
-        ta.value = v.slice(0, a - back) + v.slice(b);
-        ta.setSelectionRange(a - back, a - back);
-        edited();
+        replaceRange(a - back, a, "", a - back);
         return;
       }
     }
 
-    if (e.key !== "Tab") return;
+    if (e.key !== "Tab" || !plain) return;
     e.preventDefault();
 
     if (e.shiftKey || a !== b) {
       // Indent or dedent every line the selection touches; the two differ only
-      // in the per-line map.
+      // in the per-line map. The block stays selected so a second Tab indents
+      // again rather than typing spaces into the first line.
       const from = v.lastIndexOf("\n", a - 1) + 1;
       const to = v.indexOf("\n", b) === -1 ? v.length : v.indexOf("\n", b);
       const block = v.slice(from, to).split("\n");
-      const out = block.map(l => e.shiftKey ? l.replace(/^ {1,4}/, "") : TAB + l);
-      const delta = out.join("\n").length - v.slice(from, to).length;
-      ta.value = v.slice(0, from) + out.join("\n") + v.slice(to);
-      ta.setSelectionRange(from, to + delta);
+      const out = block.map(l => e.shiftKey ? l.replace(/^ {1,4}/, "") : TAB + l).join("\n");
+      replaceRange(from, to, out, from, from + out.length);
     } else {
-      ta.value = v.slice(0, a) + TAB + v.slice(b);
-      ta.setSelectionRange(a + TAB.length, a + TAB.length);
+      replaceRange(a, b, TAB, a + TAB.length);
     }
-    edited();
   });
 
   const vimBtn = host.querySelector("#vimbtn");
