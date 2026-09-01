@@ -191,6 +191,35 @@ code alone**, which is what a reader has in the editor, and **CPython sees the
 code with its hidden tests**, which is what pressing Run does. A solution that
 is "ruff clean" is therefore a claim about the file the reader ends up with.
 
+## What the browser cannot do
+
+`build.py --validate` runs CPython in a subprocess and the workbench runs it in
+Pyodide, and a handful of things differ. An exercise that relies on one of these
+passes offline and fails, or worse silently disagrees, in the browser.
+
+**No threads.** `threading.Thread.start()` raises `RuntimeError: can't start new
+thread`, and so do `ThreadPoolExecutor` and `asyncio.to_thread`. Unit 33 teaches
+concurrency by interleaving generators for this reason, which turns a race that
+happens one run in a thousand into one that happens every time.
+
+**`time.sleep` is not blocking.** Pyodide implements it by suspending the
+WebAssembly stack, so a coroutine that calls `time.sleep` yields to the event
+loop where CPython's would block. An exercise about blocking the loop has to
+block with ordinary synchronous work, not with `sleep`. This one cost an
+afternoon: the starter passed its own tests in the browser and failed offline,
+which is exactly the disagreement the two-runner design exists to catch.
+
+**`asyncio` needs the suspending call path.** `judgeRun` calls Python through
+`callPromising` when the browser has JSPI, which is what lets `asyncio.run`
+work at all. Browsers without it fall back to an ordinary call, where a running
+event loop raises. Nothing in the book's exercises depends on which path ran,
+and unit 34's exercises are written to be true either way.
+
+**`multiprocessing` does not run.** `cpu_count()` answers; nothing else does.
+
+Anything uncertain: write it, run `./qa-browser.sh <unit>`, and believe the
+browser.
+
 ## `_ph_import`, for exercises about import time
 
 The reader's code runs the way `python your_code.py` runs it, so `__name__` is

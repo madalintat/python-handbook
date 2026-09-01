@@ -24,12 +24,14 @@ await cdp('Page.reload', { ignoreCache: true })
 await wait(5)
 // Anything typed into an editor by hand is saved per exercise, and the router
 // does not remount a route it is already on, so clear the saved code and leave
-// the work view before the sweep starts on it.
+// the work view, then come back to it, before the sweep starts on it.
 await js(String.raw`(() => {
   Object.keys(localStorage).filter(k => k.startsWith('ph.code.')).forEach(k => localStorage.removeItem(k));
   location.hash = '/track';
 })()`)
 await wait(2)
+await js(String.raw`(() => { location.hash = '/work/00-toolchain/1'; })()`)
+await wait(3)
 
 /* Warm the interpreter before the per-unit sweeps. Installing mypy from PyPI
    takes longer than one Runtime.evaluate is allowed to run, so doing it inside
@@ -42,7 +44,7 @@ for (let i = 0; i < 30 && !warm; i++) {
 }
 cliLog(warm ? 'judges warm' : 'WARNING: judges did not warm up in 300s')
 
-const HARNESS = String.raw`(async (slug) => {
+const HARNESS = String.raw`(async (slug, n) => {
   const until = async (fn, ms = 90000) => {
     const t0 = Date.now();
     for (;;) {
@@ -56,7 +58,7 @@ const HARNESS = String.raw`(async (slug) => {
   Object.keys(localStorage).filter(k => k.startsWith('ph.code.')).forEach(k => localStorage.removeItem(k));
   const list = await fetch('data/ex-' + slug + '.json').then(r => r.json());
   const out = [];
-  for (const ex of list) {
+  for (const ex of list.filter(e => e.n === n)) {
     location.hash = '/work/' + slug + '/' + ex.n;
     const mounted = await until(() =>
       document.querySelector('#run') &&
@@ -99,7 +101,14 @@ const slugs = manifest.track.filter(u => u.hasEx).map(u => u.slug)
 if (!slugs.length) { cliLog('no unit matched ' + JSON.stringify(only)); }
 let total = 0, bad = 0
 for (const slug of slugs) {
-  const rows = await js(HARNESS + `(${JSON.stringify(slug)})`)
+  // One exercise per evaluate. A whole unit in one call can exceed the CDP
+  // timeout on a slow judge, and then the sweep reports nothing at all rather
+  // than the one exercise that was slow.
+  const count = (await js(`fetch('data/ex-${slug}.json').then(r => r.json()).then(l => l.length)`))
+  const rows = []
+  for (let n = 1; n <= count; n++) {
+    rows.push(...await js(HARNESS + `(${JSON.stringify(slug)}, ${n})`))
+  }
   for (const r of rows) {
     total++
     const probs = r.error ? [r.error] : r.problems
