@@ -38,6 +38,9 @@ fi
 step "python tokenizer"
 node test_frontend.mjs; note $?
 
+step "focus mode, against every real stage"
+node test_focus.mjs; note $?
+
 step "vim mode"
 vimout=$(node test_vim.mjs); rc=$?
 echo "$vimout" | tail -1
