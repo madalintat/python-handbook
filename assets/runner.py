@@ -51,6 +51,11 @@ def run(src, tests):
     real_stdout, sys.stdout = sys.stdout, captured
     real_limit = sys.getrecursionlimit()
     sys.setrecursionlimit(RECURSION_LIMIT)
+    # The offline judge forks a process per run and the browser reuses one
+    # interpreter for the whole session, so anything a run leaves in sys.modules
+    # would be invisible offline and permanent in the tab. An exercise that
+    # shadows a standard library module is doing exactly that on purpose.
+    real_modules = dict(sys.modules)
     try:
         exec(compile(src, SOURCE_NAME, "exec"), ns)
         exec(compile(tests, TESTS_NAME, "exec"), ns)
@@ -64,6 +69,11 @@ def run(src, tests):
     finally:
         sys.stdout = real_stdout
         sys.setrecursionlimit(real_limit)
+        for name in set(sys.modules) - set(real_modules):
+            del sys.modules[name]
+        for name, module in real_modules.items():
+            if sys.modules.get(name) is not module:
+                sys.modules[name] = module
 
 
 def run_json(src, tests):

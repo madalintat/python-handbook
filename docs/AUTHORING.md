@@ -217,6 +217,14 @@ and unit 34's exercises are written to be true either way.
 
 **`multiprocessing` does not run.** `cpu_count()` answers; nothing else does.
 
+**One interpreter, many runs.** The browser keeps a single Pyodide for the
+session where the offline judge forks a process per case, so anything a run
+leaves behind would be invisible offline and permanent in the tab. `runner.py`
+restores `sys.modules` after every run for this reason, which is what makes an
+exercise that shadows a standard library module safe. Anything else global that
+an exercise changes, a `locale`, a `decimal` context, `sys.setrecursionlimit`,
+is still yours to put back.
+
 Anything uncertain: write it, run `./qa-browser.sh <unit>`, and believe the
 browser.
 
