@@ -758,6 +758,30 @@ def _check_tables() -> None:
         raise SystemExit(f"phases with no units in them: {[PHASES[i][0] for i in empty]}")
 
 
+def _check_llms(counts: dict[str, object]) -> None:
+    """llms.txt states numbers about the book. Check it still means them.
+
+    It is the file somebody is handed when they want to rebuild this, so a
+    stale number in it is worse than a stale number anywhere else: it is the
+    one document read by a reader with no way to notice. Everything here is a
+    phrase the file has to contain, and the build says what it should say.
+    """
+    path = ROOT / "llms.txt"
+    if not path.is_file():
+        return
+    # Whitespace collapsed, and the blockquote markers with it, because the
+    # file is wrapped for reading and "39 units and 15\n> projects" says the
+    # same thing as "15 projects". A gate that trips on a line break is a gate
+    # somebody turns off.
+    text = re.sub(r"\s*\n>?\s*|\s+", " ", path.read_text(encoding="utf-8"))
+    wrong = [f"{want!r}" for want in counts.values() if str(want) not in text]
+    if wrong:
+        raise SystemExit(
+            "llms.txt no longer describes this book. It should say: "
+            + ", ".join(wrong)
+        )
+
+
 def _check_feature_tables() -> None:
     introduced = {f for feats in INTRODUCES.values() for f in feats}
     undetectable = introduced - DETECTABLE
@@ -1024,6 +1048,21 @@ def build() -> int:
         print(f"INCOMPLETE {slug}: no {', no '.join(missing)}", file=sys.stderr)
 
     done = sum(1 for e in track if e["hasNote"] and e["hasEx"] and e["hasDrills"])
+
+    # Only when the book is whole. Half a book has half these numbers and
+    # llms.txt describes the finished thing.
+    if done == len(track) and all(p["hasBody"] for p in projects):
+        _check_llms({
+            "units": f"{len(track)} units",
+            "words": f"{sum(u['words'] for u in units.values()):,} words",
+            "exercises": f"{sum(EXERCISES_PER_UNIT for e in track if e['hasEx'])} exercises",
+            "drills": f"{sum(DRILLS_PER_UNIT for e in track if e['hasDrills'])} drills",
+            "projects": f"{len(projects)} projects",
+            "stages": f"{sum(p['stages'] for p in projects)} project stages",
+            "glossary": f"{len(gloss)} entry glossary",
+            "ruff": f"ruff {JUDGES['ruff']['version']}",
+        })
+
     print(f"built {written} files -> data/")
     print(f"units complete: {done}/{len(track)}   projects written: "
           f"{sum(1 for p in projects if p['hasBody'])}/{len(projects)}")

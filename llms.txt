@@ -1,0 +1,292 @@
+# The Python Handbook
+
+> Learn Python properly, past the point the tutorials stop. 39 units and 15
+> projects, 56,703 words, 312 exercises and 108 project stages, all judged by
+> real ruff, real mypy and real CPython. No server, no account, no network call
+> at run time: all three tools are compiled to WebAssembly and run in the tab.
+
+Every exercise ships a `diagnose` map from a tool's code to prose, so the
+explanation beside a failure is about the error you hit rather than the topic
+you are on. `build.py --validate` runs every starter and every solution past all
+three judges and fails the build if a starter stops producing the code its
+explanation describes, which is what stops the content rotting when ruff or
+mypy change their minds.
+
+Built and verified against CPython 3.14, ruff 0.16.5 and mypy from PyPI. No
+framework, no npm, no build step for a reader. `build.py` turns authored
+markdown into JSON once and the browser routes and paints.
+
+## Start here
+
+Repository: https://github.com/madalintat/python-handbook
+
+Someone has handed you this file. They want one of three things and this file
+cannot tell you which. Ask before doing anything else, in one short message,
+and offer these three:
+
+1. **Build a handbook like this one for another subject.** Same design and same
+   machinery, different subject, different mascot, different colours.
+2. **Work on this handbook.** A unit, a project, a feature, a bug.
+3. **Learn Python with it.** Use the units, exercises, drills and projects as
+   the material for a course you run with them.
+
+Do not guess. The three answers lead to completely different work, and the
+first is the one this file is mostly about.
+
+## What it contains
+
+Thirty-nine units in ten phases, from `id()` and rebinding through to reading a
+traceback. Each unit is a note of 1,400 to 2,200 words, exactly 8 exercises and
+exactly 15 drills. 585 drills and a 29 entry glossary.
+
+Fifteen projects in three tiers, each one artefact built over stages that
+accumulate:
+
+- **mini**, 4 stages: bloom filter, LRU cache, retry decorator, regex engine
+- **core**, 8 stages: n-gram model, micrograd, BPE tokenizer, JSON parser, test
+  framework, ORM, async crawler, key-value store, a CLI packaged to a wheel, a
+  web framework
+- **deep**, 12 stages: build a GPT
+
+108 stages in total. Six domains: data, systems, tools, languages, ai, web.
+
+## The three judges
+
+This is the part that differs most from a handbook built on a remote compiler
+service, and it is worth understanding before copying anything.
+
+- **ruff** 0.16.5, as WebAssembly, from a CDN. Style and bug classes.
+- **mypy**, installed into Pyodide with micropip at first run. Types.
+- **CPython** 3.14, as Pyodide. Actually runs the code and its hidden tests.
+
+Nothing leaves the tab. The cost is a slow first run while mypy installs, which
+is why the QA scripts warm the judges once before sweeping anything.
+
+An exercise declares what its starter must produce, and the build checks it:
+
+```
+@expect ruff:B006          a specific rule fires
+@expect mypy:assignment    a specific type error
+@expect raises:KeyError    it runs and raises this
+@expect silent             it runs clean and the tests still fail
+@hint      one line that makes them look at the right place
+@diagnose  B006  what the tool saw, in plain language
+```
+
+## The rules that are enforced rather than remembered
+
+This is the transferable part. Every one of these is a rule an author would
+otherwise have to hold in their head while editing a file, which is the kind of
+rule that gets forgotten. `build.py` refuses the content instead.
+
+- **The vocabulary gate.** Each unit declares what it introduces. An AST feature
+  detector reads every starter and solution and refuses any construct belonging
+  to a later unit. This is the single highest value gate in the project: without
+  it, unit 4's exercise quietly needs `map`, and the reader who cannot solve it
+  concludes they are stupid rather than that the book is wrong.
+- **The continuity rule.** For every project stage: the starter fails its tests,
+  the solution passes them and is clean under both static judges, and **stage
+  N+1's starter passes stage N's tests**. That last one turns "built in stages
+  that accumulate" from a promise into a checked claim. A stage extends; it
+  never restarts, and a starter that stubs out something an earlier stage's
+  tests run through is refused by name.
+- **Diagnose coverage.** Every code a judge actually reports must have prose
+  explaining it, or a reader meets a coloured row with nothing beside it.
+- **Flakiness.** Every case runs under two `PYTHONHASHSEED` values. Set order
+  is randomised per process and a test that depends on it passes locally and
+  fails for a stranger.
+- **Prose rules.** No em dashes, no curly quotes, no exclamation marks, no
+  "simply", "obviously", or "just" as a minimiser. Checked, not requested.
+- **Cross references.** A unit may not point forward to one that comes later.
+- **Word budgets.** A note outside 1,400 to 2,200 words is refused. A project
+  stage brief under 60 words is refused, because a stage explainable in one line
+  is a step rather than a stage.
+- **Table consistency.** Stage counts against the tier, tiers and domains
+  against their allowed sets, phase indices in range, every phase non-empty,
+  and a unit's front matter slug against its own filename.
+- **Generated data is committed**, and the release script fails when it is stale.
+
+## The two-runner invariant
+
+The single most useful piece of engineering here, and the one most likely to be
+missing from a project that looks like this one.
+
+The same code runs twice: offline in a subprocess for `--validate`, and in
+Pyodide in the browser for the reader. `assets/runner.py` is one file, used by
+both, so the filenames, the line numbers and the exception names are one
+definition rather than two kept in step by hand. Two scripts then check that
+the two paths agree:
+
+```
+./qa-browser.sh    [unit ...]     every starter, judged in the browser
+./qa-solutions.sh  [project ...]  every project solution, executed in Pyodide
+```
+
+`qa-browser.sh` alone is not enough, and this took a while to learn. A starter
+fails on its first stub, so a project's real code can pass every offline check
+having never executed a line in a browser. That is exactly where a divergence
+lives. Four real ones have been caught this way:
+
+1. `time.sleep` yields in Pyodide rather than blocking.
+2. `sys.modules` leaked between runs in one long-lived interpreter.
+3. A `RecursionError` killed the interpreter for the rest of the session, fixed
+   with a recursion limit in the shared runner plus cache eviction.
+4. A benchmark that measured a clock the browser deliberately blunts. See below.
+
+## What went wrong, and what it teaches
+
+The failures worth carrying to another project of this shape.
+
+**A benchmark shorter than the clock measures the clock.** A stage compared a
+hand-written parser against the standard library's and asserted it was slower.
+It passed offline and failed in the browser: `perf_counter` in Pyodide is
+`performance.now()`, which browsers deliberately blunt as a timing-attack
+mitigation, so eleven small documents parsed three times finished inside one
+tick and the C parser measured zero. Scale the repeat count until the timer can
+see the run, which is what `timeit` does and for this reason.
+
+**Measure best of N, never once.** While cleaning up that same project I
+measured a refactor once, saw a ten percent regression, and nearly added a
+special case to avoid it. Best of three said the difference was nothing and the
+clean version was marginally faster. The trap the paragraph above exists to
+teach, walked into while editing the file next door.
+
+**Do not collect garbage you can avoid creating.** The autograd engine built a
+quarter of a million objects per forward pass and every one was part of a
+reference cycle, because the closure that pushes a gradient back held the value
+that held the closure. Turning the collector off for the step was a 28x
+speed-up and a memory leak. Passing the gradient in as an argument instead
+removed every cycle for the cost of one parameter, and was faster than the
+workaround on every axis: 162 to 91 ms a step with the collector on, and four
+million leaked objects over fifteen steps to zero.
+
+**A gate that cannot fire is not a gate.** A browser check confirmed the editor
+had really loaded the solution by comparing the first forty characters, which
+are the import block and are identical between starter and solution in 98 of
+108 stages. It would have passed on the wrong text forever.
+
+**A check nobody runs rots.** `qa-solutions.sh` was written, found a real bug,
+and was then left out of the one command that runs every check.
+
+**Derive, never annotate.** The editor needs to know which lines of a starter
+are this stage's work. That is the difference between the starter and the
+previous stage's solution, which the file already contains, so the build
+computes it. Anything hand-maintained about content drifts from the content.
+
+**Timing assertions are machine assertions.** Where a test wants to say
+something is cheap, count the work rather than the seconds: seeks, appends,
+calls. A seek count is the same on every machine and in every runtime.
+
+## The editor, and why it looks like that
+
+A `<textarea>` with transparent text laid exactly over a highlighted `<pre>`.
+The caret and the selection are the textarea's; every visible glyph is the
+pre's. They stay aligned only while they agree on font, size, line height,
+padding, tab size and wrapping, which the stylesheet asserts. Vim mode,
+soft wrap, and a gutter with error and work marks sit on top of that.
+
+Three things a project of this shape will need and may not expect:
+
+- **Cap the editor's height.** A late project stage is a thousand lines. Left
+  uncapped that is a 25,000 pixel editor, the page scrolls instead of the
+  editor, and the run button leaves the screen. Capped, it is a pane.
+- **Follow the caret yourself.** A textarea scrolls to its own caret only when
+  it is the scroller. Inside a capped ancestor it is not, and every motion past
+  the last visible line moves a caret nobody can see.
+- **Show the reader their part.** By the last stage, 1.3 percent of the file is
+  the work. The gutter marks it, a key walks it, an outline lists what the file
+  holds, and focus mode collapses everything else: 994 lines becomes 19.
+  Focus mode takes text out of the textarea, so the only copy of it is a model,
+  and every path out of that mode writes it back. Save and run read a `code()`
+  that returns the whole file whatever mode the editor is in. That one line is
+  the difference between a feature and losing somebody's work.
+
+## The content pipeline
+
+```
+content/units/<slug>.md      the note
+content/ex/<slug>.md         exactly 8 exercises
+content/drills/<slug>.md     exactly 15 drills
+content/projects/<slug>.md   4, 8 or 12 stages
+content/gloss/*.md           the glossary
+```
+
+`build.py` reads them, enforces everything above, and writes `data/`.
+`docs/AUTHORING.md` is the full contract. `data/` is committed so the site is
+servable from a checkout.
+
+```sh
+python3 build.py                        # content -> data, and every gate
+python3 build.py --check <file>          # one file, while writing it
+./release.sh --check                     # everything offline
+./release.sh --check --net               # plus all three judges
+./release.sh --check --net --browser     # plus the same code in a real browser
+```
+
+## Building one for another subject
+
+The order matters. Each step leaves something you can look at.
+
+1. **Pick the subject and the spine.** You need a sequence where each item
+   depends on the ones before it, and a tool that produces a specific, machine
+   generated complaint about the learner's work. A compiler, a type checker, a
+   linter, a test runner, a solver, a query planner. Without that, build a quiz
+   site instead; this shape is wasted on it.
+2. **Choose the execution backend before anything else.** There are two shapes.
+   A remote service that compiles and runs a snippet, which is what the Rust
+   handbook uses. Or tools compiled to WebAssembly and run in the tab, which is
+   what this one does: nothing leaves the browser, it works offline after the
+   first load, and it costs a slow first run. Prefer the second where the
+   toolchain exists. If nothing can execute the learner's work and answer
+   specifically, stop and reconsider step one.
+3. **Write the runner once.** One file that takes source and hidden tests and
+   returns a verdict, used by both the offline validator and the browser. Do
+   this before there is content to validate, because retrofitting it means
+   reconciling two definitions that have already drifted.
+4. **Fork the shell.** `index.html`, `assets/app.css`, `assets/app.js`,
+   `assets/workbench.js`. Delete the views you do not need. Do not start by
+   restyling.
+5. **Swap the palette and the mascot.** Two `:root` blocks and the accent list.
+   One flat figure that reads at 26 pixels.
+6. **Rewrite the manifest.** `build.py` holds `TRACK` and `PROJECTS`. Those
+   lists are the table of contents. Write them before writing a single unit.
+7. **Write the vocabulary gate next, not last.** List what each unit
+   introduces, and write the detector that finds those constructs in a starter.
+   Retrofitting this to written content means rewriting the content.
+8. **Write one unit completely** until `build.py --check` prints clean. One
+   finished unit teaches more about the format than reading the guide twice.
+9. **Write one project completely**, all its stages, and let the continuity
+   check refuse the first three attempts. The rule that a stage extends and
+   never restarts is not obvious until a build has told you off for breaking it.
+10. **Then the rest of the content.** By now the platform is finished and the
+    work is writing, which is where the time actually goes.
+
+## What to keep
+
+The parts that make it work, rather than the parts that make it look a certain
+way:
+
+- One runner shared by the offline validator and the browser, and a script that
+  proves the two agree. Everything else here is downstream of that.
+- The vocabulary gate. It is what makes "each unit assumes the ones before it"
+  true rather than intended.
+- The continuity check on project stages.
+- Content validated against the real tools, so it cannot rot silently.
+- Every rule a build failure rather than a paragraph in a style guide.
+- Generated data committed, with the release script failing when it is stale.
+- Hints, and no answers.
+- Progress in `localStorage`, and therefore no account.
+- Four inks, fluid type tokens so no font size appears inside a media query,
+  one accent variable set per section on a container.
+- No framework. It is a static site.
+
+## What to change
+
+Everything else. The subject, the mascot, the palette, the number of units, the
+voice, the tiers. The machinery survives all of it.
+
+## Optional
+
+- `docs/AUTHORING.md` for the full authoring contract.
+- `assets/runner.py` if you want to see the shared execution contract, which is
+  the shortest file worth reading in the repository.

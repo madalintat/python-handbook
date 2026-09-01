@@ -74,6 +74,63 @@ catches the offline and browser paths drifting apart, and `qa-solutions.sh`,
 which is the only thing that runs a project's real code where the reader runs
 it. Between them they have caught four genuine divergences.
 
+## What building this taught us
+
+General enough to be worth carrying to the next thing, in rough order of how
+much they cost to learn.
+
+**Enforce it or lose it.** Every rule this book depends on is a build failure
+rather than a paragraph in a style guide: what a unit is allowed to assume,
+that a project stage extends rather than restarts, that every reported error
+has prose explaining it, that no note points forward. A rule nobody checks is a
+rule, briefly. `build.py` refusing the content is what keeps 39 units honest
+about each other.
+
+**Derive, never annotate.** The editor needs to know which lines of a stage are
+the reader's work. That is the difference between this starter and the previous
+solution, which the file already contains, so the build computes it. Anything
+hand-maintained about content drifts from the content, silently, starting the
+day it is written.
+
+**One definition, used twice.** The same code runs offline in a subprocess and
+in the browser under WebAssembly, and `assets/runner.py` is one file used by
+both. Two definitions of "what running this means" would agree for about a
+week. Two QA scripts then check that the two paths actually reach the same
+verdict, which has caught four genuine divergences.
+
+**A gate that cannot fire is not a gate.** One check confirmed the browser had
+loaded the right code by comparing the first forty characters, which are
+identical between starter and solution in 98 of 108 stages. Ask of every check:
+what input would make this fail? If there isn't one, it is decoration.
+
+**A check nobody runs rots.** A sweep was written, found a real bug, and was
+then left out of the one command that runs every check. If it is not in
+`release.sh`, it does not exist.
+
+**Measure best of N, never once.** A refactor here looked like a ten percent
+regression on a single sample and was nothing on best of three. Noise only ever
+makes things slower, so the minimum is the honest number.
+
+**A benchmark shorter than your clock measures your clock.** A timing assertion
+passed offline and failed in the browser, because `perf_counter` there is
+`performance.now()`, which browsers deliberately blunt. Scale the work until
+the timer can see it, which is what `timeit` does and why.
+
+**Count work, not seconds.** Where a test wants to say something is cheap,
+count seeks or calls or appends. A seek count is the same on every machine and
+in every runtime; a duration is a statement about the machine that ran it.
+
+**Do not collect garbage you can avoid creating.** The autograd engine made
+every node part of a reference cycle, because the closure that pushes a
+gradient back held the value that held the closure. Turning the collector off
+was a 28x speed-up and a memory leak; passing the gradient as an argument
+removed the cycles for the cost of one parameter and beat the workaround on
+every axis.
+
+**Two documents holding the same rules is one document and a bug.** This README
+was a near-duplicate of the authoring contract until it was noticed, which is
+exactly how long that kind of thing survives.
+
 ## Writing content
 
 The contract every unit, project, drill and glossary file follows is in
