@@ -653,6 +653,10 @@ mark { background: color-mix(in srgb, var(--accent) 30%, transparent); color: in
   .judges { grid-template-columns: 1fr; }
   /* a navigation row at the top of a phone is a row nobody can reach */
   .nav { display: none; }
+  /* and the search box squeezed the brand onto two lines. Search is one tap
+     away from the Track tab and one key away on a keyboard. */
+  .nav-search { display: none; }
+  .brand { margin-right: auto; }
   .tabbar {
     display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 46;
     background: color-mix(in srgb, var(--bg) 94%, transparent); backdrop-filter: blur(10px);
@@ -671,6 +675,21 @@ mark { background: color-mix(in srgb, var(--accent) 30%, transparent); color: in
   .wrap { width: min(1240px, 100% - 1.6rem); }
   .stats { gap: 1.4rem; }
   .grid { grid-template-columns: 1fr; }
+}
+
+/* Touch targets. A 23px toolbar button is fine to click with a mouse and close
+   to unusable with a thumb, so the small controls grow. Two signals, because
+   either alone is wrong: a coarse pointer catches tablets at any width, and the
+   width catches a phone whose browser reports a fine pointer. A narrow window on
+   a laptop getting slightly larger buttons costs nothing. */
+@media (pointer: coarse), (max-width: 620px) {
+  .ed-toolbar .btn { min-height: 40px; padding-inline: 0.7rem; }
+  .exnav a { width: 40px; height: 40px; }
+  .letters a { min-width: 40px; min-height: 40px; display: grid; place-items: center; }
+  .icon-btn { width: 40px; height: 40px; }
+  .btn.sm { min-height: 40px; }
+  .opt { padding-block: 0.85rem; }
+  .sheetlink { padding-block: 0.85rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {
