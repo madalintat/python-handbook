@@ -280,6 +280,17 @@ assert find_links("", base) == []
 assert find_links("<p>no links here</p>", base) == []
 assert find_links("<a>no href</a><a href=''>empty</a>", base) == []
 
+# a response cut off mid-tag keeps every link that arrived whole. HTMLParser
+# holds an unfinished tag in its buffer until close(), so without that call the
+# last complete link before the cut is lost too, and a truncated response is an
+# ordinary thing for a crawler to be handed.
+assert find_links('<a href="/a">x</a>\n<a href="/b">y</a>', base) == [
+    "http://example.com/a", "http://example.com/b"
+]
+assert find_links('<a href="/a">x</a><a href="/b"', base) == [
+    "http://example.com/a"
+], "the unfinished tag has no href yet, and must not take the finished one down"
+
 # fetching
 pages = {
     "http://example.com/": '<a href="/a">a</a><a href="/b">b</a>',
@@ -371,6 +382,10 @@ def find_links(html, base):
     """Every crawlable link on a page, normalised, with duplicates removed."""
     finder = LinkFinder()
     finder.feed(html)
+    # HTMLParser holds a trailing incomplete tag in its buffer until close(),
+    # so without this a response cut off mid-tag quietly loses its last link,
+    # which is an ordinary thing for a crawler to be handed.
+    finder.close()
     seen = {}
     for href in finder.links:
         url = normalise(href, base)
@@ -492,6 +507,10 @@ def find_links(html, base):
     """Every crawlable link on a page, normalised, with duplicates removed."""
     finder = LinkFinder()
     finder.feed(html)
+    # HTMLParser holds a trailing incomplete tag in its buffer until close(),
+    # so without this a response cut off mid-tag quietly loses its last link,
+    # which is an ordinary thing for a crawler to be handed.
+    finder.close()
     seen = {}
     for href in finder.links:
         url = normalise(href, base)
@@ -701,6 +720,10 @@ def find_links(html, base):
     """Every crawlable link on a page, normalised, with duplicates removed."""
     finder = LinkFinder()
     finder.feed(html)
+    # HTMLParser holds a trailing incomplete tag in its buffer until close(),
+    # so without this a response cut off mid-tag quietly loses its last link,
+    # which is an ordinary thing for a crawler to be handed.
+    finder.close()
     seen = {}
     for href in finder.links:
         url = normalise(href, base)
@@ -886,6 +909,10 @@ def find_links(html, base):
     """Every crawlable link on a page, normalised, with duplicates removed."""
     finder = LinkFinder()
     finder.feed(html)
+    # HTMLParser holds a trailing incomplete tag in its buffer until close(),
+    # so without this a response cut off mid-tag quietly loses its last link,
+    # which is an ordinary thing for a crawler to be handed.
+    finder.close()
     seen = {}
     for href in finder.links:
         url = normalise(href, base)
@@ -933,6 +960,8 @@ class Crawler:
         self.same_host_only = same_host_only
         self.gate = asyncio.Semaphore(concurrency or workers)
         self.limiter = limiter
+        if retries < 1:
+            raise ValueError(f"retries={retries} would never fetch anything")
         self.retries = retries
         self.backoff = backoff
         self.retried = 0
@@ -1093,6 +1122,16 @@ asyncio.run(crawler.crawl("http://example.com/"))
 assert flaky.requested.count("http://example.com/3") == 3, flaky.requested.count("http://example.com/3")
 assert crawler.retried == 2
 
+# a crawler that would never attempt anything is refused where it is built,
+# rather than failing on the first page with a name that was never bound
+for bad in (0, -1):
+    try:
+        Crawler(flaky, retries=bad)
+    except ValueError as exc:
+        assert "never fetch anything" in str(exc)
+    else:
+        raise AssertionError(f"retries={bad} attempts nothing")
+
 # but a 404 is not, because it will be a 404 again
 missing = DictFetcher({"http://example.com/": '<a href="/gone">g</a>'})
 crawler = Crawler(missing, retries=3, backoff=0.0)
@@ -1180,6 +1219,10 @@ def find_links(html, base):
     """Every crawlable link on a page, normalised, with duplicates removed."""
     finder = LinkFinder()
     finder.feed(html)
+    # HTMLParser holds a trailing incomplete tag in its buffer until close(),
+    # so without this a response cut off mid-tag quietly loses its last link,
+    # which is an ordinary thing for a crawler to be handed.
+    finder.close()
     seen = {}
     for href in finder.links:
         url = normalise(href, base)
@@ -1227,6 +1270,8 @@ class Crawler:
         self.same_host_only = same_host_only
         self.gate = asyncio.Semaphore(concurrency or workers)
         self.limiter = limiter
+        if retries < 1:
+            raise ValueError(f"retries={retries} would never fetch anything")
         self.retries = retries
         self.backoff = backoff
         self.retried = 0
@@ -1421,6 +1466,10 @@ def find_links(html, base):
     """Every crawlable link on a page, normalised, with duplicates removed."""
     finder = LinkFinder()
     finder.feed(html)
+    # HTMLParser holds a trailing incomplete tag in its buffer until close(),
+    # so without this a response cut off mid-tag quietly loses its last link,
+    # which is an ordinary thing for a crawler to be handed.
+    finder.close()
     seen = {}
     for href in finder.links:
         url = normalise(href, base)
@@ -1469,6 +1518,8 @@ class Crawler:
         self.same_host_only = same_host_only
         self.gate = asyncio.Semaphore(concurrency or workers)
         self.limiter = limiter
+        if retries < 1:
+            raise ValueError(f"retries={retries} would never fetch anything")
         self.retries = retries
         self.backoff = backoff
         self.retried = 0
@@ -1729,6 +1780,10 @@ def find_links(html, base):
     """Every crawlable link on a page, normalised, with duplicates removed."""
     finder = LinkFinder()
     finder.feed(html)
+    # HTMLParser holds a trailing incomplete tag in its buffer until close(),
+    # so without this a response cut off mid-tag quietly loses its last link,
+    # which is an ordinary thing for a crawler to be handed.
+    finder.close()
     seen = {}
     for href in finder.links:
         url = normalise(href, base)
@@ -1777,6 +1832,8 @@ class Crawler:
         self.same_host_only = same_host_only
         self.gate = asyncio.Semaphore(concurrency or workers)
         self.limiter = limiter
+        if retries < 1:
+            raise ValueError(f"retries={retries} would never fetch anything")
         self.retries = retries
         self.backoff = backoff
         self.retried = 0
@@ -1801,6 +1858,14 @@ class Crawler:
         self.depth = {root: 0}
         self.deferred = collections.deque()
         self.peak_frontier = 0
+        # All of them, not the ones that came to mind. A crawler used twice
+        # reported the first run's retries added to the second run's.
+        self.retried = 0
+        self.timed_out = 0
+        self.blocked = []
+        self.in_flight = 0
+        self.peak_in_flight = 0
+        self.cancelled = False
         await queue.put(root)
 
         async with asyncio.TaskGroup() as group:
@@ -2002,6 +2067,10 @@ def find_links(html, base):
     """Every crawlable link on a page, normalised, with duplicates removed."""
     finder = LinkFinder()
     finder.feed(html)
+    # HTMLParser holds a trailing incomplete tag in its buffer until close(),
+    # so without this a response cut off mid-tag quietly loses its last link,
+    # which is an ordinary thing for a crawler to be handed.
+    finder.close()
     seen = {}
     for href in finder.links:
         url = normalise(href, base)
@@ -2050,6 +2119,8 @@ class Crawler:
         self.same_host_only = same_host_only
         self.gate = asyncio.Semaphore(concurrency or workers)
         self.limiter = limiter
+        if retries < 1:
+            raise ValueError(f"retries={retries} would never fetch anything")
         self.retries = retries
         self.backoff = backoff
         self.retried = 0
@@ -2077,6 +2148,14 @@ class Crawler:
         self.depth = {root: 0}
         self.deferred = collections.deque()
         self.peak_frontier = 0
+        # All of them, not the ones that came to mind. A crawler used twice
+        # reported the first run's retries added to the second run's.
+        self.retried = 0
+        self.timed_out = 0
+        self.blocked = []
+        self.in_flight = 0
+        self.peak_in_flight = 0
+        self.cancelled = False
         await queue.put(root)
 
         async with asyncio.TaskGroup() as group:
@@ -2339,6 +2418,10 @@ def find_links(html, base):
     """Every crawlable link on a page, normalised, with duplicates removed."""
     finder = LinkFinder()
     finder.feed(html)
+    # HTMLParser holds a trailing incomplete tag in its buffer until close(),
+    # so without this a response cut off mid-tag quietly loses its last link,
+    # which is an ordinary thing for a crawler to be handed.
+    finder.close()
     seen = {}
     for href in finder.links:
         url = normalise(href, base)
@@ -2387,6 +2470,8 @@ class Crawler:
         self.same_host_only = same_host_only
         self.gate = asyncio.Semaphore(concurrency or workers)
         self.limiter = limiter
+        if retries < 1:
+            raise ValueError(f"retries={retries} would never fetch anything")
         self.retries = retries
         self.backoff = backoff
         self.retried = 0
@@ -2414,6 +2499,14 @@ class Crawler:
         self.depth = {root: 0}
         self.deferred = collections.deque()
         self.peak_frontier = 0
+        # All of them, not the ones that came to mind. A crawler used twice
+        # reported the first run's retries added to the second run's.
+        self.retried = 0
+        self.timed_out = 0
+        self.blocked = []
+        self.in_flight = 0
+        self.peak_in_flight = 0
+        self.cancelled = False
         await queue.put(root)
 
         async with asyncio.TaskGroup() as group:
@@ -2564,6 +2657,11 @@ Fetch it once per host, before anything else, and let a declared `Crawl-delay`
 become the rate limit from the previous stage. That is the whole point of having
 built the limiter as a separate object.
 
+The start url needs checking too, and it is the one that gets missed. Every
+other url arrives as a link on a page, so a check inside the loop over links
+covers all of them and none of the first. A site whose `robots.txt` says
+`Disallow: /` would then have exactly one page fetched: the one it named.
+
 @goal `robots.txt` is honoured, longest match wins, and a crawl delay sets the rate.
 
 ~~~starter
@@ -2633,6 +2731,10 @@ def find_links(html, base):
     """Every crawlable link on a page, normalised, with duplicates removed."""
     finder = LinkFinder()
     finder.feed(html)
+    # HTMLParser holds a trailing incomplete tag in its buffer until close(),
+    # so without this a response cut off mid-tag quietly loses its last link,
+    # which is an ordinary thing for a crawler to be handed.
+    finder.close()
     seen = {}
     for href in finder.links:
         url = normalise(href, base)
@@ -2682,6 +2784,8 @@ class Crawler:
         self.same_host_only = same_host_only
         self.gate = asyncio.Semaphore(concurrency or workers)
         self.limiter = limiter
+        if retries < 1:
+            raise ValueError(f"retries={retries} would never fetch anything")
         self.retries = retries
         self.backoff = backoff
         self.retried = 0
@@ -2717,6 +2821,14 @@ class Crawler:
         self.depth = {root: 0}
         self.deferred = collections.deque()
         self.peak_frontier = 0
+        # All of them, not the ones that came to mind. A crawler used twice
+        # reported the first run's retries added to the second run's.
+        self.retried = 0
+        self.timed_out = 0
+        self.blocked = []
+        self.in_flight = 0
+        self.peak_in_flight = 0
+        self.cancelled = False
         await queue.put(root)
 
         async with asyncio.TaskGroup() as group:
@@ -2930,6 +3042,23 @@ loose = Crawler(DictFetcher(site))
 pages = asyncio.run(loose.crawl("http://example.com/"))
 assert "http://example.com/private" in pages
 
+# the start url is checked too. it was never found on a page, so the check on
+# discovered links never sees it, and a site that forbids everything would
+# otherwise have the one page it named fetched anyway
+forbidding = {
+    "http://example.com/robots.txt": "User-agent: *\nDisallow: /\n",
+    "http://example.com/": '<a href="/public">p</a>',
+    "http://example.com/public": "",
+}
+crawler = Crawler(DictFetcher(forbidding), obey_robots=True)
+assert asyncio.run(crawler.crawl("http://example.com/")) == {}
+assert crawler.blocked == ["http://example.com/"]
+assert "http://example.com/" not in crawler.fetcher.requested
+
+# and with robots off the same site is crawled
+loose = Crawler(DictFetcher(forbidding))
+assert len(asyncio.run(loose.crawl("http://example.com/"))) == 2
+
 # a site with no robots.txt is crawled in full
 bare = {k: v for k, v in site.items() if not k.endswith("robots.txt")}
 crawler = Crawler(DictFetcher(bare), obey_robots=True)
@@ -3017,6 +3146,10 @@ def find_links(html, base):
     """Every crawlable link on a page, normalised, with duplicates removed."""
     finder = LinkFinder()
     finder.feed(html)
+    # HTMLParser holds a trailing incomplete tag in its buffer until close(),
+    # so without this a response cut off mid-tag quietly loses its last link,
+    # which is an ordinary thing for a crawler to be handed.
+    finder.close()
     seen = {}
     for href in finder.links:
         url = normalise(href, base)
@@ -3066,6 +3199,8 @@ class Crawler:
         self.same_host_only = same_host_only
         self.gate = asyncio.Semaphore(concurrency or workers)
         self.limiter = limiter
+        if retries < 1:
+            raise ValueError(f"retries={retries} would never fetch anything")
         self.retries = retries
         self.backoff = backoff
         self.retried = 0
@@ -3098,14 +3233,32 @@ class Crawler:
         root = normalise(start)
         if root is None:
             raise ValueError(f"{start!r} is not a crawlable url")
-        if self.obey_robots:
-            await self._load_robots(root)
-        queue = asyncio.Queue(maxsize=self.max_frontier or 0)
+        # Everything a crawl accumulates, cleared before anything can add to
+        # it. All of it, rather than the parts that came to mind: half of these
+        # used to carry over, so a crawler used twice reported the first run's
+        # retries added to the second run's and called it one number.
         self.seen = {root}
         self.pages = {}
         self.depth = {root: 0}
         self.deferred = collections.deque()
         self.peak_frontier = 0
+        self.retried = 0
+        self.timed_out = 0
+        self.blocked = []
+        self.in_flight = 0
+        self.peak_in_flight = 0
+        self.cancelled = False
+
+        if self.obey_robots:
+            await self._load_robots(root)
+            if not self.robots.allows(root):
+                # The check further down runs on links found on a page. The
+                # start url was never found on a page, so without this the one
+                # url a site explicitly forbade is the one always fetched.
+                self.blocked.append(root)
+                return self.pages
+
+        queue = asyncio.Queue(maxsize=self.max_frontier or 0)
         await queue.put(root)
 
         async with asyncio.TaskGroup() as group:
@@ -3392,6 +3545,10 @@ def find_links(html, base):
     """Every crawlable link on a page, normalised, with duplicates removed."""
     finder = LinkFinder()
     finder.feed(html)
+    # HTMLParser holds a trailing incomplete tag in its buffer until close(),
+    # so without this a response cut off mid-tag quietly loses its last link,
+    # which is an ordinary thing for a crawler to be handed.
+    finder.close()
     seen = {}
     for href in finder.links:
         url = normalise(href, base)
@@ -3441,6 +3598,8 @@ class Crawler:
         self.same_host_only = same_host_only
         self.gate = asyncio.Semaphore(concurrency or workers)
         self.limiter = limiter
+        if retries < 1:
+            raise ValueError(f"retries={retries} would never fetch anything")
         self.retries = retries
         self.backoff = backoff
         self.retried = 0
@@ -3483,14 +3642,32 @@ class Crawler:
         root = normalise(start)
         if root is None:
             raise ValueError(f"{start!r} is not a crawlable url")
-        if self.obey_robots:
-            await self._load_robots(root)
-        queue = asyncio.Queue(maxsize=self.max_frontier or 0)
+        # Everything a crawl accumulates, cleared before anything can add to
+        # it. All of it, rather than the parts that came to mind: half of these
+        # used to carry over, so a crawler used twice reported the first run's
+        # retries added to the second run's and called it one number.
         self.seen = {root}
         self.pages = {}
         self.depth = {root: 0}
         self.deferred = collections.deque()
         self.peak_frontier = 0
+        self.retried = 0
+        self.timed_out = 0
+        self.blocked = []
+        self.in_flight = 0
+        self.peak_in_flight = 0
+        self.cancelled = False
+
+        if self.obey_robots:
+            await self._load_robots(root)
+            if not self.robots.allows(root):
+                # The check further down runs on links found on a page. The
+                # start url was never found on a page, so without this the one
+                # url a site explicitly forbade is the one always fetched.
+                self.blocked.append(root)
+                return self.pages
+
+        queue = asyncio.Queue(maxsize=self.max_frontier or 0)
         await queue.put(root)
 
         async with asyncio.TaskGroup() as group:
@@ -3767,6 +3944,18 @@ asyncio.run(crawler.crawl("http://example.com/"))
 report = crawler.report()
 assert report.pages == 4 and report.ok == 3 and report.failed == 1
 
+# a crawler used twice reports the second run, not the two added together
+reused = Crawler(DictFetcher(site, fail=["http://example.com/b"]),
+                 obey_robots=True, retries=2, backoff=0.0)
+asyncio.run(reused.crawl("http://example.com/"))
+first = (reused.retried, reused.report().blocked, reused.peak_in_flight)
+asyncio.run(reused.crawl("http://example.com/"))
+assert (reused.retried, reused.report().blocked, reused.peak_in_flight) == first, (
+    f"the counters carried over: {first} then "
+    f"{(reused.retried, reused.report().blocked, reused.peak_in_flight)}"
+)
+assert reused.retried > 0, "and the run being compared actually did something"
+
 # and it reads as something a person would want to look at
 text = str(report)
 assert "4 pages" in text and "1 blocked" in text, text
@@ -3866,6 +4055,10 @@ def find_links(html, base):
     """Every crawlable link on a page, normalised, with duplicates removed."""
     finder = LinkFinder()
     finder.feed(html)
+    # HTMLParser holds a trailing incomplete tag in its buffer until close(),
+    # so without this a response cut off mid-tag quietly loses its last link,
+    # which is an ordinary thing for a crawler to be handed.
+    finder.close()
     seen = {}
     for href in finder.links:
         url = normalise(href, base)
@@ -3915,6 +4108,8 @@ class Crawler:
         self.same_host_only = same_host_only
         self.gate = asyncio.Semaphore(concurrency or workers)
         self.limiter = limiter
+        if retries < 1:
+            raise ValueError(f"retries={retries} would never fetch anything")
         self.retries = retries
         self.backoff = backoff
         self.retried = 0
@@ -3986,14 +4181,32 @@ class Crawler:
         root = normalise(start)
         if root is None:
             raise ValueError(f"{start!r} is not a crawlable url")
-        if self.obey_robots:
-            await self._load_robots(root)
-        queue = asyncio.Queue(maxsize=self.max_frontier or 0)
+        # Everything a crawl accumulates, cleared before anything can add to
+        # it. All of it, rather than the parts that came to mind: half of these
+        # used to carry over, so a crawler used twice reported the first run's
+        # retries added to the second run's and called it one number.
         self.seen = {root}
         self.pages = {}
         self.depth = {root: 0}
         self.deferred = collections.deque()
         self.peak_frontier = 0
+        self.retried = 0
+        self.timed_out = 0
+        self.blocked = []
+        self.in_flight = 0
+        self.peak_in_flight = 0
+        self.cancelled = False
+
+        if self.obey_robots:
+            await self._load_robots(root)
+            if not self.robots.allows(root):
+                # The check further down runs on links found on a page. The
+                # start url was never found on a page, so without this the one
+                # url a site explicitly forbade is the one always fetched.
+                self.blocked.append(root)
+                return self.pages
+
+        queue = asyncio.Queue(maxsize=self.max_frontier or 0)
         await queue.put(root)
 
         async with asyncio.TaskGroup() as group:
