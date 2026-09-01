@@ -1,90 +1,229 @@
-# The Python Handbook
+# Authoring
 
-> Python doesn't stop you.
+The contract every unit, project and glossary file follows. Most of it is
+enforced by `build.py`, so this document describes the rules rather than
+requesting them. An exercise is finished when
 
-A compiler refuses code it cannot make sense of. Python takes almost anything
-you write, runs it, and finds the mistake when it reaches that line, or hands
-back a wrong answer and says nothing at all. That gap is the whole difficulty of
-the language, so this handbook runs your code past **three judges that disagree
-with each other**, and treats the disagreement as the lesson.
+    python3 build.py --check content/ex/<slug>.md
 
-| Judge | Speed | Answers with | Runs |
-| --- | --- | --- | --- |
-| **ruff** 0.16 | ~1 ms | lint codes (`B006`, `F841`) | WebAssembly, in your tab |
-| **mypy** 2.3 | ~100 ms | type codes (`attr-defined`) | Pyodide, in your tab |
-| **CPython** 3.14 | ~1 s | the truth | Pyodide, in your tab |
+prints `N clean`, and the whole book is honest when `./release.sh --check --net`
+passes.
 
-Nothing you write leaves your browser. There is no server, no account and no
-backend to pay for.
-
-## The fourth verdict
-
-A compiler-based book has pass and fail. This one has four, and the last is the
-reason it exists:
+## The three files a unit needs
 
 ```
-@expect ruff:B006          the linter objects
-@expect mypy:arg-type      the type checker objects
-@expect raises:TypeError   it crashes
-@expect silent             every judge is happy and it is still wrong
+content/units/<slug>.md    the note
+content/ex/<slug>.md       exactly 8 exercises
+content/drills/<slug>.md   exactly 15 drills
 ```
 
-`silent` is mutable default arguments, late-binding closures, `is` on large
-integers, a shallow copy that shares its rows. Python's most expensive bugs are
-invisible to every static tool, so the exercise passes ruff, passes mypy, runs
-clean, and the hidden tests fail anyway.
+`<slug>` must appear in the `TRACK` list in `build.py`. The manifest is the
+table of contents; nothing renders that is not in it.
 
-## Running it
+## The note
 
-It is a static site. No npm, no bundler, no framework.
+Front matter is `slug` and `title`. The body is markdown with `## ` sections.
+
+- **1,400 to 2,600 prose words.** Code blocks and inline code do not count.
+- **At least three `## ` sections.** They become the contents rail, so they have
+  to be a real outline, not decoration.
+- Open with the reader's existing wrong model, not with a definition. The unit
+  is worth writing only if there is something they currently believe that is
+  false.
+- One idea per section, and the section title says which.
+- End with a short "what to carry forward" that the next unit can lean on.
+
+## The exercises
+
+Eight per unit, each a `## ` heading, and each with three fenced blocks:
+
+````
+## The copy that never happened
+
+Prompt prose. At least fifteen words, addressed to the reader, describing what
+to look at rather than what to type.
+
+@expect silent
+@hint One line that makes them look at the right place.
+@diagnose silent Prose explaining this exact verdict.
+
+~~~starter
+code that fails
+~~~
+
+~~~tests
+assert something, "message the reader will actually read"
+~~~
+
+~~~solution
+code that passes
+~~~
+````
+
+### `@expect`, the four verdict kinds
+
+| Directive | Means |
+| --- | --- |
+| `@expect ruff:B006` | ruff reports this code |
+| `@expect mypy:arg-type` | mypy reports this code |
+| `@expect raises:TypeError` | running the starter raises this exception |
+| `@expect silent` | the starter runs without raising, and is still wrong |
+
+`silent` is the one a compiler-based book cannot have, and it is the most
+valuable kind here. Use it whenever the defect is invisible to both static
+judges.
+
+An exercise may declare several. Exercise 5 of unit 01 declares both
+`raises:AttributeError` and `mypy:attr-defined` precisely because the two judges
+finding the same defect at different distances *is* the lesson.
+
+### `@diagnose`
+
+One per code that can appear, keyed by the code itself (`silent` for the silent
+verdict). This is the single most valuable thing in the book: the reader gets
+the judge's real output and, beside it, a written reading of that specific
+complaint.
+
+`--validate` fails if a judge produces a code with no `@diagnose`, so the prose
+cannot fall behind the tools.
+
+### `@hint`
+
+At least one, as many as the exercise deserves. A hint is a sentence that makes
+the reader see the error. It is never the corrected code. Solutions exist in
+this repository and are compiled by the build, and are deliberately never shown.
+
+### What `--validate` actually enforces
+
+For every exercise, against real ruff, real mypy and real CPython:
+
+1. the starter alone produces the verdict its `@expect` lines claim;
+2. every code either judge reports has an `@diagnose`;
+3. the starter **fails its own hidden tests**, otherwise the exercise is
+   already solved and nobody would notice;
+4. a `silent` starter fails with `AssertionError` specifically, not by crashing;
+5. the solution passes the tests and is clean under both static judges.
+
+Rule 3 is the one that stops content rotting. Rule 4 is what keeps `silent`
+meaning what it says.
+
+### Notes on making the judges cooperate
+
+- **mypy only checks annotated functions.** An unannotated `def f(x):` has an
+  implicitly `Any` parameter and mypy will not look inside the body. If an
+  exercise needs a mypy verdict, the starter must carry annotations, which is
+  itself worth saying to the reader.
+- **ruff runs `E,F,B,SIM,UP` with `E501` ignored.** Line length is a formatting
+  opinion and not a teaching signal.
+- Keep starters short. The longest one in unit 01 is nine lines.
+
+## The vocabulary gate
+
+An exercise must be solvable with what the reader has already met. Relying on the
+author to remember the ordering across 39 units does not work, so `build.py`
+enforces it.
+
+Each unit declares what its note introduces, in `INTRODUCES`. `build.py --check`
+on an exercise file parses every starter and solution and refuses any construct
+belonging to a later unit:
+
+```
+VOCABULARY  01-names #6 One level deep: solution uses comprehension before the reader has met it
+```
+
+`BASELINE` is what the book assumes on page one, `def`, `for`, `if`, calls,
+attribute access, f-strings, annotations, the four container literals. Everything
+else has to be introduced somewhere before it can be used.
+
+Two rules follow when you hit a violation:
+
+**Do not weaken the gate to make an exercise pass.** Either rewrite the solution
+using what is available, or move the feature to the unit whose note genuinely
+teaches it. The second is legitimate, a note that shows `sorted()` while
+explaining in-place versus returning has introduced `sorted`, and `INTRODUCES`
+should say so.
+
+**The hidden tests are not gated.** The reader never writes them, so they may use
+anything.
+
+Where the idiomatic solution needs a later tool, say so in the `@diagnose` prose
+and point forward: "unit 12 shows the one-line version". That turns a limitation
+into a thread the reader can follow.
+
+## `_ph_import`, for exercises about import time
+
+The reader's code runs the way `python your_code.py` runs it, so `__name__` is
+`"__main__"`. When an exercise is about what happens on *import* instead, the
+hidden tests can call `_ph_import()`, which re-executes the reader's code with
+`__name__` set to `"your_code"` and returns the resulting namespace:
+
+```python
+imported = _ph_import()
+assert imported["LOG"] == [], "importing the module already did the work"
+```
+
+Both the browser runner and `--validate` provide it. Unit 00's `__main__` guard
+exercise is the reason it exists: without it, the guard can only be described,
+never demonstrated.
+
+## Checking a change
+
+Three commands, in increasing order of what they cost and what they prove:
 
 ```sh
-python3 build.py            # content/ -> data/
-python3 -m http.server 8848 # then open http://127.0.0.1:8848
+python3 build.py                 # parses everything, runs the vocabulary gate
+./release.sh --check --net       # the above, plus all three judges offline
+./qa-browser.sh                  # the same judges, in the browser
 ```
 
-## Checking it
+`build.py` alone refuses a note outside its word budget, a unit missing one of
+its three parts, an exercise using a construct from later in the track, and a
+`@diagnose` that no `@expect` accounts for. `--net` runs ruff, mypy and CPython
+over every starter and solution. `qa-browser.sh` then checks that the browser
+reaches the same verdict the offline run did, which is the only way to catch the
+two paths drifting apart.
 
-```sh
-./release.sh --check         # parsing, tokenizer, vim mode, staleness
-./release.sh --check --net   # the above, plus every starter and solution
-                             # run past all three real judges
-```
+## The drills
 
-`--net` is the one that matters. It asserts that each starter still produces the
-verdict its prose describes, that every code a judge emits has an explanation
-written for it, and that each starter still **fails its own hidden tests**, the
-check that stops an exercise quietly becoming already-solved when the tools
-change their diagnostics.
-
-## Layout
+Exactly fifteen, each a `## ` question, three or more options, exactly one
+marked `(x)`, and a `> ` line explaining why.
 
 ```
-content/       markdown you write
-  units/       the notes
-  ex/          eight exercises per unit
-  drills/      fifteen drills per unit
-  gloss/       glossary terms
-  projects/    multi-stage builds
-build.py       markdown -> JSON, plus the validator and the TRACK manifest
-data/          generated JSON, committed on purpose
-index.html     the shell
-assets/app.css every token and every rule
-assets/app.js  routing, views, progress, search
-assets/workbench.js  the tokenizer, the three judges, the verdict
-assets/vim.js  the editor's vim mode
+## What does `del x` remove?
+- ( ) The object `x` refers to
+- (x) The name `x` from its namespace
+- ( ) Both, always
+> `del` unbinds a name. The object is destroyed only if that was the last reference.
 ```
 
-`data/` is committed so the site serves from any static host with no build step,
-and `release.sh` fails if it disagrees with `content/`.
+The explanation is shown whether the reader was right or wrong, so write it as
+teaching rather than as a verdict.
 
-## Writing for it
+## The glossary
 
-`docs/AUTHORING.md` is the contract. The short version: eight exercises and
-fifteen drills per unit, a note between 1,400 and 2,600 words, hints and never
-solutions, and every judge complaint explained in prose keyed to the exact code.
+`content/gloss/*.md`, one `## Term` per entry, at least eight words of
+definition. `[[other-term]]` links to another entry. Terms are cheap and worth
+writing as you go: anything a note uses as though the reader already knows it
+belongs here.
 
-## Credits
+## Generated pages
 
-Vim mode is ported from [the Rust Handbook](https://github.com/madalintat/rust-handbook)
-(MIT), whose shape this project follows throughout.
+Two pages have no source file and must not be written by hand:
+
+- **`#/errors`** is built from every `@diagnose` in the book.
+- **`#/search`** is built from notes, sections, exercise prose and glossary
+  terms.
+
+Both are regenerated by `python3 build.py`, which is why `data/` is committed
+and why `release.sh` fails when it is stale.
+
+## Prose rules
+
+- Second person. The reader is doing something, not being lectured.
+- Name the thing, then say what it costs. Never introduce a feature without the
+  case where it is the wrong answer.
+- No exclamation marks, no "simply", no "just", no "obviously". If it were
+  obvious the unit would not exist.
+- Prefer the specific to the general: `257 is 257` beats "identity comparisons
+  can be surprising".
+- British spelling, Oxford commas off.
