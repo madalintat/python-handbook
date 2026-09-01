@@ -22,6 +22,14 @@ await useOrCreateTaskSpace('python handbook qa')
 await gotoAndWait('http://127.0.0.1:8848/#/work/00-toolchain/1', { timeout: 30 })
 await cdp('Page.reload', { ignoreCache: true })
 await wait(5)
+// Anything typed into an editor by hand is saved per exercise, and the router
+// does not remount a route it is already on, so clear the saved code and leave
+// the work view before the sweep starts on it.
+await js(String.raw`(() => {
+  Object.keys(localStorage).filter(k => k.startsWith('ph.code.')).forEach(k => localStorage.removeItem(k));
+  location.hash = '/track';
+})()`)
+await wait(2)
 
 /* Warm the interpreter before the per-unit sweeps. Installing mypy from PyPI
    takes longer than one Runtime.evaluate is allowed to run, so doing it inside

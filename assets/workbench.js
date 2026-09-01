@@ -137,10 +137,21 @@ async function getPyodide(say) {
   });
 }
 
+/* Anything the reader writes that drives an event loop -- asyncio.run, and so
+   run_until_complete under it -- has to suspend the WebAssembly stack and hand
+   control back to the browser. That only works when Python was entered through
+   a call that can suspend, which is what callPromising does; a plain call gets
+   "Cannot stack switch because the Python entrypoint was a synchronous
+   function". It needs JSPI, so browsers without it take the ordinary path and
+   everything except a running event loop behaves identically. Nothing in the
+   book's own exercises depends on which path ran. */
 async function judgeRun(src, tests, say) {
   const py = await getPyodide(say);
   const fn = py.globals.get("run_json");
-  try { return JSON.parse(fn(src, tests)); }
+  try {
+    const raw = fn.callPromising ? await fn.callPromising(src, tests) : fn(src, tests);
+    return JSON.parse(raw);
+  }
   catch (err) { forgetIfFatal(err); throw err; }
   finally { try { fn.destroy?.(); } catch {} }
 }
