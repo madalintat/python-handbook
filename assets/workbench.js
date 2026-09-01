@@ -78,6 +78,18 @@ export const cached = (key, make) => {
   return memo[key];
 };
 
+/* A Pyodide that resolved and later died is still cached, and every call after
+   that reports "already fatally failed" for the life of the tab. runner.py keeps
+   ordinary runaway recursion from getting here, but a big enough allocation
+   still can, so drop the interpreter and let the next run build a fresh one
+   instead of leaving the page permanently unable to judge anything. */
+const forgetIfFatal = err => {
+  if (/fatally failed|call stack size exceeded|memory access out of bounds/i.test(err?.message || "")) {
+    memo.py = null;
+    memo.mypy = null;
+  }
+};
+
 async function getRuff() {
   return cached("ruff", async () => {
     const { ruff } = await judges();
@@ -113,7 +125,11 @@ async function getPyodide(say) {
     // filenames, the line numbers and the exception names cannot drift apart.
     const [{ loadPyodide }, runner] = await Promise.all([
       import(`${cpython.cdn}pyodide.mjs`),
-      fetch("assets/runner.py").then(r => r.text()),
+      // no-cache, not no-store: revalidate every load, and take the 304 when
+      // nothing changed. This one file defines what a verdict means, and it has
+      // to match the build.py that produced the exercises. A stale copy from the
+      // browser cache would judge the reader's code by an older set of rules.
+      fetch("assets/runner.py", { cache: "no-cache" }).then(r => r.text()),
     ]);
     const py = await loadPyodide({ indexURL: cpython.cdn });
     py.runPython(runner);
@@ -125,7 +141,8 @@ async function judgeRun(src, tests, say) {
   const py = await getPyodide(say);
   const fn = py.globals.get("run_json");
   try { return JSON.parse(fn(src, tests)); }
-  finally { fn.destroy?.(); }
+  catch (err) { forgetIfFatal(err); throw err; }
+  finally { try { fn.destroy?.(); } catch {} }
 }
 
 async function getMypy(say) {
@@ -156,7 +173,9 @@ async function judgeMypy(src, say) {
   const py = await getMypy(say);
   const fn = py.globals.get("_ph_mypy");
   let raw;
-  try { raw = fn(src); } finally { fn.destroy?.(); }
+  try { raw = fn(src); }
+  catch (err) { forgetIfFatal(err); throw err; }
+  finally { try { fn.destroy?.(); } catch {} }
   const out = [];
   for (const line of String(raw).split("\n")) {
     const m = line.match(/^.*?:(\d+):(?:\d+:)?\s*error:\s*(.*?)\s*\[([a-z-]+)\]\s*$/);

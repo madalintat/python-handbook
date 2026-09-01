@@ -191,7 +191,7 @@ class Watched(list):
 
 assert drain(Watched([1, 2, 3])) == [1, 2, 3]
 assert drain(Watched([])) == []
-assert drain(Watched(range(20000))) == list(range(20000))
+assert drain(Watched(range(2000))) == list(range(2000))
 assert Watched.front_pops == 0, (
     f"took from the front {Watched.front_pops} times, "
     "and each one shifts every remaining element down a place"

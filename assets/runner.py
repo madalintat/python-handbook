@@ -15,6 +15,16 @@ import traceback
 SOURCE_NAME = "your_code.py"
 TESTS_NAME = "hidden_tests.py"
 
+# Runaway recursion is an ordinary mistake, and in the browser it is a fatal one:
+# Python frames sit on the WebAssembly stack, so hitting CPython's default limit
+# of 1000 overruns that stack first. Pyodide then reports "already fatally failed"
+# and every later run in the tab is dead until the reader reloads. A lower limit
+# makes Python raise RecursionError while there is still stack left, so the
+# mistake reads as a verdict instead of breaking the page. It has to be low
+# enough to leave room for the frames Pyodide itself is holding, and high enough
+# for any recursion this book asks anyone to write.
+RECURSION_LIMIT = 300
+
 
 def run(src, tests):
     """Execute the reader's code and then the hidden tests, in one namespace.
@@ -39,6 +49,8 @@ def run(src, tests):
 
     captured = io.StringIO()
     real_stdout, sys.stdout = sys.stdout, captured
+    real_limit = sys.getrecursionlimit()
+    sys.setrecursionlimit(RECURSION_LIMIT)
     try:
         exec(compile(src, SOURCE_NAME, "exec"), ns)
         exec(compile(tests, TESTS_NAME, "exec"), ns)
@@ -51,6 +63,7 @@ def run(src, tests):
                 "exc": type(exc).__name__, "msg": str(exc), "tb": tb}
     finally:
         sys.stdout = real_stdout
+        sys.setrecursionlimit(real_limit)
 
 
 def run_json(src, tests):

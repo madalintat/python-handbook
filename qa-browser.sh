@@ -11,14 +11,28 @@
 # Needs: a server on 8848 (python3 -m http.server 8848) and the ego-browser CLI.
 # It reads globalThis.__phVerdict, which assets/workbench.js sets after each run.
 #
-#   ./qa-browser.sh
+#   ./qa-browser.sh                 every unit
+#   ./qa-browser.sh 18 19-attributes  only units whose slug starts with one of these
 set -uo pipefail
 cd "$(dirname "$0")"
-ego-browser nodejs <<'EOF'
+# ego's node runtime does not inherit this shell's environment, so the filter is
+# substituted into the script before it is piped in.
+sed "s|@@ONLY@@|$*|" <<'EOF' | ego-browser nodejs
 await useOrCreateTaskSpace('python handbook qa')
 await gotoAndWait('http://127.0.0.1:8848/#/work/00-toolchain/1', { timeout: 30 })
 await cdp('Page.reload', { ignoreCache: true })
 await wait(5)
+
+/* Warm the interpreter before the per-unit sweeps. Installing mypy from PyPI
+   takes longer than one Runtime.evaluate is allowed to run, so doing it inside
+   a sweep times the whole sweep out. Polling from here keeps each evaluate short. */
+await js(String.raw`(() => { globalThis.__phVerdict = null; document.querySelector('#run')?.click(); })()`)
+let warm = false
+for (let i = 0; i < 30 && !warm; i++) {
+  await wait(10)
+  warm = await js(String.raw`!!globalThis.__phVerdict`)
+}
+cliLog(warm ? 'judges warm' : 'WARNING: judges did not warm up in 300s')
 
 const HARNESS = String.raw`(async (slug) => {
   const until = async (fn, ms = 90000) => {
@@ -71,7 +85,10 @@ const HARNESS = String.raw`(async (slug) => {
 })`;
 
 const manifest = await js(`fetch('data/manifest.json').then(r => r.json())`)
+const only = '@@ONLY@@'.split(/\s+/).filter(Boolean)
 const slugs = manifest.track.filter(u => u.hasEx).map(u => u.slug)
+  .filter(s => !only.length || only.some(o => s.startsWith(o)))
+if (!slugs.length) { cliLog('no unit matched ' + JSON.stringify(only)); }
 let total = 0, bad = 0
 for (const slug of slugs) {
   const rows = await js(HARNESS + `(${JSON.stringify(slug)})`)

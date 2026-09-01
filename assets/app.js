@@ -2,7 +2,6 @@
 
 import { highlightPython, mountWorkbench, esc, inline, cached, flag, setFlag, judges } from "./workbench.js";
 
-const main = document.getElementById("main");
 const $ = (s, r = document) => r.querySelector(s);
 
 /* ------------------------------------------------------------------ data */
@@ -34,10 +33,8 @@ const store = {
 const RAIL_KEY = "ph.rail";
 const railCollapsed = () => flag(RAIL_KEY);
 
-const sheet = document.getElementById("sheet");
-const sheetBody = document.getElementById("sheet-body");
-const sheetBtn = document.getElementById("sheetbtn");
-sheetBtn?.addEventListener("click", () => sheet.classList.toggle("open"));
+// Bound by start(), not at import: the module has to load without a document.
+let main, sheet, sheetBody, sheetBtn;
 sheet?.addEventListener("click", e => { if (e.target.closest("a")) sheet.classList.remove("open"); });
 
 /* ------------------------------------------------------------------ markdown
@@ -47,9 +44,9 @@ sheet?.addEventListener("click", e => { if (e.target.closest("a")) sheet.classLi
 
 const slugify = s => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
-const BLOCK = /^(```|#{2,4}\s|[-*]\s|\|)/;
+const BLOCK = /^(```|#{2,4}\s|[-*]\s|\d+\.\s|\|)/;
 
-function md(src) {
+export function md(src) {
   const out = [];
   const lines = src.split("\n");
   let i = 0;
@@ -82,10 +79,19 @@ function md(src) {
       i++;
       continue;
     }
-    if (/^[-*]\s/.test(line)) {
+    // Bulleted and numbered lists differ only in their marker and their tag.
+    const marker = /^([-*]|\d+\.)\s+/;
+    const bullet = marker.exec(line);
+    if (bullet) {
+      const tag = bullet[1] === "-" || bullet[1] === "*" ? "ul" : "ol";
       const items = [];
-      while (i < lines.length && /^[-*]\s/.test(lines[i])) items.push(inline(lines[i++].slice(2)));
-      out.push(`<ul>${items.map(t => `<li>${t}</li>`).join("")}</ul>`);
+      let m;
+      while (i < lines.length && (m = marker.exec(lines[i]))) {
+        const numbered = m[1] !== "-" && m[1] !== "*";
+        if (numbered !== (tag === "ol")) break;
+        items.push(inline(lines[i++].slice(m[0].length)));
+      }
+      out.push(`<${tag}>${items.map(t => `<li>${t}</li>`).join("")}</${tag}>`);
       continue;
     }
     if (!line.trim()) { i++; continue; }
@@ -689,39 +695,50 @@ async function route() {
   maybeCompanion();
 }
 
-addEventListener("hashchange", route);
+/* This file is a module of functions and also the whole application. index.html
+   calls start(); importing it does nothing on its own, which is what lets a test
+   runner reach md() and the rest without a DOM. It is the same separation this
+   book teaches for Python, where a module that runs on import cannot be reused. */
+export function start() {
+  main = document.getElementById("main");
+  sheet = document.getElementById("sheet");
+  sheetBody = document.getElementById("sheet-body");
+  sheetBtn = document.getElementById("sheetbtn");
+  sheetBtn?.addEventListener("click", () => sheet.classList.toggle("open"));
 
-addEventListener("keydown", e => {
-  const typing = /^(INPUT|TEXTAREA)$/.test(document.activeElement?.tagName);
-  if (e.key === "/" && !typing && !e.metaKey && !e.ctrlKey) {
-    e.preventDefault();
-    location.hash = "#/search/";
+  addEventListener("hashchange", route);
+
+  addEventListener("keydown", e => {
+    const typing = /^(INPUT|TEXTAREA)$/.test(document.activeElement?.tagName);
+    if (e.key === "/" && !typing && !e.metaKey && !e.ctrlKey) {
+      e.preventDefault();
+      location.hash = "#/search/";
+    }
+  });
+
+  const navsearch = $("#navsearch");
+  if (navsearch) {
+    navsearch.onkeydown = e => {
+      if (e.key === "Enter") location.hash = `#/search/${encodeURIComponent(navsearch.value)}`;
+      if (e.key === "Escape") navsearch.blur();
+    };
   }
-});
 
-const navsearch = $("#navsearch");
-if (navsearch) {
-  navsearch.onkeydown = e => {
-    if (e.key === "Enter") location.hash = `#/search/${encodeURIComponent(navsearch.value)}`;
-    if (e.key === "Escape") navsearch.blur();
+  $("#theme").onclick = () => {
+    const now = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+    document.documentElement.dataset.theme = now;
+    try { localStorage.setItem("ph.theme", now); } catch {}
   };
+
+  touchStreak();
+
+  // The footer states which judges the book was verified against. Rendered from
+  // data/judges.json so it cannot claim a version nothing pins.
+  judges().then(j => {
+    const el = $("#footversions");
+    if (!el) return;
+    el.innerHTML = `Built and verified against CPython ${esc(j.cpython.version)} and `
+      + `ruff ${esc(j.ruff.version)}, with mypy installed from PyPI at run time.<br>` + el.innerHTML;
+  }).catch(() => {});
+  route();
 }
-
-$("#theme").onclick = () => {
-  const now = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
-  document.documentElement.dataset.theme = now;
-  try { localStorage.setItem("ph.theme", now); } catch {}
-};
-
-touchStreak();
-
-// The footer states which judges the book was verified against. Rendered from
-// data/judges.json so it cannot claim a version nothing pins.
-judges().then(j => {
-  const el = $("#footversions");
-  if (!el) return;
-  el.innerHTML = `Built and verified against CPython ${esc(j.cpython.version)} and `
-    + `ruff ${esc(j.ruff.version)}, with mypy installed from PyPI at run time.<br>` + el.innerHTML;
-}).catch(() => {});
-
-route();

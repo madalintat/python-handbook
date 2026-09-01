@@ -253,7 +253,6 @@ def parse_unit(path: Path) -> dict:
     # source, so the build refuses it rather than letting it through.
     prose = re.sub(r"^```.*?^```", "", body, flags=re.M | re.S)
     unsupported = {
-        "ordered list": r"^\d+\. ",
         "blockquote": r"^> ",
         "image": r"!\[",
         "heading deeper than ####": r"^#{5,} ",

@@ -35,9 +35,9 @@ class Watched(list):
 assert sorted(shared_names(["a", "b", "c"], Watched(["b", "c", "d"]))) == ["b", "c"]
 assert shared_names([], Watched(["a"])) == []
 
-big = [str(i) for i in range(20000)]
-other = Watched(str(i) for i in range(10000, 30000))
-assert len(shared_names(big, other)) == 10000
+big = [str(i) for i in range(2000)]
+other = Watched(str(i) for i in range(1000, 3000))
+assert len(shared_names(big, other)) == 1000
 assert Watched.scans == 0, (
     f"searched the list {Watched.scans} times, "
     "and each search walks it from the start"
