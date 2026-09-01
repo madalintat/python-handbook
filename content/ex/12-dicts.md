@@ -171,7 +171,7 @@ def register(groups, kind, item, made):
 @expect silent
 @hint A set has no order. Whatever comes out is not the order that went in.
 @hint A dict does preserve insertion order, and `dict.fromkeys` uses that.
-@diagnose silent Nothing raised, and the values came back in an order that has nothing to do with the input. A set is unordered: anything that depends on the order of one is depending on nothing, even when a small set of small integers happens to look sorted. Dicts have preserved insertion order as a language guarantee since 3.7, so `dict.fromkeys(items)` deduplicates *and* keeps first-seen order, and `list(dict.fromkeys(items))` is the idiom for this exact job. The alternative, a set for the seen-check plus a list for the output, is what you write when you also need to filter as you go.
+@diagnose silent Nothing raised, and the values came back in an order that has nothing to do with the input. For small integers that order looks suspiciously sorted, because an integer hashes to itself; for strings it changes between runs, because string hashing is randomised per process. A set is unordered: anything that depends on the order of one is depending on nothing, even when a small set of small integers happens to look sorted. Dicts have preserved insertion order as a language guarantee since 3.7, so `dict.fromkeys(items)` deduplicates *and* keeps first-seen order, and `list(dict.fromkeys(items))` is the idiom for this exact job. The alternative, a set for the seen-check plus a list for the output, is what you write when you also need to filter as you go.
 
 ~~~starter
 def first_unique(items):
@@ -180,9 +180,11 @@ def first_unique(items):
 ~~~
 
 ~~~tests
-assert first_unique(["b", "a", "b", "c", "a"]) == ["b", "a", "c"]
+# small integers hash to themselves, so a set of them has a stable order and
+# this test cannot pass by luck the way one over strings could
+assert first_unique([3, 1, 3, 2, 1]) == [3, 1, 2]
+assert first_unique([5, 4]) == [5, 4]
 assert first_unique([]) == []
-assert first_unique(["x"]) == ["x"]
 ~~~
 
 ~~~solution

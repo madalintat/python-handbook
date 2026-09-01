@@ -11,6 +11,7 @@ import argparse
 import ast
 import concurrent.futures
 import json
+import os
 import re
 import subprocess
 import sys
@@ -787,15 +788,28 @@ def _run_all(cases: dict[str, tuple[str, str]]) -> dict[str, dict]:
     to be kept in step by hand. One subprocess per case, because each runs
     arbitrary code, but they are independent and go through a thread pool.
     """
+    def once(src, tests, seed):
+        out = _run([sys.executable, str(RUNNER), "--stdin"],
+                   input=json.dumps({"src": src, "tests": tests}),
+                   env={**os.environ, "PYTHONHASHSEED": seed})
+        try:
+            return json.loads(out.stdout)
+        except json.JSONDecodeError:
+            return {"ok": False, "out": "", "exc": "RunnerFailed",
+                    "msg": out.stderr.strip()[-400:], "tb": ""}
+
     def one(item):
         name, (src, tests) = item
-        out = _run([sys.executable, str(RUNNER), "--stdin"],
-                   input=json.dumps({"src": src, "tests": tests}))
-        try:
-            return name, json.loads(out.stdout)
-        except json.JSONDecodeError:
-            return name, {"ok": False, "out": "", "exc": "RunnerFailed",
-                          "msg": out.stderr.strip()[-400:], "tb": ""}
+        # Twice, under different hash seeds. String hashing is randomised per
+        # process, so anything that depends on the order of a set of strings
+        # passes or fails by luck, and an exercise that does is worse than one
+        # that is simply wrong: it goes green often enough to be committed.
+        first = once(src, tests, "0")
+        second = once(src, tests, "12345")
+        if (first["ok"], first["exc"]) != (second["ok"], second["exc"]):
+            return name, {**first, "flaky": (first["exc"] or "passed",
+                                             second["exc"] or "passed")}
+        return name, first
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
         return dict(pool.map(one, cases.items()))
@@ -921,6 +935,14 @@ def validate() -> int:
     for base, (label, ex) in sorted(labels.items()):
         s_static, s_run = static[f"{base}__starter"], runs[f"{base}__starter"]
         v_static, v_run = static[f"{base}__solution"], runs[f"{base}__solution"]
+
+        for which, verdict in (("starter", s_run), ("solution", v_run)):
+            if "flaky" in verdict:
+                a, b = verdict["flaky"]
+                print(f"FAIL {which:8} {label}: FLAKY. Under one hash seed it "
+                      f"{a}, under another it {b}. Something here depends on the "
+                      f"order of a set, which is randomised per process.")
+                failures += 1
 
         # 1. the starter produces the verdict its prose describes
         for problem in _satisfies(ex["expects"], s_static, s_run):

@@ -93,6 +93,23 @@ At least one, as many as the exercise deserves. A hint is a sentence that makes
 the reader see the error. It is never the corrected code. Solutions exist in
 this repository and are compiled by the build, and are deliberately never shown.
 
+### Hidden tests must not depend on luck
+
+String hashing is randomised per process, so the order of a set of strings
+changes between runs. A test that asserts anything about that order passes or
+fails by chance, which is worse than a test that is simply wrong: it goes green
+often enough to be committed and then fails in someone else's run.
+
+Two exercises have been caught by this. Both were fixed the same way: assert on
+something the language guarantees. Small integers hash to themselves, so a set of
+them has a stable order; dictionaries preserve insertion order by specification;
+sorting is stable. If a test needs an order, it should come from one of those and
+not from a set.
+
+`--validate` runs every case twice under different hash seeds and fails an
+exercise whose verdict differs between them. That catches the obvious cases and
+cannot prove their absence, so the rule above is the real defence.
+
 ### What `--validate` actually enforces
 
 For every exercise, against real ruff, real mypy and real CPython:
@@ -102,7 +119,8 @@ For every exercise, against real ruff, real mypy and real CPython:
 3. the starter **fails its own hidden tests**, otherwise the exercise is
    already solved and nobody would notice;
 4. a `silent` starter fails with `AssertionError` specifically, not by crashing;
-5. the solution passes the tests and is clean under both static judges.
+5. the solution passes the tests and is clean under both static judges;
+6. neither verdict changes when the hash seed does.
 
 Rule 3 is the one that stops content rotting. Rule 4 is what keeps `silent`
 meaning what it says.
