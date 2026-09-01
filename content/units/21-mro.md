@@ -1,0 +1,141 @@
+---
+slug: 21-mro
+title: Inheritance and the MRO
+---
+
+Unit 18 covered inheritance in a paragraph on purpose, because most of what people believe about it in Python is either wrong or specific to another language. This unit is the correction, and it turns on one sentence: `super()` does not mean "my parent class".
+
+## What the MRO is
+
+Every class has a **method resolution order**, a flat list of classes searched in sequence for any attribute:
+
+```python
+class Animal: pass
+class Dog(Animal): pass
+
+Dog.__mro__     # (Dog, Animal, object)
+```
+
+Attribute lookup walks that list and takes the first match. That is all inheritance is: unit 19's step 1 and step 3 search this list rather than a single class. The list is computed once, when the class is created, by an algorithm called **C3 linearisation**.
+
+C3 guarantees three things, and they are worth knowing because they are what make the list predictable:
+
+- A class always comes before its bases.
+- The order bases were written in is preserved.
+- Every class appears exactly once.
+
+When no consistent order satisfies all three, Python refuses to create the class at all, with `TypeError: Cannot create a consistent method resolution order`. That is a better outcome than the alternative, which in languages that guess is a silent choice you find out about in production.
+
+## `super()` follows the MRO, not the parent
+
+Here is the sentence that matters. `super()` in a method of class `C`, called on an instance whose type is `T`, looks for the next class **after `C` in `type(T).__mro__`**. The MRO belongs to the instance's class, not to the class the method was written in.
+
+With single inheritance that distinction never shows itself, because the next class after `C` is always `C`'s base. Which is why "super means my parent" survives so long, and why it breaks so confusingly the first time it is wrong:
+
+```python
+class A:
+    def hello(self):
+        return "A"
+
+
+class B(A):
+    def hello(self):
+        return "B then " + super().hello()
+
+
+class C(A):
+    def hello(self):
+        return "C then " + super().hello()
+
+
+class D(B, C):
+    pass
+
+
+D().hello()     # 'B then C then A'
+```
+
+Read `B.hello` again. It calls `super().hello()`, and it gets `C`, a class `B` does not inherit from and whose author it may never have met. `D.__mro__` is `(D, B, C, A, object)`, `B` is followed by `C`, and that is what `super()` means. `B`'s author had no way to know this and did not need to: they wrote "then whatever comes next", which is what `super()` says.
+
+That is the design. `super()` is not a way to reach up; it is a way to hand off. Each class does its part and delegates the rest, and the MRO decides what "the rest" is at the moment the instance's class is created.
+
+## The rules that follow
+
+Once `super()` is a hand-off rather than a parent reference, a few habits stop being style and start being correctness.
+
+**Every class in a cooperative chain must call `super()`.** One that forgets truncates the chain, and every class after it in the MRO is silently skipped. Nothing raises. The classic symptom is an `__init__` that never ran and an attribute that is missing much later.
+
+**`object` is at the end of every MRO, and it accepts nothing.** `super().__init__()` from the last class before `object` reaches `object.__init__`, which takes no arguments. This is why cooperative `__init__` chains conventionally pass keyword arguments and let each class take what it recognises out of `**kwargs`.
+
+**Call `super()` with no arguments.** The zero-argument form is compiled specially: Python gives the method a hidden reference to the class it was defined in, and reads the instance from the first parameter. `super(B, self)` means the same thing and is what you must write outside a class body, but inside one it is duplication that goes wrong when the class is renamed.
+
+**Never hardcode the base.** `A.hello(self)` skips the MRO entirely and calls exactly that class, which is right only when you specifically mean "not the next one, this one". In a diamond it silently runs `A` twice and never runs `C`.
+
+## Why C3 refuses
+
+The refusal is worth understanding, because when you meet it the message says what went wrong and not why.
+
+```python
+class A: pass
+class B(A): pass
+class C(A, B): pass     # TypeError
+```
+
+`C` lists `A` before `B`, so the order it was written in demands `A` comes first. But `B` is a subclass of `A`, and the first guarantee demands a class comes before its bases, so `B` must come first. The two requirements contradict each other, and no ordering satisfies both. Python could pick one and move on; instead it refuses, because a hierarchy where the answer depends on which rule the interpreter happens to prefer is a hierarchy nobody can reason about.
+
+Almost every real instance of this error is the same mistake in a longer form: a base class listed alongside one of its own subclasses. The fix is to remove the redundant base, which was contributing nothing anyway, since inheriting from `B` already brings `A`.
+
+## Cooperative `__init__` in practice
+
+The `**kwargs` convention is worth seeing once, because the shape looks strange until you know what it is defending against:
+
+```python
+class Timestamped:
+    def __init__(self, *, created_at=None, **kwargs):
+        super().__init__(**kwargs)
+        self.created_at = created_at
+
+
+class Tagged:
+    def __init__(self, *, tags=(), **kwargs):
+        super().__init__(**kwargs)
+        self.tags = list(tags)
+
+
+class Note(Timestamped, Tagged):
+    def __init__(self, text, **kwargs):
+        super().__init__(**kwargs)
+        self.text = text
+```
+
+`Note("hi", tags=["a"], created_at=1)` works, and no class in the chain knows what the others accept. Each one takes its own keywords out, passes the rest along, and by the time `object.__init__` is reached the dict is empty, which is exactly the condition `object` requires. Keyword-only parameters, the `*` in the signature, are not decoration here: they stop a positional argument meant for one class from silently landing in another.
+
+The order the assignments happen in is worth noticing too. Each class calls `super().__init__` **before** setting its own attributes, so the chain runs to the end and unwinds, and every class's setup happens after everything further along the MRO has finished. Reverse it and you get the opposite order, which matters the moment one class's setup reads something another one set.
+
+## When multiple inheritance is the right call
+
+Most of the time, it is not. The honest hierarchy in Python is shallow: one base class, or none. Deep hierarchies make the MRO long, and a long MRO is a lookup order nobody has in their head.
+
+There is one shape where multiple inheritance genuinely earns its place, and it is the **mixin**: a small class that supplies one orthogonal capability, has no state of its own or almost none, is never instantiated alone, and is written to be combined. `class Report(JSONSerialisable, Timestamped, Base)` reads well and works because each mixin does one thing and cooperates through `super()`.
+
+The test for whether you have a mixin or a mess is whether the classes are independent. If two of them touch the same attribute, or if reordering them changes behaviour in a way that surprises you, they are not orthogonal and combining them is a bug waiting for a maintainer.
+
+Before reaching for it at all, check the alternatives, because two of them are usually better. **Composition**: hold the other object as an attribute and call it. This is almost always simpler, and it is the answer whenever the relationship is "has a" rather than "is a". **Protocols**, from unit 22 and unit 24: if all you need is for several unrelated types to support the same operations, Python never required a shared base class for that.
+
+## Reading a hierarchy you did not write
+
+Three tools, in the order you should reach for them.
+
+`Cls.__mro__` prints the search order. If an attribute is coming from somewhere unexpected, the answer is in that tuple, in that order.
+
+`inspect.getmro(Cls)` is the same list, and `Cls.mro()` is the same again as a list rather than a tuple.
+
+`vars(Cls)` shows only what that class itself defines, with nothing inherited, which is what you want when the question is "who actually wrote this method". Unit 20 made the same suggestion for the same reason: `Cls.x` computes an answer, and `vars(Cls)["x"]` shows you the object.
+
+Between the MRO and `vars`, "where does this behaviour come from" is a two-line question in a REPL rather than an afternoon.
+
+There is a fourth tool for the case where the hierarchy is not the problem but the abstraction is. `abc.ABC` and `@abstractmethod` let a base class declare that a method exists without implementing it, and refuse to instantiate any subclass that has not supplied one. That refusal happens at construction, with a message naming every method still missing, rather than at the first call to the one you forgot. It is worth reaching for when a base class is genuinely a contract several implementations must meet, and worth skipping when the base has real behaviour and the subclasses merely extend it.
+
+## `isinstance`, and what it does not tell you
+
+`isinstance(x, C)` is true when `C` is in `type(x).__mro__`, so it is a question about the MRO. It is also the wrong question more often than people expect. A function that branches on `isinstance` to decide which of several types it was given is usually a function that should have asked the object to do something instead, which is unit 22's subject. Keep `isinstance` for boundaries, where you are validating input from somewhere you do not control, and for the narrow cases where two types genuinely need different handling and neither can be given a common method.
