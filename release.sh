@@ -60,6 +60,12 @@ if [ "${*}" != "${*/--browser/}" ]; then
   else
     browser_step "every starter, judged in the browser" ./qa-browser.sh
 
+    # A starter fails on its first stub, so the sweep above can pass without a
+    # project's real code ever having run inside Pyodide. This is the half
+    # where a divergence lives: event loops, clocks, recursion and the cycle
+    # collector all behave differently under WebAssembly.
+    browser_step "every project solution, run in the browser" ./qa-solutions.sh
+
     browser_step "every route, at every width, in both themes" ./qa-views.sh
 
     browser_step "every control" ./qa-controls.sh
