@@ -225,7 +225,7 @@ export const setFlag = (k, on) => { try { localStorage.setItem(k, on ? "1" : "0"
 /* ---------------------------------------------------------------- focus mode
 
    A stage's later starters are mostly the reader's own earlier work: stage
-   twelve of the GPT is 994 lines of which 19 are the thing to write. Focus mode
+   twelve of the GPT is 994 lines of which 13 are the thing to write. Focus mode
    shows those 19 and collapses the rest into a row that says how much is
    behind it.
 
@@ -242,7 +242,7 @@ export const setFlag = (k, on) => { try { localStorage.setItem(k, on ? "1" : "0"
 
 export const FOLD = /^# ⋯ \d+ lines? you already built ⋯$/;
 
-export function findLines(hay, needle, from) {
+function findLines(hay, needle, from) {
   if (!needle.length) return from;
   outer: for (let i = from; i + needle.length <= hay.length; i++) {
     for (let j = 0; j < needle.length; j++) if (hay[i + j] !== needle[j]) continue outer;
@@ -253,6 +253,22 @@ export function findLines(hay, needle, from) {
 
 /* The starter, cut at the run boundaries the build worked out. Fixed for the
    life of the editor: it is what "carried" means for this stage. */
+/* Work lines grouped into runs. Lines within three of each other are one
+   region, because a blank line or two between stubs is not a reason to stop.
+
+   Exported because `test_focus.mjs` needs the same rule, and a second copy of
+   it there would let the threshold change here while the test went on proving
+   the old one. That is the lesson runner.py taught this project already. */
+export function groupRuns(work) {
+  const runs = [];
+  for (const line of [...work].sort((a, b) => a - b)) {
+    const last = runs[runs.length - 1];
+    if (last && line - last[1] <= 3) last[1] = line;
+    else runs.push([line, line]);
+  }
+  return runs;
+}
+
 export function cutStarter(starter, runs) {
   const lines = starter.split("\n");
   const parts = [];
@@ -291,11 +307,7 @@ export function derive(text, carriedParts) {
    first keystroke. A line inside a folded region lands on the row that stands
    for it, which is where a reader would look for it. */
 export function shownRowOf(segs, text, full) {
-  const pieces = [[]];
-  for (const line of text.split("\n")) {
-    if (FOLD.test(line)) pieces.push([]);
-    else pieces[pieces.length - 1].push(line);
-  }
+  const pieces = splitOnFolds(text);
   let atFull = 1, atShown = 1, piece = 0;
   for (const seg of segs) {
     if (seg.carried) {
@@ -313,7 +325,17 @@ export function shownRowOf(segs, text, full) {
   return atShown;
 }
 
-export function foldLine(n) {
+export /* The buffer cut at the fold rows: one piece of the reader's text per gap. */
+function splitOnFolds(text) {
+  const pieces = [[]];
+  for (const line of text.split("\n")) {
+    if (FOLD.test(line)) pieces.push([]);
+    else pieces[pieces.length - 1].push(line);
+  }
+  return pieces;
+}
+
+function foldLine(n) {
   return `# ⋯ ${n} line${n === 1 ? "" : "s"} you already built ⋯`;
 }
 
@@ -333,11 +355,7 @@ export function toFocus(segs) {
    work slots in order and anything left over goes on the end. Misplaced is
    recoverable; dropped is not. */
 export function fromFocus(text, segs) {
-  const pieces = [[]];
-  for (const line of text.split("\n")) {
-    if (FOLD.test(line)) pieces.push([]);
-    else pieces[pieces.length - 1].push(line);
-  }
+  const pieces = splitOnFolds(text);
   const folds = segs.filter(s => s.carried).length;
   const intact = pieces.length === folds + 1;
 
@@ -423,12 +441,17 @@ function buildEditor(host, initial, onRun, starter = initial, opts = {}) {
     }
     // The line count can only have changed if the text did.
     const n = textChanged ? v.split("\n").length : lastLines;
-    if (n !== lastLines) {
+    const linesMoved = n !== lastLines;
+    if (linesMoved) {
       gutterEl.innerHTML = '<div class="gl"></div>'.repeat(n);
       lastLines = n;
       lastMarks = null;          // the loop below fills in every label and mark
     }
-    if (textChanged || shownWork === null) {
+    // Only when the line count moved, and read from the flag rather than from
+    // lastLines, which the block above has already brought up to date. Typing
+    // inside a line cannot change which row a fold sits on, and this is one
+    // shownRowOf scan per work line.
+    if (linesMoved || shownWork === null) {
       shownWork = segs ? new Set([...workLines].map(shownRow)) : workLines;
     }
     const marks = [...errLines].join(",") + "|" + relTo + "|" + [...shownWork].join(",");
@@ -468,8 +491,14 @@ function buildEditor(host, initial, onRun, starter = initial, opts = {}) {
 
      Only when the caret has actually changed line, so that a reader who has
      scrolled away to look at something is not dragged back on a repaint. */
-  let lastCaretLine = -1;
+  let lastCaretLine = -1, lastCaretAt = -1;
   function reveal() {
+    // paint() calls this, and so does keyup, and for ordinary typing both fire
+    // for the same key. Reading selectionStart is free; slicing a thousand line
+    // buffer to count newlines is twelve microseconds, so the cheap check comes
+    // first, the way `if (textChanged)` does eight lines up.
+    if (ta.selectionStart === lastCaretAt) return;
+    lastCaretAt = ta.selectionStart;
     const line = ta.value.slice(0, ta.selectionStart).split("\n").length - 1;
     if (line === lastCaretLine) return;
     lastCaretLine = line;
@@ -605,12 +634,7 @@ function buildEditor(host, initial, onRun, starter = initial, opts = {}) {
   /* The work is rarely one block: nearly half of all stages scatter it, and one
      spreads it over eleven places. So this walks the runs rather than the
      lines, and wraps round at the end. */
-  const runs = [];
-  for (const line of [...workLines].sort((a, b) => a - b)) {
-    const last = runs[runs.length - 1];
-    if (last && line - last[1] <= 3) last[1] = line;
-    else runs.push([line, line]);
-  }
+  const runs = groupRuns(workLines);
   let atRun = -1;
 
   function goToLine(line) {
@@ -621,7 +645,7 @@ function buildEditor(host, initial, onRun, starter = initial, opts = {}) {
     const at = lines.slice(0, Math.max(0, row - 1)).join("\n").length + (row > 1 ? 1 : 0);
     ta.focus();
     ta.setSelectionRange(at, at);
-    lastCaretLine = -1;                 // force the reveal even onto the same line
+    lastCaretLine = lastCaretAt = -1;   // force the reveal even onto the same line
     reveal();
     paint();
   }
@@ -667,7 +691,7 @@ function buildEditor(host, initial, onRun, starter = initial, opts = {}) {
     }
     shownWork = null;                    // recomputed on the next paint
     vim.sync();
-    lastCaretLine = -1;
+    lastCaretLine = lastCaretAt = -1;
     paint();
     ed.scrollTop = 0;
     return true;
@@ -773,6 +797,24 @@ function renderOutline(host, outline, editor) {
   });
 }
 
+/* Which lines are the reader's work, in the buffer they are actually looking
+   at. Straight from the build when nothing has been edited, and located again
+   when something has. Empty when the question cannot be answered, which is
+   what turns every one of these aids off at once. */
+function workMarks(ex, saved) {
+  if (!ex.work || !ex.work.length) return [];
+  if (!saved || saved === ex.starter) return ex.work;
+  const segs = derive(saved, cutStarter(ex.starter, groupRuns(ex.work)));
+  if (!segs) return [];
+  const lines = [];
+  let at = 1;
+  for (const seg of segs) {
+    if (!seg.carried) for (let i = 0; i < seg.lines.length; i++) lines.push(at + i);
+    at += seg.lines.length;
+  }
+  return lines;
+}
+
 export function mountWorkbench(host, ctx) {
   const { exercise: ex, storageKey, onPass, next } = ctx;
 
@@ -789,18 +831,22 @@ export function mountWorkbench(host, ctx) {
     <div id="verdict"></div>
     <div id="reading"></div>`;
 
-  // The work marks describe the starter. Once a reader has edited, the line
-  // numbers the build worked out no longer point at the same lines, so they are
-  // shown for the code as it was handed over and dropped as soon as it is not.
-  const untouched = !saved || saved === ex.starter;
+  /* The build's work marks are line numbers in the starter, so an edit moves
+     them. Rather than dropping the marks at the first keystroke, they are moved:
+     `derive` locates the carried regions in whatever the reader has now, and
+     what is between them is their work, wherever it has ended up.
+
+     It gives up only when a carried region has been rewritten, which is the one
+     case where the question has no answer, and is the same condition focus mode
+     already uses. Fixing one typo should not cost a reader the outline. */
+  const marks = workMarks(ex, saved);
   const editor = buildEditor(host.querySelector("#edhost"), saved || ex.starter,
-                             () => run(), ex.starter,
-                             { work: untouched ? ex.work : null });
+                             () => run(), ex.starter, { work: marks });
   // Open on the work rather than on line one. A reader who lands on the top of
   // a thousand line file has to go looking for the thirteen lines that are the
   // point of the stage.
-  if (untouched && editor.runs.length) requestAnimationFrame(() => editor.goToWork(1));
-  renderOutline(host.querySelector("#outline"), untouched ? ex.outline : null, editor);
+  if (editor.runs.length) requestAnimationFrame(() => editor.goToWork(1));
+  renderOutline(host.querySelector("#outline"), marks.length ? ex.outline : null, editor);
 
   // On the host rather than on document: a route change replaces this subtree,
   // so the listener goes with it. There is no teardown hook here to remove one

@@ -445,7 +445,7 @@ STAGE_BRIEF_MIN = 60
 _PROJECT_STAGES = {slug: stages for slug, _, _, stages, *_ in PROJECTS}
 
 
-def _mark_work(stages: list[dict]) -> None:
+def _mark_work(stages: list[dict], path: Path) -> None:
     """Record which lines of each starter are this stage's own work.
 
     A stage carries every earlier stage with it, so by stage twelve the starter
@@ -470,7 +470,11 @@ def _mark_work(stages: list[dict]) -> None:
             if tag in ("insert", "replace"):
                 work.extend(i + 1 for i in range(start, end) if lines[i].strip())
         stage["work"] = work
-        stage["outline"] = _outline(lines, set(work))
+        try:
+            stage["outline"] = _outline(lines, set(work))
+        except SyntaxError as exc:
+            die(path, f"stage {stage['n']} ({stage['title']}) starter does not "
+                      f"parse: line {exc.lineno}, {exc.msg}")
         previous = stage["solution"].split("\n")
 
 
@@ -481,12 +485,15 @@ def _outline(lines: list[str], work: set[int]) -> list[dict]:
     whether any of this stage's work falls inside it. It is what lets a reader
     see a thousand line file without scrolling through it.
     """
-    marks = []
-    for i, line in enumerate(lines, 1):
-        head = re.match(r"^(class|def|async def) ([A-Za-z_]\w*)", line)
-        if head:
-            marks.append({"line": i, "kind": head.group(1).split()[-1],
-                          "name": head.group(2)})
+    kinds = {ast.ClassDef: "class", ast.FunctionDef: "def",
+             ast.AsyncFunctionDef: "async def"}
+    # Parsed rather than matched line by line. A `def` written at column zero
+    # inside a docstring is a def to a regular expression and is not one to
+    # Python, and this book's docstrings show example code constantly. The
+    # parser is already here for the vocabulary gate.
+    marks = [{"line": node.lineno, "kind": kinds[type(node)], "name": node.name}
+             for node in ast.parse("\n".join(lines)).body
+             if type(node) in kinds]
     for j, mark in enumerate(marks):
         end = marks[j + 1]["line"] if j + 1 < len(marks) else len(lines) + 1
         mark["mine"] = any(mark["line"] <= n < end for n in work)
@@ -531,7 +538,7 @@ def parse_project(path: Path) -> dict:
             "solution": blocks["solution"],
         })
 
-    _mark_work(stages)
+    _mark_work(stages, path)
 
     want = _PROJECT_STAGES.get(slug)
     if want is None:

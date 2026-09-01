@@ -154,6 +154,26 @@ for (const [name, src, element] of CANNOT_RENDER) {
        "and the fold below has moved down by exactly what was typed");
   }
 
+  /* The marks have to survive an edit, or fixing one typo costs the reader the
+     outline and the jump for good. They are located again rather than dropped. */
+  {
+    const edited = starter.replace("    raise NotImplementedError",
+                                   "    a = 1\n    b = 2\n    return a + b");
+    const segs3 = derive(edited, parts);
+    ok(segs3 !== null, "the split is found again in edited text");
+    const moved = [];
+    let at = 1;
+    for (const seg of segs3) {
+      if (!seg.carried) for (let i = 0; i < seg.lines.length; i++) moved.push(at + i);
+      at += seg.lines.length;
+    }
+    ok(moved.length === 4, "two lines of work became four");
+    ok(moved[0] === 6, "and still start where they did");
+    const lines = edited.split("\n");
+    ok(moved.every(n => !lines[n - 1].startsWith("def carried")),
+       "no mark landed on code an earlier stage wrote");
+  }
+
   // several regions, each edit landing in its own slot
   const multi = ["a", "W1", "b", "b2", "W2", "c"].join("\n");
   const msegs = derive(multi, cutStarter(multi, [[2, 2], [5, 5]]));

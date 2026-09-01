@@ -195,7 +195,7 @@ Three things a project of this shape will need and may not expect:
   the last visible line moves a caret nobody can see.
 - **Show the reader their part.** By the last stage, 1.3 percent of the file is
   the work. The gutter marks it, a key walks it, an outline lists what the file
-  holds, and focus mode collapses everything else: 994 lines becomes 19.
+  holds, and focus mode collapses everything else: 994 lines becomes 20.
   Focus mode takes text out of the textarea, so the only copy of it is a model,
   and every path out of that mode writes it back. Save and run read a `code()`
   that returns the whole file whatever mode the editor is in. That one line is
