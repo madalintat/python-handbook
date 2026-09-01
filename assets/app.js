@@ -328,6 +328,7 @@ async function viewDrills(slug) {
   let at = 0, right = 0;
   main.innerHTML = `<div class="wrap" data-accent="${meta.accent}"><div class="drill">
     <p class="eyebrow"><a href="#/unit/${slug}" class="muted">Unit ${pad(meta.n)} · ${esc(meta.title)}</a></p>
+    <h1 style="font-size:var(--t-h3);margin:.3rem 0 0">Drills</h1>
     <div class="progressbar" style="margin:1rem 0 1.4rem"><i id="pb" style="width:0%"></i></div>
     <div id="quiz"></div>
   </div></div>`;
@@ -543,7 +544,7 @@ async function viewSearch(raw) {
     : e.id ? `#/unit/${e.unit}/${e.id}` : `#/unit/${e.unit}`;
 
   main.innerHTML = `<div class="wrap" style="padding:2rem 0 4rem;max-width:var(--measure)">
-    <p class="eyebrow">Search</p>
+    <h1 class="eyebrow" style="font:inherit">Search</h1>
     <input class="searchbox big" id="q" value="${esc(q)}" placeholder="Search notes, exercises and terms" autofocus>
     <p class="muted" style="margin:0.9rem 0 1.4rem">${terms.length ? `${hits.length} result${hits.length === 1 ? "" : "s"} for “${esc(q)}”` : "Type to search."}</p>
     ${hits.map(([, e]) => `<a class="hit" href="${href(e)}">
@@ -624,16 +625,15 @@ async function route() {
   const path = location.hash.replace(/^#/, "") || "/";
   if (sheetBtn) sheetBtn.hidden = !path.startsWith("/unit/");
   sheet?.classList.remove("open");
-  for (const [re, view] of routes) {
-    const m = path.match(re);
-    if (m) {
-      try { await view(...m.slice(1)); }
-      catch (err) {
-        main.innerHTML = `<div class="wrap" style="padding:4rem 0"><h1>Could not load that</h1>
-          <p class="muted mono">${esc(String(err.message))}</p>
-          <p class="muted">If you are running this locally, make sure <code>python3 build.py</code> has been run.</p></div>`;
-      }
-      break;
+  const hit = routes.find(([re]) => re.test(path));
+  if (!hit) {
+    notFound();
+  } else {
+    try { await hit[1](...path.match(hit[0]).slice(1)); }
+    catch (err) {
+      main.innerHTML = `<div class="wrap" style="padding:4rem 0"><h1>Could not load that</h1>
+        <p class="muted mono">${esc(String(err.message))}</p>
+        <p class="muted">If you are running this locally, make sure <code>python3 build.py</code> has been run.</p></div>`;
     }
   }
   document.querySelectorAll("#nav a, #tabbar a").forEach(a => {
