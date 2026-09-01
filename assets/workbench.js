@@ -561,27 +561,38 @@ function renderReading({ ex, ruff, mypy, run, reading, host, onPass, next }) {
   // An AssertionError normally means the hidden tests failed, which is what the
   // `silent` verdict describes. But an exercise can legitimately expect the
   // reader's own code to raise one, and then AssertionError is the key.
-  const declaresSilent = ex.expects.some(e => e.judge === "silent");
   const notes = ruff.length > 0 || mypy.length > 0;   // did either static judge speak
-  const keys = [];
-  if (run && run.exc) {
-    keys.push(run.exc === "AssertionError" && declaresSilent ? "silent" : run.exc);
-  }
-  ruff.forEach(d => keys.push(d.code));
-  mypy.forEach(d => keys.push(d.code));
-  for (const k of new Set(keys)) {
-    if (!ex.diagnose[k]) continue;
-    const heading = k !== "silent" ? k
-      : notes ? "Nothing raised" : "Every judge was happy";
-    parts.push(`<div class="reading"><h4>${heading}</h4>
-      <p>${inline(ex.diagnose[k])}</p></div>`);
+
+  if (ex.goal) {
+    // A project stage has one thing to do rather than a verdict to recognise,
+    // so until it does it, restating the goal beside the failure is the only
+    // reading worth having.
+    if (!passed) {
+      parts.push(`<div class="reading"><h4>This stage</h4>
+        <p>${inline(ex.goal)}</p></div>`);
+    }
+  } else {
+    const declaresSilent = ex.expects.some(e => e.judge === "silent");
+    const keys = [];
+    if (run && run.exc) {
+      keys.push(run.exc === "AssertionError" && declaresSilent ? "silent" : run.exc);
+    }
+    ruff.forEach(d => keys.push(d.code));
+    mypy.forEach(d => keys.push(d.code));
+    for (const k of new Set(keys)) {
+      if (!ex.diagnose[k]) continue;
+      const heading = k !== "silent" ? k
+        : notes ? "Nothing raised" : "Every judge was happy";
+      parts.push(`<div class="reading"><h4>${heading}</h4>
+        <p>${inline(ex.diagnose[k])}</p></div>`);
+    }
   }
 
   // A complaint with no prose beside it is worse than no complaint. This has to
   // be decided before the traceback goes in, because the traceback is evidence
   // rather than explanation, and counting it would suppress the very message a
   // reader with an unexplained error needs.
-  if (!parts.length && (run?.exc || ruff.length || mypy.length)) {
+  if (!ex.goal && !parts.length && (run?.exc || ruff.length || mypy.length)) {
     parts.push(`<div class="reading"><h4>Not one of this exercise's errors</h4>
       <p>The judges are objecting to something the exercise does not have a written
       reading for, usually a typo or a change further from the starter than the

@@ -244,6 +244,59 @@ It lives in `assets/runner.py`, so both paths have it for free. Unit 00's `__mai
 exercise is the reason it exists: without it, the guard can only be described,
 never demonstrated.
 
+## The projects
+
+A project is `content/projects/<slug>.md`, one `## ` heading per stage, and the
+number of stages has to match what `PROJECTS` declares. The slug has to be in
+`PROJECTS` too; the manifest is the list, and a file is how a project stops
+being "not written yet".
+
+A stage is an exercise with the question turned around. An exercise asks what
+some code already does, so it carries `@expect` and `@diagnose`. A stage asks
+you to make code do something, so it carries one `@goal` and the same three
+blocks:
+
+```
+## Stage title
+
+At least 60 words of brief: what to build, and the reason it is built this way
+rather than the obvious way. Same prose rules as everywhere else.
+
+@goal One line. What this stage must do, shown beside every failure.
+
+~~~starter
+# the previous stages' code, plus a stub for this one
+~~~
+
+~~~tests
+# acceptance tests for everything built so far
+~~~
+
+~~~solution
+# the reference implementation through this stage
+~~~
+```
+
+`build.py --validate` enforces four things per stage, and they are what make a
+stage worth attempting:
+
+1. **The starter fails its tests.** There is work to do.
+2. **The solution passes them.**
+3. **The solution is clean** under ruff and mypy. The reference implementation
+   is code the reader is invited to compare against, so it has to be worth
+   comparing against.
+4. **Stage N+1's starter passes stage N's tests.** This is the one that matters
+   most: it turns "built in stages that accumulate" from a promise into a
+   checked claim, so a reader can start at stage 3 knowing 1 and 2 already work.
+   Break carried-forward code and the build names the stage and the assertion.
+
+Every stage also runs under two hash seeds, like every exercise, and the
+solution is stripped from the shipped JSON.
+
+Write the tests against the whole artefact so far, not only the new part. That
+is what makes the continuity check meaningful, and it is what a reader wants:
+the thing either works or it does not.
+
 ## The drills
 
 Exactly fifteen, each a `## ` question, three or more options, exactly one

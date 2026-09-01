@@ -53,7 +53,7 @@ for (let i = 0; i < 30 && !warm; i++) {
 }
 cliLog(warm ? 'judges warm' : 'WARNING: judges did not warm up in 300s')
 
-const HARNESS = String.raw`(async (slug, ex) => {
+const HARNESS = String.raw`(async (route, slug, ex) => {
   const until = async (fn, ms = 90000) => {
     const t0 = Date.now();
     for (;;) {
@@ -66,7 +66,7 @@ const HARNESS = String.raw`(async (slug, ex) => {
   // whatever was last typed rather than the starter
   Object.keys(localStorage).filter(k => k.startsWith('ph.code.')).forEach(k => localStorage.removeItem(k));
   {
-    location.hash = '/work/' + slug + '/' + ex.n;
+    location.hash = '/' + route + '/' + slug + '/' + ex.n;
     const mounted = await until(() =>
       document.querySelector('#run') &&
       document.querySelector('.wb-brief h1')?.textContent === ex.title, 20000);
@@ -77,8 +77,10 @@ const HARNESS = String.raw`(async (slug, ex) => {
     if (!done) return { n: ex.n, title: ex.title, error: 'timed out' };
     const v = globalThis.__phVerdict;
 
+    // A stage declares a goal instead of a set of verdicts, so there is nothing
+    // to compare the judges against: what it has to do is fail, and say why.
     const want = { ruff: [], mypy: [], raises: null, silent: false };
-    for (const e of ex.expects) {
+    for (const e of ex.expects || []) {
       if (e.judge === 'ruff') want.ruff.push(e.code);
       else if (e.judge === 'mypy') want.mypy.push(e.code);
       else if (e.judge === 'raises') want.raises = e.code;
@@ -88,14 +90,17 @@ const HARNESS = String.raw`(async (slug, ex) => {
     const gotMypy = v.mypy.map(d => d.code).sort();
     const problems = [];
     for (const c of want.ruff.sort()) if (!gotRuff.includes(c)) problems.push('ruff missing ' + c);
-    for (const c of gotRuff) if (!ex.diagnose[c]) problems.push('ruff ' + c + ' has no diagnose');
+    for (const c of gotRuff) if (ex.diagnose && !ex.diagnose[c]) problems.push('ruff ' + c + ' has no diagnose');
     for (const c of want.mypy.sort()) if (!gotMypy.includes(c)) problems.push('mypy missing ' + c);
-    for (const c of gotMypy) if (!ex.diagnose[c]) problems.push('mypy ' + c + ' has no diagnose');
+    for (const c of gotMypy) if (ex.diagnose && !ex.diagnose[c]) problems.push('mypy ' + c + ' has no diagnose');
     if (want.raises && v.raises !== want.raises) problems.push('want raise ' + want.raises + ', got ' + (v.raises || 'none'));
     if (want.silent && v.raises && v.raises !== 'AssertionError') problems.push('expected silent, raised ' + v.raises);
     if (v.ok) problems.push('the starter PASSED its own tests');
-    const readings = [...document.querySelectorAll('.reading h4')].map(e => e.textContent);
+    const readings = [...document.querySelectorAll('#reading h4')].map(e => e.textContent);
     if (!readings.length) problems.push('no reading shown');
+    if (ex.goal && !readings.includes('This stage')) {
+      problems.push('the stage goal was not shown beside the failure');
+    }
     return { n: ex.n, title: ex.title, ruff: gotRuff, mypy: gotMypy, raises: v.raises, readings, problems };
   }
 })`;
@@ -120,7 +125,7 @@ for (const slug of slugs) {
   const list = await js(`fetch('data/ex-${slug}.json').then(r => r.json())`)
   const rows = []
   for (const ex of list) {
-    rows.push(await js(HARNESS + `(${JSON.stringify(slug)}, ${JSON.stringify(ex)})`))
+    rows.push(await js(HARNESS + `('work', ${JSON.stringify(slug)}, ${JSON.stringify(ex)})`))
   }
   for (const r of rows) {
     total++
@@ -129,7 +134,23 @@ for (const slug of slugs) {
   }
   cliLog(`  ${slug}: ${rows.length} exercises, ${rows.filter(r => (r.problems||[r.error]).length).length} problems`)
 }
-cliLog(`\nBROWSER STARTERS: ${total} exercises, ${bad} problems`)
+const projects = manifest.projects.filter(p => p.hasBody)
+  .filter(p => !only.length || only.some(o => p.slug.startsWith(o)))
+for (const p of projects) {
+  const proj = await js(`fetch('data/project-${p.slug}.json').then(r => r.json())`)
+  const rows = []
+  for (const stage of proj.stages) {
+    rows.push(await js(HARNESS + `('project', ${JSON.stringify(p.slug)}, ${JSON.stringify(stage)})`))
+  }
+  for (const r of rows) {
+    total++
+    const probs = r.error ? [r.error] : r.problems
+    if (probs.length) { bad++; cliLog(`FAIL ${p.slug} stage ${r.n} ${r.title}`); probs.forEach(x => cliLog('       ' + x)) }
+  }
+  cliLog(`  ${p.slug}: ${rows.length} stages, ${rows.filter(r => (r.problems||[r.error]).length).length} problems`)
+}
+
+cliLog(`\nBROWSER STARTERS: ${total} exercises and stages, ${bad} problems`)
 EOF
 
 # The ego-browser CLI's own exit status says nothing about the run, so the

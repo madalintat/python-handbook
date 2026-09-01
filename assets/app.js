@@ -187,12 +187,20 @@ function unitCard(u, readSet = store.read()) {
 }
 
 function projectCard(p) {
+  const done = stagesDone(p.slug);
   return `<a class="card" data-accent="${p.tier === "deep" ? "clay" : p.tier === "core" ? "denim" : "moss"}" href="#/project/${p.slug}">
     <span class="n">${p.tierLabel.toUpperCase()} · ${p.domain.toUpperCase()}</span>
     <h3>${esc(p.title)}</h3>
     <p>${inline(p.blurb)}</p>
-    <div class="meta"><span>${p.stages} stages</span><span>${Math.floor(p.minutes / 60)}h ${p.minutes % 60}m</span>${p.hasBody ? "" : "<span>not written yet</span>"}</div>
+    <div class="meta"><span>${done ? `${done}/${p.stages} stages` : `${p.stages} stages`}</span><span>${Math.floor(p.minutes / 60)}h ${p.minutes % 60}m</span>${p.hasBody ? "" : "<span>not written yet</span>"}</div>
   </a>`;
+}
+
+// How many stages of a project are finished. Stage keys are "slug:n", so this
+// counts the ones belonging to this project rather than every stage everywhere.
+function stagesDone(slug) {
+  const stage = store.read().stage || {};
+  return Object.keys(stage).filter(k => stage[k] && k.startsWith(`${slug}:`)).length;
 }
 
 async function viewTrack() {
@@ -423,17 +431,53 @@ async function viewProjects() {
   stagger([...main.querySelectorAll(".card")]);
 }
 
-async function viewProject(slug) {
+async function viewProject(slug, n) {
   const m = await load("manifest");
   const p = m.projects.find(x => x.slug === slug);
   if (!p) return notFound();
-  main.innerHTML = `<div class="wrap" data-accent="denim" style="padding:2rem 0 4rem;max-width:var(--measure)">
-    <p class="eyebrow">${p.tierLabel} · ${p.domain} · ${p.stages} stages</p>
-    <h1 style="margin:0.4rem 0 0.6rem">${esc(p.title)}</h1>
-    <p class="lede">${inline(p.blurb)}</p>
-    <p class="muted">This project is in the manifest. Its stages have not been written yet.</p>
-    <a class="btn ghost" href="#/projects">All projects</a>
+
+  if (!p.hasBody) {
+    main.innerHTML = `<div class="wrap" data-accent="denim" style="padding:2rem 0 4rem;max-width:var(--measure)">
+      <p class="eyebrow">${p.tierLabel} · ${p.domain} · ${p.stages} stages</p>
+      <h1 style="margin:0.4rem 0 0.6rem">${esc(p.title)}</h1>
+      <p class="lede">${inline(p.blurb)}</p>
+      <p class="muted">This project is in the manifest. Its stages have not been written yet.</p>
+      <a class="btn ghost" href="#/projects">All projects</a>
+    </div>`;
+    return;
+  }
+
+  const project = await load(`project-${slug}`);
+  const stages = project.stages;
+  const i = Math.min(Math.max(1, Number(n) || 1), stages.length);
+  const stage = stages[i - 1];
+
+  main.innerHTML = `<div class="wrap" data-accent="denim">
+    <div class="wb">
+      <section class="wb-brief">
+        <p class="eyebrow"><a href="#/projects" class="muted">${p.tierLabel} · ${esc(p.title)}</a></p>
+        <div class="exnav">${stages.map((s, k) => {
+          const done = store.get("stage", `${slug}:${k + 1}`);
+          return `<a href="#/project/${slug}/${k + 1}" class="${done ? "passed" : ""}" ${k + 1 === i ? 'aria-current="true"' : ""} title="${esc(s.title)}">${k + 1}</a>`;
+        }).join("")}</div>
+        <h1>${esc(stage.title)}</h1>
+        ${md(stage.brief)}
+        <div class="reading" style="margin-top:1.2rem"><h4>Stage ${i} of ${stages.length}</h4>
+          <p>${inline(stage.goal)}</p></div>
+      </section>
+      <section id="bench"></section>
+    </div>
   </div>`;
+
+  mountWorkbench($("#bench"), {
+    exercise: stage,
+    storageKey: `ph.code.project.${slug}.${i}`,
+    onPass: () => {
+      store.set("stage", `${slug}:${i}`, true);
+      document.querySelectorAll(".exnav a")[i - 1]?.classList.add("passed");
+    },
+    next: i < stages.length ? `#/project/${slug}/${i + 1}` : "#/projects",
+  });
 }
 
 async function viewProgress() {
@@ -444,6 +488,7 @@ async function viewProgress() {
   const hinted = Object.keys(p.hinted || {}).length;
   const written = m.track.filter(u => u.hasEx);
   const totalEx = written.reduce((n, u) => n + u.hasEx, 0);
+  const totalStages = m.projects.filter(x => x.hasBody).reduce((n, x) => n + x.stages, 0);
 
   main.innerHTML = `<div class="wrap" style="padding:2rem 0 4rem">
     <p class="eyebrow">Progress</p>
@@ -453,6 +498,7 @@ async function viewProgress() {
       <div class="stat"><b>${passed}/${totalEx}</b><span>exercises passed</span></div>
       <div class="stat"><b>${hinted}</b><span>needed a hint</span></div>
       <div class="stat"><b>${Object.keys(p.drills || {}).length}</b><span>drill sets done</span></div>
+      <div class="stat"><b>${Object.keys(p.stage || {}).length}/${totalStages}</b><span>project stages built</span></div>
       <div class="stat"><b>${(p.streak || {}).run || 0}</b><span>day streak, best ${(p.streak || {}).best || 0}</span></div>
     </div>
     <div class="grid">${(() => { const seen = store.read(); return m.track.filter(u => u.hasNote).map(u => unitCard(u, seen)).join(""); })()}</div>
@@ -661,7 +707,7 @@ const routes = [
   [/^\/work\/([\w-]+)\/(\d+)$/,    viewWork],
   [/^\/drills\/([\w-]+)$/,         viewDrills],
   [/^\/projects$/,                 viewProjects],
-  [/^\/project\/([\w-]+)$/,        viewProject],
+  [/^\/project\/([\w-]+)(?:\/(\d+))?$/, viewProject],
   [/^\/progress$/,                 viewProgress],
   [/^\/glossary(?:\/([A-Za-z]))?$/, viewGlossary],
   [/^\/errors$/,                   viewErrors],
