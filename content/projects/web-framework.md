@@ -315,8 +315,11 @@ to exist. The subclasses then do almost nothing. `JSON` overrides `render` and
 sets a media type. That is the whole of it.
 
 The small rules are worth keeping too. A caller's own header wins over a
-default, which is what `setdefault` is for. And 204, 304 and anything below 200
-carry no body, so they get no content-length either.
+default, which is what `setdefault` is for. 204, 304 and anything below 200
+carry no body, so they get no content-length either. And a HEAD gets the
+headers a GET would have got, content-length included, and none of the body,
+because HTTP says so and because a proxy handed a body on a HEAD can lose track
+of where one response ends and the next begins.
 
 @goal `Response` sends itself, and the subclasses only choose a type and a render.
 
@@ -619,6 +622,16 @@ for status in (204, 304, 100):
     assert empty.body == b"", status
     assert "content-length" not in empty.headers, status
 
+# a HEAD gets the headers a GET would have got and none of the body. HTTP is
+# explicit about it, and a proxy handed a body on a HEAD can lose track of
+# where one response ends and the next begins.
+answered = asyncio.run(Client(PlainText("hello world")).request("HEAD", "/"))
+assert answered.status == 200
+assert answered.body == b""
+assert answered.headers["content-length"] == "11", "the length a GET would report"
+assert answered.headers["content-type"] == "text/plain; charset=utf-8"
+assert asyncio.run(Client(PlainText("hello world")).get("/")).body == b"hello world"
+
 # a redirect is about its Location, not its body
 moved = asyncio.run(Client(Redirect("/elsewhere")).get("/"))
 assert moved.status == 307
@@ -853,7 +866,13 @@ class Response:
     async def __call__(self, scope, receive, send):
         await send({"type": "http.response.start", "status": self.status,
                     "headers": self.headers.raw()})
-        await send({"type": "http.response.body", "body": self.body})
+        # A HEAD gets the headers a GET would have got, including the
+        # content-length, and none of the body. HTTP is explicit about it, and
+        # a proxy handed a body on a HEAD is entitled to lose track of where
+        # one response ends and the next begins.
+        head = scope.get("method") == "HEAD"
+        await send({"type": "http.response.body",
+                    "body": b"" if head else self.body})
 
     def __repr__(self):
         return f"<{type(self).__name__} {self.status} {len(self.body)} bytes>"
@@ -1154,7 +1173,13 @@ class Response:
     async def __call__(self, scope, receive, send):
         await send({"type": "http.response.start", "status": self.status,
                     "headers": self.headers.raw()})
-        await send({"type": "http.response.body", "body": self.body})
+        # A HEAD gets the headers a GET would have got, including the
+        # content-length, and none of the body. HTTP is explicit about it, and
+        # a proxy handed a body on a HEAD is entitled to lose track of where
+        # one response ends and the next begins.
+        head = scope.get("method") == "HEAD"
+        await send({"type": "http.response.body",
+                    "body": b"" if head else self.body})
 
     def __repr__(self):
         return f"<{type(self).__name__} {self.status} {len(self.body)} bytes>"
@@ -1647,7 +1672,13 @@ class Response:
     async def __call__(self, scope, receive, send):
         await send({"type": "http.response.start", "status": self.status,
                     "headers": self.headers.raw()})
-        await send({"type": "http.response.body", "body": self.body})
+        # A HEAD gets the headers a GET would have got, including the
+        # content-length, and none of the body. HTTP is explicit about it, and
+        # a proxy handed a body on a HEAD is entitled to lose track of where
+        # one response ends and the next begins.
+        head = scope.get("method") == "HEAD"
+        await send({"type": "http.response.body",
+                    "body": b"" if head else self.body})
 
     def __repr__(self):
         return f"<{type(self).__name__} {self.status} {len(self.body)} bytes>"
@@ -2030,7 +2061,13 @@ class Response:
     async def __call__(self, scope, receive, send):
         await send({"type": "http.response.start", "status": self.status,
                     "headers": self.headers.raw()})
-        await send({"type": "http.response.body", "body": self.body})
+        # A HEAD gets the headers a GET would have got, including the
+        # content-length, and none of the body. HTTP is explicit about it, and
+        # a proxy handed a body on a HEAD is entitled to lose track of where
+        # one response ends and the next begins.
+        head = scope.get("method") == "HEAD"
+        await send({"type": "http.response.body",
+                    "body": b"" if head else self.body})
 
     def __repr__(self):
         return f"<{type(self).__name__} {self.status} {len(self.body)} bytes>"
@@ -2335,6 +2372,16 @@ async def special(request):
 
 assert asyncio.run(Client(ordered).get("/x/special")).text == "general"
 
+# a route that answers GET answers HEAD, and answers it properly
+assert asyncio.run(client.request("HEAD", "/")).status == 200
+assert asyncio.run(client.request("HEAD", "/")).body == b""
+assert asyncio.run(client.get("/")).body == b"index"
+assert asyncio.run(client.request("HEAD", "/users/12")).status == 200
+assert asyncio.run(client.request("HEAD", "/nothing")).status == 404
+
+# and a route that only takes POST does not answer HEAD
+assert asyncio.run(client.request("HEAD", "/users")).status == 405
+
 # and links are built by name rather than written out
 assert router.url_for("user", id=3) == "/users/3"
 assert router.url_for("files", rest="a/b") == "/files/a/b"
@@ -2605,7 +2652,13 @@ class Response:
     async def __call__(self, scope, receive, send):
         await send({"type": "http.response.start", "status": self.status,
                     "headers": self.headers.raw()})
-        await send({"type": "http.response.body", "body": self.body})
+        # A HEAD gets the headers a GET would have got, including the
+        # content-length, and none of the body. HTTP is explicit about it, and
+        # a proxy handed a body on a HEAD is entitled to lose track of where
+        # one response ends and the next begins.
+        head = scope.get("method") == "HEAD"
+        await send({"type": "http.response.body",
+                    "body": b"" if head else self.body})
 
     def __repr__(self):
         return f"<{type(self).__name__} {self.status} {len(self.body)} bytes>"
@@ -3139,7 +3192,13 @@ class Response:
     async def __call__(self, scope, receive, send):
         await send({"type": "http.response.start", "status": self.status,
                     "headers": self.headers.raw()})
-        await send({"type": "http.response.body", "body": self.body})
+        # A HEAD gets the headers a GET would have got, including the
+        # content-length, and none of the body. HTTP is explicit about it, and
+        # a proxy handed a body on a HEAD is entitled to lose track of where
+        # one response ends and the next begins.
+        head = scope.get("method") == "HEAD"
+        await send({"type": "http.response.body",
+                    "body": b"" if head else self.body})
 
     def __repr__(self):
         return f"<{type(self).__name__} {self.status} {len(self.body)} bytes>"
@@ -3447,9 +3506,14 @@ class Timing(Middleware):
 class CatchErrors(Middleware):
     """An exception below becomes a 500 rather than a crashed connection."""
 
-    def __init__(self, app, handler=None):
+    def __init__(self, app, handler=None, keep=20):
         super().__init__(app)
         self.handler = handler
+        self.keep = keep
+        # The last few, not all of them. This layer is the outermost one and
+        # lives as long as the app does, and every exception on it holds its
+        # traceback, which holds every frame, which holds the request body and
+        # the scope. An unbounded list here is a memory leak per error.
         self.errors = []
 
     async def __call__(self, scope, receive, send):
@@ -3876,7 +3940,13 @@ class Response:
     async def __call__(self, scope, receive, send):
         await send({"type": "http.response.start", "status": self.status,
                     "headers": self.headers.raw()})
-        await send({"type": "http.response.body", "body": self.body})
+        # A HEAD gets the headers a GET would have got, including the
+        # content-length, and none of the body. HTTP is explicit about it, and
+        # a proxy handed a body on a HEAD is entitled to lose track of where
+        # one response ends and the next begins.
+        head = scope.get("method") == "HEAD"
+        await send({"type": "http.response.body",
+                    "body": b"" if head else self.body})
 
     def __repr__(self):
         return f"<{type(self).__name__} {self.status} {len(self.body)} bytes>"
@@ -4252,9 +4322,14 @@ class CatchErrors(Middleware):
     connection, which is honest, where sending a second start message is not.
     """
 
-    def __init__(self, app, handler=None):
+    def __init__(self, app, handler=None, keep=20):
         super().__init__(app)
         self.handler = handler
+        self.keep = keep
+        # The last few, not all of them. This layer is the outermost one and
+        # lives as long as the app does, and every exception on it holds its
+        # traceback, which holds every frame, which holds the request body and
+        # the scope. An unbounded list here is a memory leak per error.
         self.errors = []
 
     async def __call__(self, scope, receive, send):
@@ -4270,6 +4345,7 @@ class CatchErrors(Middleware):
             await self.app(scope, receive, watch)
         except Exception as exc:
             self.errors.append(exc)
+            del self.errors[:-self.keep]
             if started:
                 raise
             response = (
@@ -4554,7 +4630,13 @@ class Response:
     async def __call__(self, scope, receive, send):
         await send({"type": "http.response.start", "status": self.status,
                     "headers": self.headers.raw()})
-        await send({"type": "http.response.body", "body": self.body})
+        # A HEAD gets the headers a GET would have got, including the
+        # content-length, and none of the body. HTTP is explicit about it, and
+        # a proxy handed a body on a HEAD is entitled to lose track of where
+        # one response ends and the next begins.
+        head = scope.get("method") == "HEAD"
+        await send({"type": "http.response.body",
+                    "body": b"" if head else self.body})
 
     def __repr__(self):
         return f"<{type(self).__name__} {self.status} {len(self.body)} bytes>"
@@ -4930,9 +5012,14 @@ class CatchErrors(Middleware):
     connection, which is honest, where sending a second start message is not.
     """
 
-    def __init__(self, app, handler=None):
+    def __init__(self, app, handler=None, keep=20):
         super().__init__(app)
         self.handler = handler
+        self.keep = keep
+        # The last few, not all of them. This layer is the outermost one and
+        # lives as long as the app does, and every exception on it holds its
+        # traceback, which holds every frame, which holds the request body and
+        # the scope. An unbounded list here is a memory leak per error.
         self.errors = []
 
     async def __call__(self, scope, receive, send):
@@ -4948,6 +5035,7 @@ class CatchErrors(Middleware):
             await self.app(scope, receive, watch)
         except Exception as exc:
             self.errors.append(exc)
+            del self.errors[:-self.keep]
             if started:
                 raise
             response = (
@@ -5450,7 +5538,13 @@ class Response:
     async def __call__(self, scope, receive, send):
         await send({"type": "http.response.start", "status": self.status,
                     "headers": self.headers.raw()})
-        await send({"type": "http.response.body", "body": self.body})
+        # A HEAD gets the headers a GET would have got, including the
+        # content-length, and none of the body. HTTP is explicit about it, and
+        # a proxy handed a body on a HEAD is entitled to lose track of where
+        # one response ends and the next begins.
+        head = scope.get("method") == "HEAD"
+        await send({"type": "http.response.body",
+                    "body": b"" if head else self.body})
 
     def __repr__(self):
         return f"<{type(self).__name__} {self.status} {len(self.body)} bytes>"
@@ -5827,9 +5921,14 @@ class CatchErrors(Middleware):
     connection, which is honest, where sending a second start message is not.
     """
 
-    def __init__(self, app, handler=None):
+    def __init__(self, app, handler=None, keep=20):
         super().__init__(app)
         self.handler = handler
+        self.keep = keep
+        # The last few, not all of them. This layer is the outermost one and
+        # lives as long as the app does, and every exception on it holds its
+        # traceback, which holds every frame, which holds the request body and
+        # the scope. An unbounded list here is a memory leak per error.
         self.errors = []
 
     async def __call__(self, scope, receive, send):
@@ -5845,6 +5944,7 @@ class CatchErrors(Middleware):
             await self.app(scope, receive, watch)
         except Exception as exc:
             self.errors.append(exc)
+            del self.errors[:-self.keep]
             if started:
                 raise
             response = (
@@ -5988,6 +6088,14 @@ into a 500, while this layer only answers for what it was told about.
 422 rather than 400 for a request that asked for a parameter it did not get.
 400 says the request was malformed and 500 says it was our fault, and neither
 of those is true of a missing field.
+
+A body that is not JSON at all is the other side of that line, and it is 400,
+because it did not parse. The difference matters to whoever is fixing it: a 400
+sends them to look at how they serialised, a 422 sends them to look at what
+they sent. It is registered as a handler rather than raised from the parsing
+code, because `json.JSONDecodeError` comes out of the standard library and is
+not ours to subclass, which is exactly the case a registry handles and an
+inheritance hierarchy cannot.
 
 @goal Raised exceptions become responses, and the MRO chooses which handler.
 
@@ -6240,7 +6348,13 @@ class Response:
     async def __call__(self, scope, receive, send):
         await send({"type": "http.response.start", "status": self.status,
                     "headers": self.headers.raw()})
-        await send({"type": "http.response.body", "body": self.body})
+        # A HEAD gets the headers a GET would have got, including the
+        # content-length, and none of the body. HTTP is explicit about it, and
+        # a proxy handed a body on a HEAD is entitled to lose track of where
+        # one response ends and the next begins.
+        head = scope.get("method") == "HEAD"
+        await send({"type": "http.response.body",
+                    "body": b"" if head else self.body})
 
     def __repr__(self):
         return f"<{type(self).__name__} {self.status} {len(self.body)} bytes>"
@@ -6617,9 +6731,14 @@ class CatchErrors(Middleware):
     connection, which is honest, where sending a second start message is not.
     """
 
-    def __init__(self, app, handler=None):
+    def __init__(self, app, handler=None, keep=20):
         super().__init__(app)
         self.handler = handler
+        self.keep = keep
+        # The last few, not all of them. This layer is the outermost one and
+        # lives as long as the app does, and every exception on it holds its
+        # traceback, which holds every frame, which holds the request body and
+        # the scope. An unbounded list here is a memory leak per error.
         self.errors = []
 
     async def __call__(self, scope, receive, send):
@@ -6635,6 +6754,7 @@ class CatchErrors(Middleware):
             await self.app(scope, receive, watch)
         except Exception as exc:
             self.errors.append(exc)
+            del self.errors[:-self.keep]
             if started:
                 raise
             response = (
@@ -6775,6 +6895,19 @@ def http_exception_handler(request, exc):
     raise NotImplementedError
 
 
+def malformed_body_handler(request, exc):
+    """A body that is not JSON at all is 400, not 422.
+
+    422 says the request parsed and was wrong about something. This one did not
+    parse. The difference matters to whoever is fixing it: a 400 sends them to
+    look at how they serialised, a 422 sends them to look at what they sent.
+
+    It is registered rather than raised, because `json.JSONDecodeError` comes
+    out of the standard library and is not ours to subclass.
+    """
+    return JSON({"detail": f"the body is not JSON: {exc}"}, status=400)
+
+
 def validation_handler(request, exc):
     """A request that did not carry what the handler asked for is 422."""
     raise NotImplementedError
@@ -6788,6 +6921,7 @@ class ExceptionMiddleware(Middleware):
         self.handlers = {
             HTTPException: http_exception_handler,
             MissingParameter: validation_handler,
+            json.JSONDecodeError: malformed_body_handler,
         }
         self.handlers.update(handlers or {})
 
@@ -6943,6 +7077,37 @@ assert asyncio.run(checking.get("/items/999")).json() == {
     "path": "/items/999", "detail": "no item 999",
 }
 
+
+# a body that is not JSON at all is a malformed request, which is 400. not
+# 422, which says it parsed and was wrong, and not 500, which says it was ours.
+@router.route("/take", methods=["POST"])
+async def take(payload=Body()):
+    return JSON({"got": payload})
+
+
+broken = asyncio.run(client.post("/take", body=b"{not json"))
+assert broken.status == 400, broken.status
+assert "not JSON" in broken.json()["detail"]
+assert asyncio.run(client.post("/take", body=b'{"a": 1}')).json() == {"got": {"a": 1}}
+
+# a body that parses and is missing a field is still 422
+@router.route("/named", methods=["POST"])
+async def named(name=Body("name")):
+    return PlainText(name)
+
+
+assert asyncio.run(client.post("/named", body=b'{"other": 1}')).status == 422
+assert asyncio.run(client.post("/named", body=b'{"name": "ada"}')).text == "ada"
+
+# the caught errors are kept for looking at, and there is a limit on how many.
+# this layer lives as long as the app, and an exception holds its traceback,
+# which holds every frame, which holds the request body.
+capped = CatchErrors(router, keep=3)
+for _ in range(10):
+    asyncio.run(Client(capped).get("/unknown"))
+assert len(capped.errors) == 3, len(capped.errors)
+assert all(isinstance(e, ZeroDivisionError) for e in capped.errors)
+assert len(CatchErrors(router).errors) == 0
 
 # an error after the status went out cannot be turned into anything
 @router.route("/late")
@@ -7211,7 +7376,13 @@ class Response:
     async def __call__(self, scope, receive, send):
         await send({"type": "http.response.start", "status": self.status,
                     "headers": self.headers.raw()})
-        await send({"type": "http.response.body", "body": self.body})
+        # A HEAD gets the headers a GET would have got, including the
+        # content-length, and none of the body. HTTP is explicit about it, and
+        # a proxy handed a body on a HEAD is entitled to lose track of where
+        # one response ends and the next begins.
+        head = scope.get("method") == "HEAD"
+        await send({"type": "http.response.body",
+                    "body": b"" if head else self.body})
 
     def __repr__(self):
         return f"<{type(self).__name__} {self.status} {len(self.body)} bytes>"
@@ -7588,9 +7759,14 @@ class CatchErrors(Middleware):
     connection, which is honest, where sending a second start message is not.
     """
 
-    def __init__(self, app, handler=None):
+    def __init__(self, app, handler=None, keep=20):
         super().__init__(app)
         self.handler = handler
+        self.keep = keep
+        # The last few, not all of them. This layer is the outermost one and
+        # lives as long as the app does, and every exception on it holds its
+        # traceback, which holds every frame, which holds the request body and
+        # the scope. An unbounded list here is a memory leak per error.
         self.errors = []
 
     async def __call__(self, scope, receive, send):
@@ -7606,6 +7782,7 @@ class CatchErrors(Middleware):
             await self.app(scope, receive, watch)
         except Exception as exc:
             self.errors.append(exc)
+            del self.errors[:-self.keep]
             if started:
                 raise
             response = (
@@ -7754,6 +7931,19 @@ def http_exception_handler(request, exc):
     return JSON({"detail": exc.detail}, status=exc.status, headers=exc.headers)
 
 
+def malformed_body_handler(request, exc):
+    """A body that is not JSON at all is 400, not 422.
+
+    422 says the request parsed and was wrong about something. This one did not
+    parse. The difference matters to whoever is fixing it: a 400 sends them to
+    look at how they serialised, a 422 sends them to look at what they sent.
+
+    It is registered rather than raised, because `json.JSONDecodeError` comes
+    out of the standard library and is not ours to subclass.
+    """
+    return JSON({"detail": f"the body is not JSON: {exc}"}, status=400)
+
+
 def validation_handler(request, exc):
     """A request that did not carry what the handler asked for is 422.
 
@@ -7779,6 +7969,7 @@ class ExceptionMiddleware(Middleware):
         self.handlers = {
             HTTPException: http_exception_handler,
             MissingParameter: validation_handler,
+            json.JSONDecodeError: malformed_body_handler,
         }
         self.handlers.update(handlers or {})
 
@@ -8129,7 +8320,13 @@ class Response:
     async def __call__(self, scope, receive, send):
         await send({"type": "http.response.start", "status": self.status,
                     "headers": self.headers.raw()})
-        await send({"type": "http.response.body", "body": self.body})
+        # A HEAD gets the headers a GET would have got, including the
+        # content-length, and none of the body. HTTP is explicit about it, and
+        # a proxy handed a body on a HEAD is entitled to lose track of where
+        # one response ends and the next begins.
+        head = scope.get("method") == "HEAD"
+        await send({"type": "http.response.body",
+                    "body": b"" if head else self.body})
 
     def __repr__(self):
         return f"<{type(self).__name__} {self.status} {len(self.body)} bytes>"
@@ -8521,9 +8718,14 @@ class CatchErrors(Middleware):
     connection, which is honest, where sending a second start message is not.
     """
 
-    def __init__(self, app, handler=None):
+    def __init__(self, app, handler=None, keep=20):
         super().__init__(app)
         self.handler = handler
+        self.keep = keep
+        # The last few, not all of them. This layer is the outermost one and
+        # lives as long as the app does, and every exception on it holds its
+        # traceback, which holds every frame, which holds the request body and
+        # the scope. An unbounded list here is a memory leak per error.
         self.errors = []
 
     async def __call__(self, scope, receive, send):
@@ -8539,6 +8741,7 @@ class CatchErrors(Middleware):
             await self.app(scope, receive, watch)
         except Exception as exc:
             self.errors.append(exc)
+            del self.errors[:-self.keep]
             if started:
                 raise
             response = (
@@ -8687,6 +8890,19 @@ def http_exception_handler(request, exc):
     return JSON({"detail": exc.detail}, status=exc.status, headers=exc.headers)
 
 
+def malformed_body_handler(request, exc):
+    """A body that is not JSON at all is 400, not 422.
+
+    422 says the request parsed and was wrong about something. This one did not
+    parse. The difference matters to whoever is fixing it: a 400 sends them to
+    look at how they serialised, a 422 sends them to look at what they sent.
+
+    It is registered rather than raised, because `json.JSONDecodeError` comes
+    out of the standard library and is not ours to subclass.
+    """
+    return JSON({"detail": f"the body is not JSON: {exc}"}, status=400)
+
+
 def validation_handler(request, exc):
     """A request that did not carry what the handler asked for is 422.
 
@@ -8712,6 +8928,7 @@ class ExceptionMiddleware(Middleware):
         self.handlers = {
             HTTPException: http_exception_handler,
             MissingParameter: validation_handler,
+            json.JSONDecodeError: malformed_body_handler,
         }
         self.handlers.update(handlers or {})
 
@@ -9318,7 +9535,13 @@ class Response:
     async def __call__(self, scope, receive, send):
         await send({"type": "http.response.start", "status": self.status,
                     "headers": self.headers.raw()})
-        await send({"type": "http.response.body", "body": self.body})
+        # A HEAD gets the headers a GET would have got, including the
+        # content-length, and none of the body. HTTP is explicit about it, and
+        # a proxy handed a body on a HEAD is entitled to lose track of where
+        # one response ends and the next begins.
+        head = scope.get("method") == "HEAD"
+        await send({"type": "http.response.body",
+                    "body": b"" if head else self.body})
 
     def __repr__(self):
         return f"<{type(self).__name__} {self.status} {len(self.body)} bytes>"
@@ -9712,9 +9935,14 @@ class CatchErrors(Middleware):
     connection, which is honest, where sending a second start message is not.
     """
 
-    def __init__(self, app, handler=None):
+    def __init__(self, app, handler=None, keep=20):
         super().__init__(app)
         self.handler = handler
+        self.keep = keep
+        # The last few, not all of them. This layer is the outermost one and
+        # lives as long as the app does, and every exception on it holds its
+        # traceback, which holds every frame, which holds the request body and
+        # the scope. An unbounded list here is a memory leak per error.
         self.errors = []
 
     async def __call__(self, scope, receive, send):
@@ -9730,6 +9958,7 @@ class CatchErrors(Middleware):
             await self.app(scope, receive, watch)
         except Exception as exc:
             self.errors.append(exc)
+            del self.errors[:-self.keep]
             if started:
                 raise
             response = (
@@ -9878,6 +10107,19 @@ def http_exception_handler(request, exc):
     return JSON({"detail": exc.detail}, status=exc.status, headers=exc.headers)
 
 
+def malformed_body_handler(request, exc):
+    """A body that is not JSON at all is 400, not 422.
+
+    422 says the request parsed and was wrong about something. This one did not
+    parse. The difference matters to whoever is fixing it: a 400 sends them to
+    look at how they serialised, a 422 sends them to look at what they sent.
+
+    It is registered rather than raised, because `json.JSONDecodeError` comes
+    out of the standard library and is not ours to subclass.
+    """
+    return JSON({"detail": f"the body is not JSON: {exc}"}, status=400)
+
+
 def validation_handler(request, exc):
     """A request that did not carry what the handler asked for is 422.
 
@@ -9903,6 +10145,7 @@ class ExceptionMiddleware(Middleware):
         self.handlers = {
             HTTPException: http_exception_handler,
             MissingParameter: validation_handler,
+            json.JSONDecodeError: malformed_body_handler,
         }
         self.handlers.update(handlers or {})
 
