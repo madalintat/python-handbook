@@ -222,6 +222,111 @@ async function judgeMypy(src, say) {
 const TAB = "    ";
 export const flag = k => { try { return localStorage.getItem(k) === "1"; } catch { return false; } };
 export const setFlag = (k, on) => { try { localStorage.setItem(k, on ? "1" : "0"); } catch {} };
+/* ---------------------------------------------------------------- focus mode
+
+   A stage's later starters are mostly the reader's own earlier work: stage
+   twelve of the GPT is 994 lines of which 19 are the thing to write. Focus mode
+   shows those 19 and collapses the rest into a row that says how much is
+   behind it.
+
+   The whole difficulty is that a textarea holds text, not a document, so
+   hiding a region means the text is no longer in the textarea. Everything here
+   exists to make that lossless:
+
+   - the carried regions are kept, exactly, as arrays of lines
+   - leaving focus mode puts them back in their original order
+   - the split is re-derived by finding those carried regions in the current
+     text, so edits made in either mode survive the other
+   - if a carried region cannot be found, because the reader rewrote it, focus
+     mode switches itself off rather than guessing. Nothing is ever dropped. */
+
+export const FOLD = /^# ⋯ \d+ lines? you already built ⋯$/;
+
+export function findLines(hay, needle, from) {
+  if (!needle.length) return from;
+  outer: for (let i = from; i + needle.length <= hay.length; i++) {
+    for (let j = 0; j < needle.length; j++) if (hay[i + j] !== needle[j]) continue outer;
+    return i;
+  }
+  return -1;
+}
+
+/* The starter, cut at the run boundaries the build worked out. Fixed for the
+   life of the editor: it is what "carried" means for this stage. */
+export function cutStarter(starter, runs) {
+  const lines = starter.split("\n");
+  const parts = [];
+  let at = 1;
+  for (const [a, b] of runs) {
+    if (a > at) parts.push(lines.slice(at - 1, a - 1));
+    at = b + 1;
+  }
+  if (at <= lines.length) parts.push(lines.slice(at - 1));
+  return parts.filter(p => p.length);
+}
+
+/* The current text, split into what is carried and what is the reader's, by
+   locating the carried regions inside it. Returns null when one has been
+   rewritten, which is the signal to stop offering focus mode. */
+export function derive(text, carriedParts) {
+  const lines = text.split("\n");
+  const segs = [];
+  let at = 0;
+  for (const part of carriedParts) {
+    const found = findLines(lines, part, at);
+    if (found < 0) return null;
+    if (found > at) segs.push({ carried: false, lines: lines.slice(at, found) });
+    segs.push({ carried: true, lines: part });
+    at = found + part.length;
+  }
+  if (at < lines.length) segs.push({ carried: false, lines: lines.slice(at) });
+  return segs;
+}
+
+export function foldLine(n) {
+  return `# ⋯ ${n} line${n === 1 ? "" : "s"} you already built ⋯`;
+}
+
+/* Focus text: the reader's regions, with one comment line standing in for each
+   carried region. A comment, so that a reader who copies it out has not copied
+   out something that will not parse. */
+export function toFocus(segs) {
+  return segs.map(s => s.carried ? foldLine(s.lines.length) : s.lines.join("\n")).join("\n");
+}
+
+/* Focus text back to whole text.
+
+   The fold lines are the boundaries, so the pieces between them line up with
+   the reader's regions: a carried segment consumed one fold line and so ends a
+   piece, a work segment consumed a piece and does not. When the count does not
+   match, because a reader deleted a fold line, the pieces are handed to the
+   work slots in order and anything left over goes on the end. Misplaced is
+   recoverable; dropped is not. */
+export function fromFocus(text, segs) {
+  const pieces = [[]];
+  for (const line of text.split("\n")) {
+    if (FOLD.test(line)) pieces.push([]);
+    else pieces[pieces.length - 1].push(line);
+  }
+  const folds = segs.filter(s => s.carried).length;
+  const intact = pieces.length === folds + 1;
+
+  const out = [];
+  const used = new Set();
+  let at = 0, nth = 0;
+  for (const seg of segs) {
+    if (seg.carried) { out.push(...seg.lines); at++; continue; }
+    const index = intact ? at : nth;
+    out.push(...(pieces[index] ?? []));
+    used.add(index);
+    nth++;
+  }
+  for (let i = 0; i < pieces.length; i++) {
+    if (!used.has(i) && pieces[i].length) out.push(...pieces[i]);
+  }
+  return out.join("\n");
+}
+
 const WRAP_KEY = "ph.wrap";
 
 /* A textarea with transparent text laid exactly over a highlighted <pre>. The
@@ -230,7 +335,7 @@ const WRAP_KEY = "ph.wrap";
    tab-size and wrapping, all asserted in the stylesheet, not here. The one
    metric CSS cannot settle is width, because a textarea cannot size itself to
    its longest line, so that gets pushed across after each paint. */
-function buildEditor(host, initial, onRun, starter = initial) {
+function buildEditor(host, initial, onRun, starter = initial, opts = {}) {
   host.innerHTML = `
     <div class="ed-toolbar">
       <span class="mono faint">your_code.py</span>
@@ -238,6 +343,10 @@ function buildEditor(host, initial, onRun, starter = initial) {
       <button class="btn ghost sm" id="vimbtn" aria-pressed="false"
               title="Vim keybindings: motions, operators, counts, text objects, visual, undo">vim</button>
       <button class="btn ghost sm" id="wraptoggle" aria-pressed="false" title="Soft wrap long lines">wrap</button>
+      <button class="btn ghost sm" id="focusbtn" hidden aria-pressed="false"
+              title="Hide the code you already wrote and show only this stage's work">focus</button>
+      <button class="btn ghost sm" id="nextwork" hidden
+              title="Jump to the next thing this stage asks you to write (F2)">yours</button>
       <button class="btn ghost sm" id="resetcode" title="Restore the starter">reset</button>
     </div>
     <div class="editor${flag(WRAP_KEY) ? " softwrap" : ""}" id="ed">
@@ -257,6 +366,10 @@ function buildEditor(host, initial, onRun, starter = initial) {
   const badge = host.querySelector(".vimbadge");
 
   let errLines = new Set();
+  // The lines this stage asks for, worked out by the build from the difference
+  // between this starter and the previous stage's solution. By the last stage
+  // of a long project there are a dozen of them in a thousand line file.
+  const workLines = new Set(opts.work || []);
   let lastHl = null, lastLines = -1, lastMarks = "";
   let relTo = null;          // cursor line for vim's relative numbering, or null
 
@@ -281,7 +394,7 @@ function buildEditor(host, initial, onRun, starter = initial) {
       lastLines = n;
       lastMarks = null;          // the loop below fills in every label and mark
     }
-    const marks = [...errLines].join(",") + "|" + relTo;
+    const marks = [...errLines].join(",") + "|" + relTo + "|" + workLines.size;
     if (marks !== lastMarks) {
       // Only the marks moved. Vim calls paint() on every motion key, so
       // re-parsing the gutter's HTML for a cursor move was the bulk of the cost
@@ -291,7 +404,8 @@ function buildEditor(host, initial, onRun, starter = initial) {
         const el = rows[i - 1];
         if (!el) break;
         const cur = relTo !== null && i === relTo + 1;
-        const cls = "gl" + (errLines.has(i) ? " err" : "") + (cur ? " cur" : "");
+        const cls = "gl" + (errLines.has(i) ? " err" : "")
+                  + (workLines.has(i) ? " work" : "") + (cur ? " cur" : "");
         if (el.className !== cls) el.className = cls;   // assigning invalidates style even when equal
         const label = relTo === null || cur ? i : Math.abs(i - 1 - relTo);
         if (el.textContent !== String(label)) el.textContent = label;
@@ -307,6 +421,30 @@ function buildEditor(host, initial, onRun, starter = initial) {
       const wrapping = ed.classList.contains("softwrap");
       requestAnimationFrame(() => { ta.style.width = wrapping ? "" : pre.scrollWidth + "px"; });
     }
+    reveal();
+  }
+
+  /* The editor is a capped pane now, so it is what scrolls rather than the
+     page, and nothing scrolls it to follow the caret. A textarea does that for
+     itself when it is the scroller; here it is not, and without this every vim
+     motion past the last visible line moves a caret nobody can see.
+
+     Only when the caret has actually changed line, so that a reader who has
+     scrolled away to look at something is not dragged back on a repaint. */
+  let lastCaretLine = -1;
+  function reveal() {
+    const line = ta.value.slice(0, ta.selectionStart).split("\n").length - 1;
+    if (line === lastCaretLine) return;
+    lastCaretLine = line;
+    if (ed.scrollHeight <= ed.clientHeight) return;
+    const height = parseFloat(getComputedStyle(ta).lineHeight) || 26;
+    const margin = height * 2;                      // keep two lines of context
+    const top = line * height;
+    if (top - margin < ed.scrollTop) {
+      ed.scrollTop = Math.max(0, top - margin);
+    } else if (top + height + margin > ed.scrollTop + ed.clientHeight) {
+      ed.scrollTop = top + height + margin - ed.clientHeight;
+    }
   }
 
   /* Vim mode intercepts keys before the handlers below, so Tab and Enter are
@@ -314,6 +452,8 @@ function buildEditor(host, initial, onRun, starter = initial) {
   const vim = Vim.attach(ta, { paint, onRun, badge, gutter(line) { relTo = line; } });
 
   ta.addEventListener("input", paint);
+  ta.addEventListener("keyup", reveal);
+  ta.addEventListener("click", reveal);
   ta.addEventListener("scroll", () => { pre.parentElement.scrollLeft = ta.scrollLeft; });
 
   /* Replace [from, to) with text, then leave the selection where asked.
@@ -420,15 +560,124 @@ function buildEditor(host, initial, onRun, starter = initial) {
   paintWrap();
 
   paint();
+  /* The work is rarely one block: nearly half of all stages scatter it, and one
+     spreads it over eleven places. So this walks the runs rather than the
+     lines, and wraps round at the end. */
+  const runs = [];
+  for (const line of [...workLines].sort((a, b) => a - b)) {
+    const last = runs[runs.length - 1];
+    if (last && line - last[1] <= 3) last[1] = line;
+    else runs.push([line, line]);
+  }
+  let atRun = -1;
+
+  function goToLine(line) {
+    const lines = ta.value.split("\n");
+    const at = lines.slice(0, Math.max(0, line - 1)).join("\n").length + (line > 1 ? 1 : 0);
+    ta.focus();
+    ta.setSelectionRange(at, at);
+    lastCaretLine = -1;                 // force the reveal even onto the same line
+    reveal();
+    paint();
+  }
+
+  function goToWork(step = 1) {
+    if (!runs.length) return;
+    atRun = (atRun + step + runs.length) % runs.length;
+    goToLine(runs[atRun][0]);
+  }
+
+  /* Focus mode. The carried regions come out of the textarea and go into
+     `segs`, which is the only copy of them, so every path back out of here
+     writes them again. `code()` is what everything else must read: the whole
+     file, whichever mode the editor happens to be in. */
+  const carriedParts = runs.length ? cutStarter(starter, runs) : [];
+  let segs = null;                       // non-null exactly while focused
+  let focusMap = null;                   // full file line -> focus line
+
+  function code() {
+    return segs ? fromFocus(ta.value, segs) : ta.value;
+  }
+
+  function setFocus(on) {
+    if (on === !!segs) return true;
+    if (on) {
+      const found = derive(ta.value, carriedParts);
+      if (!found) return false;          // a carried region was rewritten
+      segs = found;
+      focusMap = new Map();
+      let full = 1, shown = 1;
+      for (const seg of segs) {
+        if (seg.carried) {
+          for (let i = 0; i < seg.lines.length; i++) focusMap.set(full++, shown);
+          shown++;                       // the one fold line standing in for it
+        } else {
+          for (let i = 0; i < seg.lines.length; i++) focusMap.set(full++, shown++);
+        }
+      }
+      ta.value = toFocus(segs);
+    } else {
+      ta.value = fromFocus(ta.value, segs);
+      segs = null;
+      focusMap = null;
+    }
+    vim.sync();
+    lastCaretLine = -1;
+    paint();
+    ed.scrollTop = 0;
+    return true;
+  }
+
+  const focusBtn = host.querySelector("#focusbtn");
+  if (runs.length && carriedParts.length) {
+    focusBtn.hidden = false;
+    focusBtn.addEventListener("click", () => {
+      const wanted = !segs;
+      if (!setFocus(wanted)) {
+        // The reader has rewritten code an earlier stage wrote. That is allowed,
+        // and it means this editor can no longer say which lines are theirs.
+        focusBtn.hidden = true;
+        return;
+      }
+      focusBtn.setAttribute("aria-pressed", String(!!segs));
+      focusBtn.classList.toggle("on", !!segs);
+    });
+  }
+
+  const nextBtn = host.querySelector("#nextwork");
+  if (runs.length) {
+    nextBtn.hidden = false;
+    nextBtn.textContent = runs.length > 1 ? `yours (${runs.length})` : "yours";
+    nextBtn.addEventListener("click", () => goToWork(1));
+  }
+
   return {
+    goToWork,
+    goToLine,
+    code,
+    setFocus,
+    get focused() { return !!segs; },
+    runs,
     ta,
     paint,
     el: ed,
     // Back to the exercise's starter, NOT to whatever the editor happened to
     // open with: after an edit and a reload those are the same value, and reset
     // would hand back the edit it was asked to discard.
-    reset: () => { ta.value = starter; vim.sync(); paint(); },
-    setErrorLines(lines) { errLines = new Set(lines); paint(); },
+    reset: () => {
+      segs = null;                       // whole file again, whatever mode we were in
+      focusMap = null;
+      ta.value = starter;
+      vim.sync();
+      paint();
+    },
+    // The judges count lines in the whole file. In focus mode the editor is
+    // showing a shorter one, so a line has to be moved to where it now sits,
+    // and a line inside a collapsed region lands on the row that stands for it.
+    setErrorLines(lines) {
+      errLines = new Set(focusMap ? lines.map(n => focusMap.get(n) ?? n) : lines);
+      paint();
+    },
   };
 }
 
@@ -437,13 +686,51 @@ function buildEditor(host, initial, onRun, starter = initial) {
 const row = (who, cls, text) =>
   `<div class="verdict-row ${cls}"><i class="lamp"></i><span class="who">${who}</span><span class="what">${esc(text)}</span></div>`;
 
+/* What the file holds, as a strip above it.
+
+   A stage carries every earlier stage with it, so the honest answer to "what
+   is in this thousand line file" is a list of names, not a thousand lines. The
+   ones this stage asks for are marked, and clicking any of them goes there, so
+   the shape of the thing is readable without scrolling through it at all. */
+function renderOutline(host, outline, editor) {
+  if (!outline || outline.length < 4) return;          // a short file is its own outline
+  const mine = outline.filter(m => m.mine).length;
+  host.className = "wb-outline";
+  host.innerHTML = `
+    <button class="ol-head" aria-expanded="false">
+      <span class="ol-caret">▸</span>
+      <span>${outline.length} things in this file</span>
+      ${mine ? `<span class="ol-mine">${mine} yours</span>` : ""}
+    </button>
+    <div class="ol-list" hidden>${outline.map(m => `
+      <button class="ol-item${m.mine ? " mine" : ""}" data-line="${m.line}">
+        <span class="ol-kind">${m.kind}</span>
+        <span class="ol-name">${m.name}</span>
+        <span class="ol-lines">${m.lines}</span>
+      </button>`).join("")}</div>`;
+
+  const head = host.querySelector(".ol-head");
+  const list = host.querySelector(".ol-list");
+  head.addEventListener("click", () => {
+    const open = list.hidden;
+    list.hidden = !open;
+    head.setAttribute("aria-expanded", String(open));
+    host.querySelector(".ol-caret").textContent = open ? "▾" : "▸";
+  });
+  list.addEventListener("click", (e) => {
+    const item = e.target.closest(".ol-item");
+    if (item) editor.goToLine(Number(item.dataset.line));
+  });
+}
+
 export function mountWorkbench(host, ctx) {
   const { exercise: ex, storageKey, onPass, next } = ctx;
 
   let saved = "";
   try { saved = localStorage.getItem(storageKey) || ""; } catch {}
 
-  host.innerHTML = `<div id="edhost"></div>
+  host.innerHTML = `<div id="outline"></div>
+    <div id="edhost"></div>
     <div class="wb-actions">
       <button class="btn" id="run">Run <kbd class="runkey">\u2318\u23ce</kbd></button>
       <span id="wbstatus" class="mono faint" style="font-size:var(--t-micro)"></span>
@@ -452,7 +739,30 @@ export function mountWorkbench(host, ctx) {
     <div id="verdict"></div>
     <div id="reading"></div>`;
 
-  const editor = buildEditor(host.querySelector("#edhost"), saved || ex.starter, () => run(), ex.starter);
+  // The work marks describe the starter. Once a reader has edited, the line
+  // numbers the build worked out no longer point at the same lines, so they are
+  // shown for the code as it was handed over and dropped as soon as it is not.
+  const untouched = !saved || saved === ex.starter;
+  const editor = buildEditor(host.querySelector("#edhost"), saved || ex.starter,
+                             () => run(), ex.starter,
+                             { work: untouched ? ex.work : null });
+  // Open on the work rather than on line one. A reader who lands on the top of
+  // a thousand line file has to go looking for the thirteen lines that are the
+  // point of the stage.
+  if (untouched && editor.runs.length) requestAnimationFrame(() => editor.goToWork(0));
+  renderOutline(host.querySelector("#outline"), untouched ? ex.outline : null, editor);
+
+  // On the host rather than on document: a route change replaces this subtree,
+  // so the listener goes with it. There is no teardown hook here to remove one
+  // from document, and a listener that outlives its editor would walk the work
+  // of a stage the reader has left.
+  host.addEventListener("keydown", (e) => {
+    if (e.key === "F2" && editor.runs.length) {
+      e.preventDefault();
+      editor.goToWork(e.shiftKey ? -1 : 1);
+    }
+  });
+
   const status = host.querySelector("#wbstatus");
   const verdict = host.querySelector("#verdict");
   const reading = host.querySelector("#reading");
@@ -461,7 +771,9 @@ export function mountWorkbench(host, ctx) {
   // is the one blocking call on the typing path. Save shortly after typing
   // stops, and flush before anything that could lose the buffer.
   let saveTimer = null;
-  const save = () => { try { localStorage.setItem(storageKey, editor.ta.value); } catch {} };
+  // code(), never ta.value: in focus mode the textarea holds the reader's
+  // regions and nothing else, and saving that would lose the rest of the file.
+  const save = () => { try { localStorage.setItem(storageKey, editor.code()); } catch {} };
   editor.ta.addEventListener("input", () => {
     clearTimeout(saveTimer);
     saveTimer = setTimeout(save, 400);
@@ -483,7 +795,7 @@ export function mountWorkbench(host, ctx) {
     editor.el.classList.remove("passed");
     reading.innerHTML = "";
     editor.setErrorLines([]);
-    const src = editor.ta.value;
+    const src = editor.code();
 
     verdict.innerHTML = `<div class="verdict">
       ${row("ruff", "is-wait", "checking…")}

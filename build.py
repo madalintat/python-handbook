@@ -444,6 +444,50 @@ STAGE_BRIEF_MIN = 60
 _PROJECT_STAGES = {slug: stages for slug, _, _, stages, *_ in PROJECTS}
 
 
+def _mark_work(stages: list[dict]) -> None:
+    """Record which lines of each starter are this stage's own work.
+
+    A stage carries every earlier stage with it, so by stage twelve the starter
+    is a thousand lines of which thirteen are the thing to write. Nobody should
+    have to hunt for them, and nobody should have to annotate them either: the
+    answer is the difference between this starter and the previous solution,
+    which the file already contains.
+
+    Lines rather than characters, and a set of lines rather than ranges,
+    because the reader edits by line and the editor draws by line. A line that
+    also appears in the previous solution is carried even if it moved, which is
+    what stops a reformatted import block reading as new work.
+    """
+    previous: set[str] = set()
+    for stage in stages:
+        lines = stage["starter"].split("\n")
+        work = [i + 1 for i, line in enumerate(lines)
+                if line.strip() and line not in previous]
+        stage["work"] = work
+        stage["outline"] = _outline(lines, set(work))
+        previous = set(stage["solution"].split("\n"))
+
+
+def _outline(lines: list[str], work: set[int]) -> list[dict]:
+    """The top level shape of a file: what is in it, and where the work is.
+
+    One entry per class or top level function, with the line it starts on and
+    whether any of this stage's work falls inside it. It is what lets a reader
+    see a thousand line file without scrolling through it.
+    """
+    marks = []
+    for i, line in enumerate(lines, 1):
+        head = re.match(r"^(class|def|async def) ([A-Za-z_]\w*)", line)
+        if head:
+            marks.append({"line": i, "kind": head.group(1).split()[-1],
+                          "name": head.group(2)})
+    for j, mark in enumerate(marks):
+        end = marks[j + 1]["line"] if j + 1 < len(marks) else len(lines) + 1
+        mark["mine"] = any(mark["line"] <= n < end for n in work)
+        mark["lines"] = end - mark["line"]
+    return marks
+
+
 def parse_project(path: Path) -> dict:
     meta, body = front_matter(path.read_text(), path)
     slug = meta["slug"]
@@ -480,6 +524,8 @@ def parse_project(path: Path) -> dict:
             "tests": blocks["tests"],
             "solution": blocks["solution"],
         })
+
+    _mark_work(stages)
 
     want = _PROJECT_STAGES.get(slug)
     if want is None:

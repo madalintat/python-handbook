@@ -1,6 +1,7 @@
 /* Smallest thing that fails if the tokenizer breaks. Run: node test_frontend.mjs */
 import assert from "node:assert/strict";
-import { highlightPython as hl } from "./assets/workbench.js";
+import { highlightPython as hl, cutStarter, derive, toFocus, fromFocus }
+  from "./assets/workbench.js";
 
 let checks = 0;
 const has = (src, cls, text) => {
@@ -77,4 +78,63 @@ for (const [name, src, element] of CANNOT_RENDER) {
     `md() now renders ${name} as ${element}; build.py still refuses it in UNSUPPORTED_MARKDOWN`);
 }
 
-console.log(`tokenizer + renderer: ${checks} checks clean`);
+
+
+
+/* Focus mode hides the code an earlier stage wrote, which means taking it out
+   of the textarea, which means the only copy of it is the model below. Every
+   check here is about the same thing: nothing the reader typed can be lost. */
+{
+  const starter = ["import os", "", "def carried():", "    return 1", "",
+                   "def mine():", "    raise NotImplementedError", "",
+                   "def also_carried():", "    return 2"].join("\n");
+  const parts = cutStarter(starter, [[6, 7]]);
+  ok(parts.length === 2, "the work has carried code on both sides of it");
+
+  const segs = derive(starter, parts);
+  ok(segs !== null, "the carried regions are found in the starter");
+  ok(fromFocus(toFocus(segs), segs) === starter, "focus round trips untouched");
+
+  const focus = toFocus(segs);
+  ok(focus.split("\n").length < starter.split("\n").length, "focus is shorter");
+  ok(focus.includes("def mine():"), "focus keeps the work");
+  ok(!focus.includes("def carried():"), "focus hides what was carried");
+
+  const whole = fromFocus(focus.replace("    raise NotImplementedError", "    return 42"), segs);
+  ok(whole.includes("    return 42"), "an edit made in focus survives leaving it");
+  ok(whole.includes("def carried():") && whole.includes("def also_carried():"),
+     "and the carried code comes back");
+  ok(whole.indexOf("def carried():") < whole.indexOf("return 42")
+     && whole.indexOf("return 42") < whole.indexOf("def also_carried():"),
+     "in the order it was in");
+
+  const grown = fromFocus(
+    focus.replace("    raise NotImplementedError", "    a = 1\n    b = 2"), segs);
+  ok(grown.includes("    a = 1") && grown.includes("    b = 2"), "added lines survive");
+
+  // a reader who deletes a fold line has merged two regions. that is allowed to
+  // put text in the wrong place; it is not allowed to lose it.
+  const mangled = focus.split("\n").filter(l => !/you already built/.test(l)).join("\n");
+  const saved = fromFocus(mangled, segs);
+  ok(saved.includes("def mine():"), "deleting a fold line loses no work");
+  ok(saved.includes("def carried():"), "and still restores the carried code");
+
+  // the split is re-derived, so a full-mode edit does not strand focus mode
+  const again = derive(whole.replace("    return 42", "    return 43"), parts);
+  ok(again !== null, "the split survives an edit made outside focus");
+  ok(toFocus(again).includes("return 43"), "and picks up the new text");
+
+  // rewriting carried code turns focus off rather than guessing
+  ok(derive(starter.replace("def carried():", "def renamed():"), parts) === null,
+     "a rewritten carried region gives up instead of guessing");
+
+  // several regions, each edit landing in its own slot
+  const multi = ["a", "W1", "b", "b2", "W2", "c"].join("\n");
+  const msegs = derive(multi, cutStarter(multi, [[2, 2], [5, 5]]));
+  ok(fromFocus(toFocus(msegs), msegs) === multi, "many regions round trip");
+  ok(fromFocus(toFocus(msegs).replace("W1", "X1").replace("W2", "X2"), msegs)
+     === ["a", "X1", "b", "b2", "X2", "c"].join("\n"),
+     "and each edit lands in its own region");
+}
+
+console.log(`tokenizer, renderer and focus mode: ${checks} checks clean`);
