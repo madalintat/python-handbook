@@ -27,10 +27,28 @@ import json, sys
 sys.path.insert(0, ".")
 import build
 from pathlib import Path
+
+
+def marker(stage):
+    """A line of the solution the starter does not contain.
+
+    The check in the browser needs to tell "the editor took the solution" from
+    "the editor still holds the starter", and the two are byte-identical for
+    the first forty characters in 98 of the 108 stages, because they open with
+    the same imports. A line only the solution has cannot be confused.
+    """
+    starter = stage["starter"]
+    for line in stage["solution"].split("\n"):
+        if len(line.strip()) > 12 and line not in starter:
+            return line
+    raise SystemExit(f"{stage['n']}: the solution has no line the starter lacks")
+
+
 out = {}
 for p in sorted(Path("content/projects").glob("*.md")):
     d = build.parse_project(p)
-    out[d["slug"]] = [{"n": s["n"], "title": s["title"], "solution": s["solution"]}
+    out[d["slug"]] = [{"n": s["n"], "title": s["title"], "solution": s["solution"],
+                       "mark": marker(s)}
                       for s in d["stages"]]
 Path(".qa-solutions.json").write_text(json.dumps(out))
 PY
@@ -79,7 +97,7 @@ const MOUNT = String.raw`(async (slug, stage) => {
     return 'did not mount';
   }
   if (!await until(() =>
-    (document.querySelector('#ed textarea')?.value ?? '').includes(stage.head))) {
+    (document.querySelector('#ed textarea')?.value ?? '').includes(stage.mark))) {
     return 'the editor did not take the solution';
   }
   globalThis.__phVerdict = null;
@@ -99,8 +117,12 @@ if (!slugs.length) {
   for (const slug of slugs) {
     let n = 0
     for (const stage of solutions[slug]) {
+      // `mark` is a line only the solution has, worked out above. Comparing
+      // the first characters instead would pass on the starter, which opens
+      // with the same imports, and a seeding failure would then be reported as
+      // a solution that fails its own tests.
       const seed = { n: stage.n, title: stage.title, solution: stage.solution,
-                     head: stage.solution.slice(0, 40) }
+                     mark: stage.mark }
       total++; n++
       const problems = []
       const failed = await js(`(${MOUNT})(${JSON.stringify(slug)}, ${JSON.stringify(seed)})`)
