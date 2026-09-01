@@ -841,7 +841,14 @@ def _judge_all(sources: dict[str, str]) -> dict[str, dict]:
             if out.returncode == 0:
                 return name, ""
             tail = [ln for ln in out.stderr.strip().splitlines() if ln and not ln[0].isspace()]
-            return name, tail[-1].split(":")[0].strip() if tail else ""
+            if not tail:
+                return name, ""
+            # A traceback prints the qualified name (json.decoder.JSONDecodeError)
+            # while the browser reports type(e).__name__ (JSONDecodeError), its
+            # last component. Without this the two judges disagree about every
+            # exception not defined in builtins, and an exercise expecting one
+            # would validate here and fail for the reader, or the reverse.
+            return name, tail[-1].split(":")[0].strip().rsplit(".", 1)[-1]
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
             for name, raised in pool.map(run_one, sources.items()):
@@ -869,6 +876,16 @@ def _satisfies(expects: list[dict], verdict: dict) -> list[str]:
     return problems
 
 
+# Cases where the two runners could disagree about what an exception is called.
+# The browser reports type(e).__name__; a traceback prints the qualified name.
+_NAME_CASES = {
+    "_agree_builtin": ('raise TypeError("x")', "TypeError"),
+    "_agree_qualified": ('import json\njson.loads("{bad")', "JSONDecodeError"),
+    "_agree_custom": ('class ConfigError(Exception): pass\nraise ConfigError("x")', "ConfigError"),
+    "_agree_nested": ('import decimal\ndecimal.Decimal("x")', "InvalidOperation"),
+}
+
+
 def validate() -> int:
     if not _judges_available():
         print("validate needs uv with ruff and mypy available", file=sys.stderr)
@@ -885,9 +902,18 @@ def validate() -> int:
             sources[f"{base}__broken"] = _combine(ex["starter"], ex["tests"])
             sources[f"{base}__solution"] = _combine(ex["solution"], ex["tests"])
 
+    # Judged alongside the exercises, so the two runners cannot drift apart on
+    # what an exception is called without a check failing.
+    sources.update({k: src for k, (src, _) in _NAME_CASES.items()})
     verdicts = _judge_all(sources)
 
     failures = 0
+    for key, (_, expected) in _NAME_CASES.items():
+        got = verdicts[key]["raises"]
+        if got != expected:
+            print(f"FAIL judges: an exception the browser calls {expected!r} "
+                  f"is reported here as {got!r}")
+            failures += 1
     for base, (label, ex) in sorted(labels.items()):
         starter = verdicts[f"{base}__starter"]
         broken = verdicts[f"{base}__broken"]
