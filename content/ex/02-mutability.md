@@ -154,7 +154,7 @@ assert row == ("a", 1), f"the original row changed: {row}"
 ~~~solution
 def relabel(row: tuple[str, int], name: str) -> tuple[str, int]:
     """Return the row with its first field replaced by name."""
-    return (name, *row[1:])
+    return (name, row[1])
 
 
 print(relabel(("a", 1), "b"))
@@ -262,5 +262,5 @@ assert extended is not original, "the same list came back"
 ~~~solution
 def add_line(report, line):
     """Return a new report with line added, leaving the original alone."""
-    return [*report, line]
+    return report + [line]
 ~~~

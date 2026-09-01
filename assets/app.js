@@ -1,22 +1,18 @@
 /* The Python Handbook — routing, views, progress. No framework, no build step. */
 
-import { highlightPython, mountWorkbench } from "./workbench.js";
+import { highlightPython, mountWorkbench, esc, inline, cached, flag, setFlag } from "./workbench.js";
 
 const main = document.getElementById("main");
 const $ = (s, r = document) => r.querySelector(s);
 
 /* ------------------------------------------------------------------ data */
 
-const cache = new Map();
-async function load(name) {
-  if (!cache.has(name)) {
-    cache.set(name, fetch(`data/${name}.json`).then(r => {
-      if (!r.ok) throw new Error(`${name} not built yet`);
-      return r.json();
-    }));
-  }
-  return cache.get(name);
-}
+// cached() memoises the success and drops a failure, so one bad fetch does not
+// poison a key for the rest of the session.
+const load = name => cached(`data:${name}`, () => fetch(`data/${name}.json`).then(r => {
+  if (!r.ok) throw new Error(`${name} not built yet`);
+  return r.json();
+}));
 
 /* ------------------------------------------------------------------ progress */
 
@@ -25,6 +21,9 @@ const store = {
   all() { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; } },
   save(p) { try { localStorage.setItem(KEY, JSON.stringify(p)); } catch {} },
   get(bucket, k) { return (this.all()[bucket] || {})[k]; },
+  // rendering the 39-unit track called get() once per card, and each call
+  // re-read and re-parsed the whole progress blob
+  read() { return this.all().read || {}; },
   set(bucket, k, v) {
     const p = this.all();
     (p[bucket] ||= {})[k] = v;
@@ -33,8 +32,6 @@ const store = {
 };
 
 const RAIL_KEY = "ph.rail";
-const flag = k => { try { return localStorage.getItem(k) === "1"; } catch { return false; } };
-const setFlag = (k, on) => { try { localStorage.setItem(k, on ? "1" : "0"); } catch {} };
 const railCollapsed = () => flag(RAIL_KEY);
 
 const sheet = document.getElementById("sheet");
@@ -48,16 +45,9 @@ sheet?.addEventListener("click", e => { if (e.target.closest("a")) sheet.classLi
    Deliberately small: headings, paragraphs, fenced code, inline code, bold,
    links and lists. Anything the notes do not use is not supported.          */
 
-const esc = s => s.replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
 const slugify = s => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
-function inline(s) {
-  return esc(s)
-    .replace(/`([^`]+)`/g, (_, c) => `<code>${c}</code>`)
-    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
-    .replace(/(^|[\s(])\*([^*\n]+)\*/g, "$1<em>$2</em>")
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
-}
+const BLOCK = /^(```|#{2,4}\s|[-*]\s)/;
 
 function md(src) {
   const out = [];
@@ -90,7 +80,7 @@ function md(src) {
     if (!line.trim()) { i++; continue; }
 
     const para = [];
-    while (i < lines.length && lines[i].trim() && !lines[i].startsWith("```") && !/^#{2,4}\s/.test(lines[i]) && !/^[-*]\s/.test(lines[i])) {
+    while (i < lines.length && lines[i].trim() && !BLOCK.test(lines[i])) {
       para.push(lines[i++]);
     }
     out.push(`<p>${inline(para.join(" "))}</p>`);
@@ -159,9 +149,9 @@ async function viewHome() {
 
 const pad = n => String(n).padStart(2, "0");
 
-function unitCard(u) {
-  const state = u.hasNote ? (store.get("read", u.slug) ? "read" : "ready") : "soon";
-  const badge = { read: '<span class="done">read</span>', ready: "", soon: '<span>not written yet</span>' }[state];
+function unitCard(u, readSet = store.read()) {
+  const badge = !u.hasNote ? "<span>not written yet</span>"
+    : readSet[u.slug] ? '<span class="done">read</span>' : "";
   return `<a class="card" data-accent="${u.accent}" href="#/unit/${u.slug}">
     <span class="n">${pad(u.n)}</span>
     <h3>${esc(u.title)}</h3>
@@ -186,10 +176,10 @@ async function viewTrack() {
     <h1 style="margin:0.4rem 0 0.6rem">${m.track.length} units, in order</h1>
     <p class="lede muted" style="max-width:60ch">Each unit depends on the ones before it. There are no optional
     units and no shortcuts — the ordering is the argument.</p>
-    ${m.phases.map(ph => `
+    ${(() => { const seen = store.read(); return m.phases.map(ph => `
       <div class="phase-head"><h3>${esc(ph.title)}</h3><p>${esc(ph.blurb)}</p></div>
-      <div class="grid">${m.track.filter(u => u.phase === ph.n).map(unitCard).join("")}</div>
-    `).join("")}
+      <div class="grid">${m.track.filter(u => u.phase === ph.n).map(u => unitCard(u, seen)).join("")}</div>
+    `).join(""); })()}
   </div>`;
   stagger([...main.querySelectorAll(".card")]);
 }
@@ -250,7 +240,11 @@ async function viewUnit(slug, anchor) {
   if (anchor) document.getElementById(anchor)?.scrollIntoView({ behavior: "instant", block: "start" });
 }
 
+let unwireRail = null;
+
 function wireRail(sections) {
+  unwireRail?.();
+  unwireRail = null;
   const links = new Map([...document.querySelectorAll("#rail a")].map(a => [a.dataset.sec, a]));
   const fill = $("#railfill");
   const heads = sections.map(s => document.getElementById(s.id)).filter(Boolean);
@@ -270,6 +264,7 @@ function wireRail(sections) {
   };
   update();
   addEventListener("scroll", update, { passive: true });
+  unwireRail = () => removeEventListener("scroll", update);
 }
 
 async function viewWork(slug, n) {
@@ -414,6 +409,7 @@ async function viewProgress() {
       <div class="stat"><b>${passed}/${totalEx}</b><span>exercises passed</span></div>
       <div class="stat"><b>${hinted}</b><span>needed a hint</span></div>
       <div class="stat"><b>${Object.keys(p.drills || {}).length}</b><span>drill sets done</span></div>
+      <div class="stat"><b>${(p.streak || {}).run || 0}</b><span>day streak, best ${(p.streak || {}).best || 0}</span></div>
     </div>
     <div class="grid">${m.track.filter(u => u.hasNote).map(unitCard).join("")}</div>
     <div style="margin-top:2rem"><button class="btn ghost sm" id="reset">Erase all progress</button></div>
@@ -422,6 +418,16 @@ async function viewProgress() {
     if (confirm("Erase every note read, exercise passed and saved snippet?")) {
       Object.keys(localStorage).filter(k => k.startsWith("ph.")).forEach(k => localStorage.removeItem(k));
       touchStreak();
+
+// The footer states which judges the book was verified against. Rendered from
+// data/judges.json so it cannot claim a version nothing pins.
+load("judges").then(j => {
+  const el = $("#footversions");
+  if (!el) return;
+  el.innerHTML = `Built and verified against CPython ${esc(j.cpython.version)} and `
+    + `ruff ${esc(j.ruff.version)}, with mypy installed from PyPI at run time.<br>` + el.innerHTML;
+}).catch(() => {});
+
 route();
     }
   };
@@ -466,15 +472,15 @@ async function viewGlossary(letter) {
    fall out of step with the prose the workbench actually shows.              */
 
 const JUDGE_LABEL = {
-  runtime: ["CPython", "Exceptions the interpreter raises, and what each one is really telling you."],
-  ruff: ["ruff", "Lint codes. Mistakes with a shape a linter can see without running anything."],
-  mypy: ["mypy", "Type codes. Found before the program runs, and only on code you have annotated."],
-  reading: ["No complaint at all", "The cases where every judge is happy and the code is still wrong."],
+  runtime: ["CPython", "Exceptions the interpreter raises, and what each one is really telling you.", "clay"],
+  ruff: ["ruff", "Lint codes. Mistakes with a shape a linter can see without running anything.", "gold"],
+  mypy: ["mypy", "Type codes. Found before the program runs, and only on code you have annotated.", "denim"],
+  reading: ["No complaint at all", "The cases where every judge is happy and the code is still wrong.", "plum"],
 };
 
 async function viewErrors() {
   const errors = await load("errors");
-  const groups = ["runtime", "ruff", "mypy", "reading"];
+  const groups = Object.keys(JUDGE_LABEL);
   main.innerHTML = `<div class="wrap" data-accent="clay" style="padding:2rem 0 4rem">
     <p class="eyebrow">Errors</p>
     <h1 style="margin:0.4rem 0 0.6rem">Every complaint this book explains</h1>
@@ -484,12 +490,11 @@ async function viewErrors() {
     ${groups.map(g => {
       const list = errors.filter(e => e.judge === g);
       if (!list.length) return "";
-      const [label, blurb] = JUDGE_LABEL[g];
+      const [label, blurb, accent] = JUDGE_LABEL[g];
       return `<div class="phase-head"><h3>${label}</h3><p>${blurb}</p></div>
         <div class="grid">${list.map(e => {
           const first = e.seen[0];
-          return `<a class="card" data-accent="${g === "runtime" ? "clay" : g === "ruff" ? "gold" : g === "mypy" ? "denim" : "plum"}"
-                     href="#/work/${first.unit}/${first.n}">
+          return `<a class="card" data-accent="${accent}" href="#/work/${first.unit}/${first.n}">
             <span class="n">${esc(e.code)}</span>
             <h3>${esc(first.title)}</h3>
             <p>${inline(first.prose.slice(0, 180))}${first.prose.length > 180 ? "…" : ""}</p>
@@ -504,8 +509,12 @@ async function viewErrors() {
 /* ------------------------------------------------------------------ search */
 
 function score(entry, terms) {
-  const title = entry.title.toLowerCase();
-  const body = (entry.body || "").toLowerCase();
+  // lowercase once per entry, not once per keystroke: the note bodies are
+  // capped at 20k characters each and this runs on every debounced input
+  entry._t ??= entry.title.toLowerCase();
+  entry._b ??= (entry.body || "").toLowerCase();
+  const title = entry._t;
+  const body = entry._b;
   let s = 0;
   for (const q of terms) {
     if (title === q) s += 100;
@@ -622,9 +631,10 @@ const routes = [
 ];
 
 async function route() {
-  const path = location.hash.replace(/^#/, "") || "/";
+  const path = location.hash.slice(1) || "/";
   if (sheetBtn) sheetBtn.hidden = !path.startsWith("/unit/");
   sheet?.classList.remove("open");
+  if (!path.startsWith("/unit/")) { unwireRail?.(); unwireRail = null; }
   const hit = routes.find(([re]) => re.test(path));
   if (!hit) {
     notFound();
@@ -670,4 +680,14 @@ $("#theme").onclick = () => {
 };
 
 touchStreak();
+
+// The footer states which judges the book was verified against. Rendered from
+// data/judges.json so it cannot claim a version nothing pins.
+load("judges").then(j => {
+  const el = $("#footversions");
+  if (!el) return;
+  el.innerHTML = `Built and verified against CPython ${esc(j.cpython.version)} and `
+    + `ruff ${esc(j.ruff.version)}, with mypy installed from PyPI at run time.<br>` + el.innerHTML;
+}).catch(() => {});
+
 route();

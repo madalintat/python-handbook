@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import concurrent.futures
 import json
 import re
 import subprocess
@@ -19,6 +20,7 @@ from pathlib import Path
 ROOT = Path(__file__).parent
 CONTENT = ROOT / "content"
 DATA = ROOT / "data"
+CACHE = ROOT / ".cache"
 
 # ---------------------------------------------------------------- the manifest
 
@@ -153,11 +155,39 @@ PROJECTS = [
      "Tokenizer to embeddings to attention to a training loop to sampling. Consumes the BPE tokenizer and micrograd you already built, and ends with a model writing text."),
 ]
 
-TIERS = {"mini": "Mini", "core": "Core", "deep": "Deep"}
-
 # The four verdict kinds. `silent` is the one Rust cannot have: every judge is
 # happy and the code is still wrong.
 VERDICTS = {"ruff", "mypy", "raises", "silent"}
+
+# The one description of the three judges. build.py runs them from here and the
+# browser fetches this as data/judges.json, so what --validate calls clean and
+# what a reader is told is clean cannot drift apart.
+JUDGES = {
+    "ruff": {
+        "version": "0.16.5",
+        "cdn": "https://cdn.jsdelivr.net/npm/@astral-sh/ruff-wasm-web@0.16.5/",
+        "select": ["E", "F", "B", "SIM", "UP"],
+        # line length is a formatting opinion, not a teaching signal
+        "ignore": ["E501"],
+        "lineLength": 88,
+    },
+    "mypy": {
+        "flags": ["--no-color-output", "--no-error-summary", "--hide-error-context"],
+        # micropip does not resolve mypy's transitive dependencies in Pyodide
+        "install": ["mypy_extensions", "pathspec", "tomli", "mypy"],
+        # typing-extensions ships inside the Pyodide distribution
+        "preload": ["micropip", "typing-extensions"],
+    },
+    "cpython": {
+        "version": "3.14",
+        "cdn": "https://cdn.jsdelivr.net/pyodide/v314.0.6/full/",
+    },
+}
+
+# The four verdict kinds under the names the errors page groups them by, with the
+# heading and blurb it renders. Kept here so the page cannot drift from the
+# vocabulary the content is written in.
+JUDGE_GROUP = {"ruff": "ruff", "mypy": "mypy", "raises": "runtime", "silent": "reading"}
 
 # ---------------------------------------------------------------- parsing
 
@@ -204,6 +234,8 @@ def word_count(s: str) -> int:
 # ---------------------------------------------------------------- units
 
 NOTE_MIN, NOTE_MAX = 1400, 2600
+EXERCISES_PER_UNIT = 8
+DRILLS_PER_UNIT = 15
 
 
 def parse_unit(path: Path) -> dict:
@@ -290,8 +322,8 @@ def parse_exercises(path: Path) -> list[dict]:
             "solution": blocks["solution"],
         })
 
-    if len(out) != 8:
-        die(path, f"{len(out)} exercises, must be exactly 8")
+    if len(out) != EXERCISES_PER_UNIT:
+        die(path, f"{len(out)} exercises, must be exactly {EXERCISES_PER_UNIT}")
     return out
 
 
@@ -322,8 +354,8 @@ def parse_drills(path: Path) -> list[dict]:
             "answer": correct[0],
             "why": why.group(1).strip(),
         })
-    if len(out) != 15:
-        die(path, f"{len(out)} drills, must be exactly 15")
+    if len(out) != DRILLS_PER_UNIT:
+        die(path, f"{len(out)} drills, must be exactly {DRILLS_PER_UNIT}")
     return out
 
 
@@ -370,48 +402,48 @@ BASELINE = {
 }
 
 # slug -> what that unit's note teaches, and therefore what its exercises and
-# every later unit's exercises may use.
+# every later unit's exercises may use. This lists only features the detector
+# below can actually see: a name here that nothing detects gates nothing, which
+# is worse than not listing it, so the build refuses one.
 INTRODUCES = {
-    "00-toolchain": {"compile", "eval", "round", "math", "assert", "raise", "main_guard"},
-    "01-names": {"id", "copy_slice", "del", "class", "init", "self", "list_call"},
-    "02-mutability": {"comprehension", "copy_module", "deepcopy", "clear", "update",
-                      "spread", "slice", "sorted"},
-    "03-data-model": {"dunder", "callable", "iter", "sum", "setattr", "getattr",
-                      "repr", "hash"},
-    "04-equality": {"set", "frozenset", "any", "all", "nan"},
-    "05-expressions": {"walrus", "starred_assign", "conditional_expr", "next"},
-    "06-control-flow": {"match", "enumerate", "zip", "break", "continue", "loop_else", "product"},
-    "07-functions": {"starargs", "kwargs", "keyword_only", "positional_only", "closure", "lambda"},
-    "08-scope": {"nonlocal", "global"},
-    "09-exceptions": {"try", "except", "finally", "custom_exception"},
-    "10-sequences": {"slice", "negative_index", "slice_assign"},
-    "11-strings": {"encode", "decode", "bytes", "format_spec", "join", "split"},
-    "12-dicts": {"setdefault", "defaultdict", "dict_views", "dict_comprehension"},
-    "13-comprehensions": {"nested_comprehension", "counter", "deque", "chainmap"},
-    "14-sorting": {"key_func", "heapq", "bisect", "total_ordering"},
-    "15-iterators": {"iter_protocol", "stopiteration"},
-    "16-generators": {"yield", "yield_from", "generator_send"},
-    "17-itertools": {"itertools", "functools", "map", "filter", "reduce", "cache", "partial"},
-    "18-classes": {"new", "classmethod", "staticmethod", "class_attribute"},
-    "19-attributes": {"getattr_dunder", "slots", "property"},
-    "20-descriptors": {"descriptor"},
-    "21-mro": {"super", "inheritance", "mro"},
-    "22-protocols": {"with", "context_manager", "operator_overload"},
-    "23-dataclasses": {"dataclass", "namedtuple", "enum"},
-    "24-typing": {"generic", "typevar", "protocol_class", "literal", "typeddict", "optional"},
+    "00-toolchain": {"assert", "compile", "eval", "math", "raise", "round"},
+    "01-names": {"class", "del", "id"},
+    "02-mutability": {"comprehension", "copy_module", "deepcopy", "slice", "sorted"},
+    "03-data-model": {"callable", "getattr", "hash", "iter", "repr", "setattr", "sum"},
+    "04-equality": {"all", "any", "frozenset", "set"},
+    "05-expressions": {"conditional_expr", "next", "starargs", "walrus"},
+    "06-control-flow": {"enumerate", "match", "zip"},
+    "07-functions": {"lambda"},
+    "08-scope": {"global", "nonlocal"},
+    "09-exceptions": {"try"},
+    "10-sequences": set(),
+    "11-strings": set(),
+    "12-dicts": {"defaultdict", "dict_comprehension", "setdefault"},
+    "13-comprehensions": {"counter", "deque"},
+    "14-sorting": {"bisect", "heapq"},
+    "15-iterators": set(),
+    "16-generators": {"yield"},
+    "17-itertools": {"cache", "filter", "functools", "itertools", "map", "partial", "reduce"},
+    "18-classes": {"classmethod", "staticmethod"},
+    "19-attributes": {"property"},
+    "20-descriptors": set(),
+    "21-mro": {"super"},
+    "22-protocols": {"with"},
+    "23-dataclasses": {"dataclass", "enum", "namedtuple"},
+    "24-typing": {"optional"},
     "25-typecheck": set(),
-    "26-decorators": {"decorator", "wraps"},
-    "27-metaclasses": {"metaclass", "init_subclass"},
+    "26-decorators": {"wraps"},
+    "27-metaclasses": set(),
     "28-ast": {"ast", "dis", "inspect"},
-    "29-modules": {"relative_import", "package"},
+    "29-modules": set(),
     "30-packaging": set(),
-    "31-testing": {"pytest", "fixture", "monkeypatch"},
+    "31-testing": set(),
     "32-tooling": {"logging"},
-    "33-concurrency": {"thread", "process", "lock"},
-    "34-async": {"async_def", "await", "async_for", "taskgroup"},
-    "35-performance": {"profile", "timeit"},
-    "36-memory": {"weakref", "gc"},
-    "37-ecosystem": {"pathlib", "datetime", "re", "subprocess"},
+    "33-concurrency": {"thread"},
+    "34-async": {"async_def", "await"},
+    "35-performance": {"timeit"},
+    "36-memory": {"gc", "weakref"},
+    "37-ecosystem": {"pathlib", "re", "subprocess"},
     "38-tracebacks": {"breakpoint", "pdb"},
 }
 
@@ -432,6 +464,7 @@ _NODE_FEATURES = [
     ((ast.Await,), "await"),
     ((ast.IfExp,), "conditional_expr"),
     ((ast.Delete,), "del"),
+    ((ast.Starred,), "starargs"),
     ((ast.Assert,), "assert"),
     ((ast.Raise,), "raise"),
 ]
@@ -460,6 +493,28 @@ _MODULE_FEATURES = {
     "subprocess": "subprocess", "threading": "thread", "asyncio": "async_def",
     "typing": "optional", "pdb": "pdb", "timeit": "timeit",
 }
+
+
+# INTRODUCES says what each unit unlocks; the tables above say what the detector
+# can actually find. Nothing connected the two, so a feature named in INTRODUCES
+# but never detected gated nothing, and a detected feature named in no unit gated
+# everything forever. Both are now build failures.
+DETECTABLE = ({name for _, name in _NODE_FEATURES}
+              | set(_NAME_FEATURES.values()) | set(_MODULE_FEATURES.values()))
+
+
+def _check_feature_tables() -> None:
+    introduced = {f for feats in INTRODUCES.values() for f in feats}
+    undetectable = introduced - DETECTABLE - BASELINE
+    ungated = DETECTABLE - introduced - BASELINE
+    if undetectable:
+        raise SystemExit(f"INTRODUCES names features no detector finds: {sorted(undetectable)}")
+    if ungated:
+        raise SystemExit(f"the detector finds features no unit introduces: {sorted(ungated)}")
+    twice = [f for f in DETECTABLE
+             if sum(1 for feats in INTRODUCES.values() if f in feats) > 1]
+    if twice:
+        raise SystemExit(f"features introduced by more than one unit: {sorted(twice)}")
 
 
 def features_used(source: str) -> set[str]:
@@ -503,6 +558,7 @@ def available_by(slug: str) -> set[str]:
 
 def gate(path: Path) -> list[str]:
     """Complaints about an exercise file using constructs from further down the track."""
+    _check_feature_tables()
     slug = path.stem
     allowed = available_by(slug)
     problems = []
@@ -533,20 +589,24 @@ def build() -> int:
         by_slug[slug] = entry
         track.append(entry)
 
+    # Parse each file once. The JSON dump, the errors index and the search index
+    # all want the same parsed result, and re-globbing meant every validation and
+    # every regex ran two or three times per build.
+    units = {p: parse_unit(p) for p in sorted(CONTENT.glob("units/*.md"))}
+    exercises = {p: parse_exercises(p) for p in sorted(CONTENT.glob("ex/*.md"))}
+
     written = 0
-    for path in sorted(CONTENT.glob("units/*.md")):
-        unit = parse_unit(path)
+    for path, unit in units.items():
         if unit["slug"] not in by_slug:
             die(path, f"slug {unit['slug']!r} is not in TRACK")
         by_slug[unit["slug"]]["hasNote"] = True
         (DATA / f"unit-{unit['slug']}.json").write_text(json.dumps(unit))
         written += 1
 
-    for path in sorted(CONTENT.glob("ex/*.md")):
+    for path, ex in exercises.items():
         slug = path.stem
         if slug not in by_slug:
             die(path, f"slug {slug!r} is not in TRACK")
-        ex = parse_exercises(path)
         by_slug[slug]["hasEx"] = len(ex)
         (DATA / f"ex-{slug}.json").write_text(json.dumps(ex))
         written += 1
@@ -561,35 +621,33 @@ def build() -> int:
         written += 1
 
     projects = []
-    proj_slugs = {p[0] for p in PROJECTS}
     for slug, tier, domain, stages, minutes, title, blurb in PROJECTS:
         projects.append({
-            "slug": slug, "tier": tier, "tierLabel": TIERS[tier], "domain": domain,
+            "slug": slug, "tier": tier, "tierLabel": tier.capitalize(), "domain": domain,
             "stages": stages, "minutes": minutes, "title": title, "blurb": blurb,
             "hasBody": False,
         })
+    by_proj = {p["slug"]: p for p in projects}
     for path in sorted(CONTENT.glob("projects/*.md")):
         proj = parse_project(path)
-        if proj["slug"] not in proj_slugs:
+        if proj["slug"] not in by_proj:
             die(path, f"project slug {proj['slug']!r} is not in PROJECTS")
-        for p in projects:
-            if p["slug"] == proj["slug"]:
-                p["hasBody"] = True
+        by_proj[proj["slug"]]["hasBody"] = True
         (DATA / f"project-{proj['slug']}.json").write_text(json.dumps(proj))
         written += 1
 
     # The errors index is derived from every @diagnose in the book, so it cannot
     # drift from the prose the workbench actually shows.
     errors: dict[str, dict] = {}
-    for path in sorted(CONTENT.glob("ex/*.md")):
+    for path, parsed in exercises.items():
         slug = path.stem
-        for ex in parse_exercises(path):
+        for ex in parsed:
+            # The judge travels with the @expect declaration. Guessing it back
+            # from the shape of the code was wrong for B006, which looks like an
+            # exception name, and would be wrong again for the next such code.
+            declared = {e["code"] or e["judge"]: e["judge"] for e in ex["expects"]}
             for code, prose in ex["diagnose"].items():
-                # order matters: B006 starts with a capital too, so the ruff
-                # shape has to be tested before "looks like an exception name"
-                judge = ("reading" if code == "silent" else
-                         "ruff" if re.fullmatch(r"[A-Z]{1,4}\d{3,4}", code) else
-                         "runtime" if code[0].isupper() else "mypy")
+                judge = JUDGE_GROUP[declared[code]] if code in declared else "runtime"
                 entry = errors.setdefault(code, {"code": code, "judge": judge, "seen": []})
                 entry["seen"].append({"unit": slug, "n": ex["n"], "title": ex["title"],
                                       "prose": prose})
@@ -606,8 +664,7 @@ def build() -> int:
 
     # A search index built once here rather than fetching 39 notes in the browser.
     index = []
-    for path in sorted(CONTENT.glob("units/*.md")):
-        unit = parse_unit(path)
+    for unit in units.values():
         meta = by_slug[unit["slug"]]
         for sec in unit["sections"]:
             index.append({"kind": "section", "unit": unit["slug"], "n": meta["n"],
@@ -616,8 +673,8 @@ def build() -> int:
         index.append({"kind": "note", "unit": unit["slug"], "n": meta["n"],
                       "title": unit["title"], "id": "",
                       "body": re.sub(r"\s+", " ", unit["body"])[:20000]})
-    for path in sorted(CONTENT.glob("ex/*.md")):
-        for ex in parse_exercises(path):
+    for path, parsed in exercises.items():
+        for ex in parsed:
             # the diagnose prose is where an exercise's substance is; indexing
             # only the prompt makes half the book unsearchable
             body = " ".join([ex["prompt"], *ex["hints"], *ex["diagnose"].values()])
@@ -628,12 +685,18 @@ def build() -> int:
     (DATA / "search.json").write_text(json.dumps(index))
     written += 1
 
+    (DATA / "judges.json").write_text(json.dumps(JUDGES))
+    written += 1
+
     (DATA / "manifest.json").write_text(json.dumps({
         "track": track,
         "phases": [{"n": i, "title": t, "blurb": b} for i, (t, b) in enumerate(PHASES)],
         "projects": projects,
         "accents": ACCENTS,
         "totalMinutes": sum(p[4] for p in PROJECTS),
+        "exercisesPerUnit": EXERCISES_PER_UNIT,
+        "drillsPerUnit": DRILLS_PER_UNIT,
+        "judges": JUDGES,
     }))
     written += 1
 
@@ -656,7 +719,6 @@ def build() -> int:
     print(f"errors indexed: {len(errors)}   glossary terms: {len(gloss)}   "
           f"search entries: {len(index)}")
     return 1 if partial else 0
-    return 0
 
 
 # ---------------------------------------------------------------- check / validate
@@ -704,34 +766,64 @@ def _combine(source: str, tests: str) -> str:
     return f"{source}\n\n_PH_SOURCE = {source!r}\n{_IMPORT_SHIM}\n{tests}"
 
 
-def _judge(source: str) -> dict:
-    """Run all three judges over one snippet. Mirrors the browser workbench."""
+def _judge_all(sources: dict[str, str]) -> dict[str, dict]:
+    """Judge many snippets at once.
+
+    ruff and mypy cost almost nothing per file and a great deal per invocation,
+    so both run once over the whole set rather than once per snippet. CPython has
+    to stay one process per snippet, since each one runs arbitrary code, but they
+    are independent and go through a thread pool.
+    """
+    verdicts = {name: {"ruff": [], "mypy": [], "raises": ""} for name in sources}
+
     with tempfile.TemporaryDirectory() as td:
-        f = Path(td) / "snippet.py"
-        f.write_text(source)
+        root = Path(td)
+        paths = {}
+        for name, src in sources.items():
+            f = root / f"{name}.py"
+            f.write_text(src)
+            paths[f.name] = name
 
         ruff = _run(["uv", "run", "--quiet", "--with", "ruff", "ruff", "check",
                      "--output-format", "json", "--isolated", "--no-cache",
-                     "--select", "E,F,B,SIM,UP", "--ignore", "E501", str(f)])
+                     "--select", ",".join(JUDGES["ruff"]["select"]),
+                     "--ignore", ",".join(JUDGES["ruff"]["ignore"]),
+                     "--line-length", str(JUDGES["ruff"]["lineLength"]), str(root)])
         try:
-            ruff_codes = sorted({d["code"] for d in json.loads(ruff.stdout or "[]") if d.get("code")})
+            for d in json.loads(ruff.stdout or "[]"):
+                name = paths.get(Path(d.get("filename", "")).name)
+                if name and d.get("code"):
+                    verdicts[name]["ruff"].append(d["code"])
         except json.JSONDecodeError:
-            ruff_codes = []
+            pass
 
+        CACHE.mkdir(parents=True, exist_ok=True)
         mypy = _run(["uv", "run", "--quiet", "--with", "mypy", "mypy",
-                     "--no-color-output", "--no-error-summary", "--hide-error-context",
-                     "--no-incremental", "--cache-dir", str(Path(td) / "c"), str(f)])
-        mypy_codes = sorted(set(re.findall(
-            r"^.*?:\d+:(?:\d+:)?\s*error:\s*.*?\s*\[([a-z-]+)\]\s*$", mypy.stdout, re.M)))
+                     *JUDGES["mypy"]["flags"],
+                     "--cache-dir", str(CACHE / "mypy"), *[str(root / f) for f in paths]])
+        for line in mypy.stdout.splitlines():
+            m = re.match(r"^(.*?):\d+:(?:\d+:)?\s*error:\s*.*?\s*\[([a-z-]+)\]\s*$", line)
+            if m:
+                name = paths.get(Path(m.group(1)).name)
+                if name:
+                    verdicts[name]["mypy"].append(m.group(2))
 
-        run = _run([sys.executable, str(f)])
-        raised = ""
-        if run.returncode != 0:
-            tail = [ln for ln in run.stderr.strip().splitlines() if ln and not ln[0].isspace()]
-            if tail:
-                raised = tail[-1].split(":")[0].strip()
+        def run_one(item):
+            name, _ = item
+            out = _run([sys.executable, str(root / f"{name}.py")])
+            if out.returncode == 0:
+                return name, ""
+            tail = [ln for ln in out.stderr.strip().splitlines() if ln and not ln[0].isspace()]
+            return name, tail[-1].split(":")[0].strip() if tail else ""
 
-    return {"ruff": ruff_codes, "mypy": mypy_codes, "raises": raised}
+        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+            for name, raised in pool.map(run_one, sources.items()):
+                verdicts[name]["raises"] = raised
+
+    for v in verdicts.values():
+        v["ruff"] = sorted(set(v["ruff"]))
+        v["mypy"] = sorted(set(v["mypy"]))
+    return verdicts
 
 
 def _satisfies(expects: list[dict], verdict: dict) -> list[str]:
@@ -755,53 +847,62 @@ def validate() -> int:
         print("validate needs uv with ruff and mypy available", file=sys.stderr)
         return 2
 
-    failures = 0
-    checked = 0
+    # Build every snippet the run needs, judge them all in one go, then check.
+    labels, sources = {}, {}
     for path in sorted(CONTENT.glob("ex/*.md")):
+        slug = path.stem.replace("-", "_")
         for ex in parse_exercises(path):
-            checked += 1
-            label = f"{path.stem} #{ex['n']} {ex['title']}"
+            base = f"ex_{slug}__{ex['n']}"
+            labels[base] = (f"{path.stem} #{ex['n']} {ex['title']}", ex)
+            sources[f"{base}__starter"] = ex["starter"]
+            sources[f"{base}__broken"] = _combine(ex["starter"], ex["tests"])
+            sources[f"{base}__solution"] = _combine(ex["solution"], ex["tests"])
 
-            # 1. the starter, alone, must produce the verdict its prose describes
-            starter_verdict = _judge(ex["starter"])
-            for problem in _satisfies(ex["expects"], starter_verdict):
-                print(f"FAIL starter  {label}: {problem}")
-                failures += 1
+    verdicts = _judge_all(sources)
 
-            # 2. the starter must actually FAIL its own hidden tests. without this
-            #    an exercise can quietly become already-solved and nobody notices.
-            # every code a judge actually produced must have prose explaining it,
-            # or the learner meets a yellow row with no reading beside it
-            for judge in ("ruff", "mypy"):
-                for code in starter_verdict[judge]:
-                    if code not in ex["diagnose"]:
-                        print(f"FAIL starter  {label}: {judge} reported {code} "
-                              f"but there is no @diagnose {code}")
-                        failures += 1
+    failures = 0
+    for base, (label, ex) in sorted(labels.items()):
+        starter = verdicts[f"{base}__starter"]
+        broken = verdicts[f"{base}__broken"]
+        sol = verdicts[f"{base}__solution"]
 
-            broken = _judge(_combine(ex["starter"], ex["tests"]))
-            if not broken["raises"]:
-                print(f"FAIL starter  {label}: starter already passes its own tests")
-                failures += 1
-            elif any(e["judge"] == "silent" for e in ex["expects"]) \
-                    and broken["raises"] != "AssertionError":
-                print(f"FAIL starter  {label}: @expect silent, so starter+tests should "
-                      f"fail an assert, but it raised {broken['raises']}")
-                failures += 1
+        # 1. the starter, alone, produces the verdict its prose describes
+        for problem in _satisfies(ex["expects"], starter):
+            print(f"FAIL starter  {label}: {problem}")
+            failures += 1
 
-            # 3. the solution must pass the tests and be clean
-            sol = _judge(_combine(ex["solution"], ex["tests"]))
-            if sol["raises"]:
-                print(f"FAIL solution {label}: solution+tests raised {sol['raises']}")
-                failures += 1
-            if sol["ruff"]:
-                print(f"FAIL solution {label}: solution is not ruff clean: {sol['ruff']}")
-                failures += 1
-            if sol["mypy"]:
-                print(f"FAIL solution {label}: solution is not mypy clean: {sol['mypy']}")
-                failures += 1
+        # 2. every code a judge reports has prose explaining it, or the reader
+        #    meets a coloured row with no reading beside it
+        for judge in ("ruff", "mypy"):
+            for code in starter[judge]:
+                if code not in ex["diagnose"]:
+                    print(f"FAIL starter  {label}: {judge} reported {code} "
+                          f"but there is no @diagnose {code}")
+                    failures += 1
 
-    print(f"\nvalidated {checked} exercises against ruff + mypy + CPython: "
+        # 3. the starter must actually FAIL its own hidden tests, or the exercise
+        #    is already solved and nobody would notice
+        if not broken["raises"]:
+            print(f"FAIL starter  {label}: starter already passes its own tests")
+            failures += 1
+        elif any(e["judge"] == "silent" for e in ex["expects"]) \
+                and broken["raises"] != "AssertionError":
+            print(f"FAIL starter  {label}: @expect silent, so starter+tests should "
+                  f"fail an assert, but it raised {broken['raises']}")
+            failures += 1
+
+        # 4. the solution passes the tests and is clean under both static judges
+        if sol["raises"]:
+            print(f"FAIL solution {label}: solution+tests raised {sol['raises']}")
+            failures += 1
+        if sol["ruff"]:
+            print(f"FAIL solution {label}: solution is not ruff clean: {sol['ruff']}")
+            failures += 1
+        if sol["mypy"]:
+            print(f"FAIL solution {label}: solution is not mypy clean: {sol['mypy']}")
+            failures += 1
+
+    print(f"\nvalidated {len(labels)} exercises against ruff + mypy + CPython: "
           f"{'ALL CLEAN' if not failures else f'{failures} FAILURES'}")
     return 1 if failures else 0
 

@@ -10,6 +10,9 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:ital,wght@0,400;0,600;1,400&display=swap">
 <link rel="stylesheet" href="assets/app.css">
+<link rel="modulepreload" href="assets/app.js">
+<link rel="modulepreload" href="assets/workbench.js">
+<link rel="modulepreload" href="assets/vim.js">
 <script>
   // set the theme before first paint so there is no flash
   try {
@@ -44,8 +47,7 @@
 <footer class="foot">
   <div class="wrap">
     <img src="assets/mascot-128.png" alt="">
-    <p>
-      Built and verified against CPython 3.14, ruff 0.16 and mypy 2.3.<br>
+    <p id="footversions">
       Every exercise is compiled and run for real, in your browser. Nothing you write leaves this machine.
     </p>
   </div>

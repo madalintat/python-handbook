@@ -26,28 +26,35 @@ step "python tokenizer"
 node test_frontend.mjs; note $?
 
 step "vim mode"
-node test_vim.mjs | tail -1
-node test_vim.mjs | grep -q "0 failed"; note $?
+vimout=$(node test_vim.mjs); rc=$?
+echo "$vimout" | tail -1
+note $rc
 
-step "every content file parses"
-parsefail=0
-for f in content/units/*.md content/ex/*.md content/drills/*.md content/gloss/*.md content/projects/*.md; do
-  [ -e "$f" ] || continue
-  out=$(python3 build.py --check "$f" 2>&1) || { echo "   $f: $out"; parsefail=1; }
-done
-note $parsefail
-
-step "no exercise uses a construct the reader has not met"
+# One interpreter for every content file: build.py --check per file meant fifty
+# starts, each re-importing the whole module and its tables. --check on an
+# exercise already runs the vocabulary gate, so there is no second step.
+step "every content file parses, and no exercise runs ahead of the reader"
 python3 - <<'PY'
 import sys
 from pathlib import Path
 sys.path.insert(0, ".")
 import build
-problems = [p for f in sorted(Path("content/ex").glob("*.md")) for p in build.gate(f)]
-for p in problems:
-    print("  " + p)
-print(f"   {len(problems)} vocabulary violations")
-sys.exit(1 if problems else 0)
+
+bad = 0
+for kind, parse in (("units", build.parse_unit), ("ex", build.parse_exercises),
+                    ("drills", build.parse_drills), ("gloss", build.parse_gloss),
+                    ("projects", build.parse_project)):
+    for f in sorted((Path("content") / kind).glob("*.md")):
+        try:
+            parse(f)
+        except SystemExit as e:
+            print(f"   {f}: {e}"); bad += 1
+            continue
+        if kind == "ex":
+            for problem in build.gate(f):
+                print(f"   VOCABULARY {problem}"); bad += 1
+print(f"   {bad} problems")
+sys.exit(1 if bad else 0)
 PY
 note $?
 

@@ -39,6 +39,25 @@ Reading alone does not make a name local. A function that only reads `count` see
 
 That is why `+=` on a global is the classic trap. It is an assignment, so the name becomes local, so the read on its right-hand side fails.
 
+## Why the rule is a compile-time one
+
+It would be possible to design a language that decides where a name lives when the line runs. Python does not, and knowing that it decides earlier explains behaviour that otherwise looks arbitrary.
+
+When a function is compiled, its local names are collected and turned into slots in a fixed-size array. Reading a local is then an array index rather than a dictionary lookup, which is a large part of why Python functions are faster than module-level code doing the same work. You can see the decision in the compiled function:
+
+```python
+def tick():
+    print(count)
+    count = count + 1
+
+print(tick.__code__.co_varnames)     # ('count',)
+print(tick.__code__.co_names)        # ('print',)
+```
+
+`count` is already in `co_varnames` before the function has ever run. That is the compiler having read the whole body and concluded that `count` is local, and it is why moving the assignment to the last line does not help: there is no line-by-line reconsideration.
+
+It also explains why `locals()` inside a function hands you a snapshot rather than a live dictionary, and why you cannot create a local name dynamically by writing into it. The slots were fixed when the function was compiled.
+
 ## `global` and `nonlocal`
 
 Two declarations that change what an assignment binds.
@@ -111,6 +130,45 @@ def make(i):
     return lambda: i
 funcs.append(make(i))
 ```
+
+## Shadowing, and the names worth not reusing
+
+Because the search stops at the first namespace holding the name, a local quietly replaces anything outer with the same spelling. Most of the time that is exactly what you want and is why local names are safe to choose freely.
+
+The exception is the built-in namespace, which is searched last and is therefore the easiest to hide by accident. `list`, `dict`, `set`, `type`, `id`, `input`, `str`, `next`, `filter`, `format` and `hash` are all ordinary names, and all of them are plausible as a variable:
+
+```python
+def summarise(input):
+    type = input["type"]
+    list = sorted(input["items"])       # `list` is now a list
+    return list, type
+```
+
+Every line here works. The cost arrives later, when something in the same scope tries to call `list(...)` or `type(x)` and gets a `TypeError` about an object not being callable, several lines away from the shadowing that caused it.
+
+The habit that avoids it is a trailing underscore when the obvious name is taken: `type_`, `input_`, `list_`. Linters flag the common ones, and it is worth listening to them, because the failure is remote from its cause.
+
+## Where closures are actually useful
+
+The loop trap makes closures look like a hazard, so it is worth saying what they are for.
+
+They give you a function carrying private state that nothing else can reach. A counter, a rate limiter, a memoiser, a callback that remembers which row it belongs to, a partially applied function waiting for its last argument. In every case the alternatives are a global, which anything can touch, or a class, which is more ceremony for one function.
+
+```python
+def make_limiter(maximum):
+    used = 0
+    def allow(n):
+        nonlocal used
+        if used + n > maximum:
+            return False
+        used += n
+        return True
+    return allow
+```
+
+`used` is genuinely private. There is no attribute to reach for and no module-level name to collide with, and two limiters made from the same factory share nothing at all.
+
+The decision between this and a small class is mostly about how many operations there are. One operation and a closure is lighter; two or more, or anything a caller needs to inspect, and a class says more. Unit 26 builds on closures directly, because a decorator is a closure over the function it wraps.
 
 ## Comprehensions have their own scope
 

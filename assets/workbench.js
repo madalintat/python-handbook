@@ -4,9 +4,10 @@
 
 import Vim from "./vim.js";
 
-const PYODIDE = "https://cdn.jsdelivr.net/pyodide/v314.0.6/full/";
-const RUFF = "https://cdn.jsdelivr.net/npm/@astral-sh/ruff-wasm-web@0.16.5/";
-const RUFF_SELECT = ["E", "F", "B", "SIM", "UP"];
+// The three judges are described once, by build.py, and shipped as
+// data/judges.json. Fetching it rather than restating it here is what stops the
+// browser calling something clean that --validate would have failed.
+const judges = () => cached("judges", () => fetch("data/judges.json").then(r => r.json()));
 
 /* ------------------------------------------------------------------ tokenizer */
 
@@ -21,7 +22,15 @@ const BUILTINS = new Set(("abs aiter all any ascii bin bool bytearray bytes call
   "super tuple type vars zip Exception ValueError TypeError KeyError IndexError AttributeError NameError " +
   "RuntimeError StopIteration AssertionError ZeroDivisionError UnboundLocalError").split(" "));
 
-const esc = s => s.replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+export const esc = s => s.replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+
+// Markdown-ish inline formatting, used by the notes, the exercise prompts and
+// the diagnose readings. One definition: a second copy drifts.
+export const inline = s => esc(s)
+  .replace(/`([^`]+)`/g, (_, c) => `<code>${c}</code>`)
+  .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+  .replace(/(^|[\s(])\*([^*\n]+)\*/g, "$1<em>$2</em>")
+  .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
 
 // order matters: comments and triple-quoted strings must win over everything after them
 const TOKEN = new RegExp([
@@ -63,19 +72,20 @@ export function highlightPython(src) {
 // Memoise the success, never the failure. `p ||= f()` caches a rejected promise
 // forever, which turns one flaky CDN fetch into a judge that is dead for the session.
 const memo = {};
-const cached = (key, make) => {
+export const cached = (key, make) => {
   memo[key] ||= make().catch(err => { memo[key] = null; throw err; });
   return memo[key];
 };
 
 async function getRuff() {
   return cached("ruff", async () => {
-    const mod = await import(`${RUFF}ruff_wasm.js`);
-    await mod.default(`${RUFF}ruff_wasm_bg.wasm`);
+    const { ruff } = await judges();
+    const mod = await import(`${ruff.cdn}ruff_wasm.js`);
+    await mod.default(`${ruff.cdn}ruff_wasm_bg.wasm`);
     const settings = {
-      "line-length": 88,
+      "line-length": ruff.lineLength,
       "indent-width": 4,
-      lint: { select: RUFF_SELECT, ignore: ["E501"] },
+      lint: { select: ruff.select, ignore: ruff.ignore },
     };
     // 0.16 takes a position encoding; older builds take one argument. Try both.
     try { return new mod.Workspace(settings, mod.PositionEncoding.Utf32); }
@@ -95,8 +105,9 @@ async function judgeRuff(src) {
 async function getPyodide(say) {
   return cached("py", async () => {
     say?.("fetching CPython…");
-    const { loadPyodide } = await import(`${PYODIDE}pyodide.mjs`);
-    const py = await loadPyodide({ indexURL: PYODIDE });
+    const { cpython } = await judges();
+    const { loadPyodide } = await import(`${cpython.cdn}pyodide.mjs`);
+    const py = await loadPyodide({ indexURL: cpython.cdn });
     py.runPython(RUNNER);
     return py;
   });
@@ -142,22 +153,20 @@ async function getMypy(say) {
   return cached("mypy", async () => {
     const py = await getPyodide(say);
     say?.("fetching mypy…");
-    // micropip does not resolve mypy's transitive dependencies here, so name them all.
-    // typing-extensions ships inside the Pyodide distribution: take it from there
-    // rather than paying for another PyPI round trip.
-    await py.loadPackage(["micropip", "typing-extensions"]);
+    const { mypy } = await judges();
+    await py.loadPackage(mypy.preload);
     const micropip = py.pyimport("micropip");
-    await micropip.install(["mypy_extensions", "pathspec", "tomli", "mypy"]);
+    await micropip.install(mypy.install);
+    py.globals.set("_ph_mypy_flags", mypy.flags);
     py.runPython(`
 from mypy import api as _mypy_api
+
+_PH_MYPY_FLAGS = list(_ph_mypy_flags) + ["--cache-dir", "/tmp/mypycache"]
 
 def _ph_mypy(src):
     with open("/tmp/check.py", "w") as f:
         f.write(src)
-    out, _err, _code = _mypy_api.run([
-        "--no-error-summary", "--hide-error-context", "--no-color-output",
-        "--cache-dir", "/tmp/mypycache", "/tmp/check.py",
-    ])
+    out, _err, _code = _mypy_api.run([*_PH_MYPY_FLAGS, "/tmp/check.py"])
     return out
 `);
     return py;
@@ -180,8 +189,8 @@ async function judgeMypy(src, say) {
 /* ------------------------------------------------------------------ the editor */
 
 const TAB = "    ";
-const flag = k => { try { return localStorage.getItem(k) === "1"; } catch { return false; } };
-const setFlag = (k, on) => { try { localStorage.setItem(k, on ? "1" : "0"); } catch {} };
+export const flag = k => { try { return localStorage.getItem(k) === "1"; } catch { return false; } };
+export const setFlag = (k, on) => { try { localStorage.setItem(k, on ? "1" : "0"); } catch {} };
 const WRAP_KEY = "ph.wrap";
 
 /* A textarea with transparent text laid exactly over a highlighted <pre>. The
@@ -216,7 +225,7 @@ function buildEditor(host, initial, onRun) {
   const ta = host.querySelector("textarea");
   const badge = host.querySelector(".vimbadge");
 
-  let errLines = [];
+  let errLines = new Set();
   let lastHl = null, lastLines = -1, lastErrs = "";
   let relTo = null;          // cursor line for vim's relative numbering, or null
 
@@ -224,34 +233,49 @@ function buildEditor(host, initial, onRun) {
 
   function paint() {
     const v = ta.value;
+    const textChanged = v !== lastHl;
     // Only re-highlight when the text actually changed. paint() runs on every
     // keystroke AND every consumed vim key, and most vim keys are motions that
     // change nothing at all.
-    if (v !== lastHl) {
+    if (textChanged) {
       // A trailing newline collapses inside a <pre>, so the last line loses its
       // row and everything below the caret drifts up by one. One space fixes it.
       pre.innerHTML = highlightPython(v) + (v.endsWith("\n") ? " " : "");
       lastHl = v;
     }
     const n = v.split("\n").length;
-    const errs = errLines.join(",") + "|" + relTo;
-    if (n !== lastLines || errs !== lastErrs) {
+    const errs = [...errLines].join(",") + "|" + relTo;
+    if (n !== lastLines) {
+      // The line count changed, so the gutter has to be rebuilt.
       let g = "";
-      for (let i = 1; i <= n; i++) {
-        const cls = (errLines.includes(i) ? " err" : "")
-          + (relTo !== null && i === relTo + 1 ? " cur" : "");
-        const label = relTo === null || i === relTo + 1 ? i : Math.abs(i - 1 - relTo);
-        g += `<div class="gl${cls}">${label}</div>`;
-      }
+      for (let i = 1; i <= n; i++) g += `<div class="gl">${i}</div>`;
       gutterEl.innerHTML = g;
       lastLines = n;
+      lastErrs = null;
+    }
+    if (errs !== lastErrs) {
+      // Only the marks moved. Vim calls paint() on every motion key, so
+      // re-parsing the gutter's HTML for a cursor move was the bulk of the cost
+      // of pressing j. Walk the existing nodes instead.
+      const rows = gutterEl.children;
+      for (let i = 1; i <= n; i++) {
+        const el = rows[i - 1];
+        if (!el) break;
+        const cur = relTo !== null && i === relTo + 1;
+        el.className = "gl" + (errLines.has(i) ? " err" : "") + (cur ? " cur" : "");
+        const label = relTo === null || cur ? i : Math.abs(i - 1 - relTo);
+        if (el.textContent !== String(label)) el.textContent = label;
+      }
       lastErrs = errs;
     }
-    // Reading scrollWidth straight after an innerHTML write forces a synchronous
-    // layout; deferring keeps that off the keystroke's critical path.
-    requestAnimationFrame(() => {
-      ta.style.width = ed.classList.contains("softwrap") ? "" : pre.scrollWidth + "px";
-    });
+    // Reading scrollWidth straight after writing the highlight forces a
+    // synchronous layout, so it is deferred; and it only needs doing when the
+    // text actually changed, not on every motion key.
+    if (textChanged) {
+      requestAnimationFrame(() => {
+        ta.style.width = ed.classList.contains("softwrap") ? "" : pre.scrollWidth + "px";
+      });
+    }
   }
 
   /* Vim mode intercepts keys before the handlers below, so Tab and Enter are
@@ -365,7 +389,7 @@ function buildEditor(host, initial, onRun) {
     paint,
     el: ed,
     reset: () => { ta.value = initial; vim.sync(); paint(); },
-    setErrorLines(lines) { errLines = lines; paint(); },
+    setErrorLines(lines) { errLines = new Set(lines); paint(); },
   };
 }
 
@@ -424,10 +448,20 @@ export function mountWorkbench(host, ctx) {
       rows[n].querySelector(".what").textContent = text;
     };
 
-    // ruff answers in about a millisecond, so it goes first and alone
+    // Start all three at once. They are independent downloads on a cold cache,
+    // and awaiting them in series turned a max into a sum. They are still
+    // *displayed* in this order, which is what the reader cares about.
+    // settle() attaches a handler immediately, so a judge that fails while we
+    // are waiting on another one is not an unhandled rejection.
+    const settle = p => p.then(value => ({ value }), error => ({ error }));
+    const pRuff = settle(judgeRuff(src));
+    const pRun = settle(judgeRun(src, ex.tests, say));
+    const pMypy = settle(judgeMypy(src, say));
+    const take = async p => { const r = await p; if (r.error) throw r.error; return r.value; };
+
     let ruff = [];
     try {
-      ruff = await judgeRuff(src);
+      ruff = await take(pRuff);
       set(0, ruff.length ? "is-warn" : "is-ok",
         ruff.length ? ruff.map(d => `${d.code} line ${d.line}: ${d.message}`).join(" · ") : "clean");
     } catch (e) { set(0, "", `unavailable (${e.message})`); }
@@ -435,7 +469,7 @@ export function mountWorkbench(host, ctx) {
     // CPython is the truth and takes the longest, so it starts next
     let exec = null;
     try {
-      exec = await judgeRun(src, ex.tests, say);
+      exec = await take(pRun);
       say("");
       if (exec.exc) set(2, "is-bad", `${exec.exc}: ${exec.msg}`);
       else set(2, "is-ok", exec.out.trim() ? `passed · stdout: ${exec.out.trim().split("\n").slice(-1)[0]}` : "passed");
@@ -444,7 +478,7 @@ export function mountWorkbench(host, ctx) {
     let mypy = [];
     try {
       set(1, "is-wait", "checking…");
-      mypy = await judgeMypy(src, say);
+      mypy = await take(pMypy);
       say("");
       set(1, mypy.length ? "is-warn" : "is-ok",
         mypy.length ? mypy.map(d => `${d.code} line ${d.line}: ${d.message}`).join(" · ") : "clean");
@@ -485,7 +519,7 @@ function renderReading({ ex, ruff, mypy, run, reading, host, onPass, next }) {
     const heading = k !== "silent" ? k
       : (ruff.length || mypy.length) ? "Nothing raised" : "Every judge was happy";
     parts.push(`<div class="reading"><h4>${heading}</h4>
-      <p>${inlineLite(ex.diagnose[k])}</p></div>`);
+      <p>${inline(ex.diagnose[k])}</p></div>`);
   }
 
   if (run && run.exc && run.tb) {
@@ -516,7 +550,3 @@ function renderReading({ ex, ruff, mypy, run, reading, host, onPass, next }) {
   reading.innerHTML = parts.join("");
 }
 
-const inlineLite = s => esc(s)
-  .replace(/`([^`]+)`/g, (_, c) => `<code>${c}</code>`)
-  .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
-  .replace(/(^|[\s(])\*([^*\n]+)\*/g, "$1<em>$2</em>");
