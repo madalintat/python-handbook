@@ -157,13 +157,16 @@ When you know something the checker cannot, `assert isinstance(x, Foo)` states i
 
 ## Types on the way in
 
-Annotations live in `__annotations__` and are evaluated when the `def` runs, which is why a class that refers to itself needs the name as a string:
+Annotations live in `__annotations__`, and since 3.14 they are **evaluated lazily**: the `def` stores a description of the expression and nothing computes it until something reads it. A method can therefore annotate its own class, which used to require quoting the name:
 
 ```python
-def merge(self, other: "Node") -> "Node": ...
+class Node:
+    def merge(self, other: Node) -> Node: ...      # fine on 3.14
 ```
 
-`from __future__ import annotations` makes every annotation a string automatically, which removes the quoting problem and the cost of building type objects at import. It also means anything reading annotations at run time, pydantic, dataclasses, a dependency injector, has to resolve them, which `typing.get_type_hints` does.
+You will still read a great deal of code with quoted annotations and with `from __future__ import annotations` at the top, both of which were the older ways to get this, and both of which still work. On 3.14 neither is needed for forward references.
+
+What has not changed is that anything reading annotations at run time, pydantic, dataclasses, a dependency injector, forces the evaluation at that moment, and a name that is not importable then will raise. `typing.get_type_hints` is the function that resolves them, and the failure it produces is the subject of an exercise in unit 29.
 
 ## How much to write
 
