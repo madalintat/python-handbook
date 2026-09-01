@@ -183,7 +183,11 @@ spelled, would mean the validator was not judging the artefact the reader runs.
 That equivalence is checked rather than assumed. `--validate` judges four
 snippets alongside the exercises whose exceptions could be named differently by
 the two paths (a builtin, a qualified name, a user-defined class, a nested
-module), and `./qa-browser.sh` compares every exercise's browser verdict against
+module), `./qa-solutions.sh` runs every project solution inside Pyodide, which
+`./qa-browser.sh` cannot: a starter fails on its first stub, so a project's real
+code can pass every offline check having never executed a line in a browser, and
+that is where event loops, clocks, recursion limits and the cycle collector
+differ. `./qa-browser.sh` compares every exercise's browser verdict against
 the `@expect` its prose is written for.
 
 The division of labour follows the workbench exactly: **ruff and mypy see the
@@ -247,9 +251,11 @@ never demonstrated.
 ## The projects
 
 A project is `content/projects/<slug>.md`, one `## ` heading per stage, and the
-number of stages has to match what `PROJECTS` declares. The slug has to be in
-`PROJECTS` too; the manifest is the list, and a file is how a project stops
-being "not written yet".
+number of stages has to match what `PROJECTS` declares: a mini is four, a core
+is eight, a deep one is twelve. The slug has to be in `PROJECTS` too, along
+with a tier from `TIERS` and a domain from `DOMAINS`, all three checked at
+startup. The manifest is the list, and a file is how a project stops being
+"not written yet".
 
 A stage is an exercise with the question turned around. An exercise asks what
 some code already does, so it carries `@expect` and `@diagnose`. A stage asks
@@ -296,6 +302,11 @@ solution is stripped from the shipped JSON.
 Write the tests against the whole artefact so far, not only the new part. That
 is what makes the continuity check meaningful, and it is what a reader wants:
 the thing either works or it does not.
+
+The reliable order to write one in is solution first, then its tests, and only
+then cut the starter out of the solution. A starter written first describes a
+design the solution drifts away from, and the drift shows up as a continuity
+failure three stages later.
 
 **A stage extends; it never restarts.** A starter must not stub out something an
 earlier stage's tests rely on, and the continuity check will refuse it if you
