@@ -3,3 +3,7 @@
 __pycache__/
 .DS_Store
 .cache/
+.venv/
+# qa-solutions.sh writes this for the browser to fetch and removes it on the
+# way out. A run killed part way through leaves it behind.
+.qa-solutions.json
