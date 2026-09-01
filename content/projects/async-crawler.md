@@ -21,9 +21,7 @@ is a crawler with a confusing error log.
 @goal `normalise` gives one canonical form per page and refuses what is not one.
 
 ~~~starter
-import asyncio
 from dataclasses import dataclass, field
-from urllib.parse import urldefrag, urljoin, urlparse
 
 
 @dataclass
@@ -105,7 +103,6 @@ assert Page("u", 200).links == [] and Page("u", 200).body == ""
 ~~~
 
 ~~~solution
-import asyncio
 from dataclasses import dataclass, field
 from urllib.parse import urldefrag, urljoin, urlparse
 
@@ -168,8 +165,8 @@ dictionary of pages that behaves exactly as the real one does.
 @goal `find_links` parses a page's links, and a fetcher returns a `Page`.
 
 ~~~starter
-import asyncio
 from dataclasses import dataclass, field
+from html.parser import HTMLParser
 from urllib.parse import urldefrag, urljoin, urlparse
 
 
@@ -211,9 +208,6 @@ def normalise(url, base=None):
 def same_host(url, other):
     """Whether two urls are on the same host."""
     return urlparse(url).netloc.lower() == urlparse(other).netloc.lower()
-
-
-from html.parser import HTMLParser
 
 
 class LinkFinder(HTMLParser):
@@ -314,6 +308,7 @@ assert fetcher.requested == ["http://example.com/", "http://example.com/nope"]
 ~~~solution
 import asyncio
 from dataclasses import dataclass, field
+from html.parser import HTMLParser
 from urllib.parse import urldefrag, urljoin, urlparse
 
 
@@ -355,9 +350,6 @@ def normalise(url, base=None):
 def same_host(url, other):
     """Whether two urls are on the same host."""
     return urlparse(url).netloc.lower() == urlparse(other).netloc.lower()
-
-
-from html.parser import HTMLParser
 
 
 class LinkFinder(HTMLParser):
@@ -437,6 +429,7 @@ that made them.
 ~~~starter
 import asyncio
 from dataclasses import dataclass, field
+from html.parser import HTMLParser
 from urllib.parse import urldefrag, urljoin, urlparse
 
 
@@ -478,9 +471,6 @@ def normalise(url, base=None):
 def same_host(url, other):
     """Whether two urls are on the same host."""
     return urlparse(url).netloc.lower() == urlparse(other).netloc.lower()
-
-
-from html.parser import HTMLParser
 
 
 class LinkFinder(HTMLParser):
@@ -648,6 +638,7 @@ assert len(limited) <= 3, len(limited)
 ~~~solution
 import asyncio
 from dataclasses import dataclass, field
+from html.parser import HTMLParser
 from urllib.parse import urldefrag, urljoin, urlparse
 
 
@@ -689,9 +680,6 @@ def normalise(url, base=None):
 def same_host(url, other):
     """Whether two urls are on the same host."""
     return urlparse(url).netloc.lower() == urlparse(other).netloc.lower()
-
-
-from html.parser import HTMLParser
 
 
 class LinkFinder(HTMLParser):
@@ -835,6 +823,7 @@ timeout loses pages that were there. Not on a 404, which will be a 404 again.
 ~~~starter
 import asyncio
 from dataclasses import dataclass, field
+from html.parser import HTMLParser
 from urllib.parse import urldefrag, urljoin, urlparse
 
 
@@ -876,9 +865,6 @@ def normalise(url, base=None):
 def same_host(url, other):
     """Whether two urls are on the same host."""
     return urlparse(url).netloc.lower() == urlparse(other).netloc.lower()
-
-
-from html.parser import HTMLParser
 
 
 class LinkFinder(HTMLParser):
@@ -1131,6 +1117,7 @@ assert pages["http://example.com/2"].ok, "a page that recovers should be kept"
 ~~~solution
 import asyncio
 from dataclasses import dataclass, field
+from html.parser import HTMLParser
 from urllib.parse import urldefrag, urljoin, urlparse
 
 
@@ -1172,9 +1159,6 @@ def normalise(url, base=None):
 def same_host(url, other):
     """Whether two urls are on the same host."""
     return urlparse(url).netloc.lower() == urlparse(other).netloc.lower()
-
-
-from html.parser import HTMLParser
 
 
 class LinkFinder(HTMLParser):
@@ -1371,10 +1355,10 @@ invisible on a small site and total on a big one.
 @goal Depth is limited, the frontier is bounded, and a full queue never deadlocks.
 
 ~~~starter
-import collections
-
 import asyncio
+import collections
 from dataclasses import dataclass, field
+from html.parser import HTMLParser
 from urllib.parse import urldefrag, urljoin, urlparse
 
 
@@ -1416,9 +1400,6 @@ def normalise(url, base=None):
 def same_host(url, other):
     """Whether two urls are on the same host."""
     return urlparse(url).netloc.lower() == urlparse(other).netloc.lower()
-
-
-from html.parser import HTMLParser
 
 
 class LinkFinder(HTMLParser):
@@ -1682,10 +1663,10 @@ assert both.deferred == collections.deque() or len(both.deferred) == 0
 ~~~
 
 ~~~solution
-import collections
-
 import asyncio
+import collections
 from dataclasses import dataclass, field
+from html.parser import HTMLParser
 from urllib.parse import urldefrag, urljoin, urlparse
 
 
@@ -1727,9 +1708,6 @@ def normalise(url, base=None):
 def same_host(url, other):
     """Whether two urls are on the same host."""
     return urlparse(url).netloc.lower() == urlparse(other).netloc.lower()
-
-
-from html.parser import HTMLParser
 
 
 class LinkFinder(HTMLParser):
@@ -1958,10 +1936,10 @@ cancelled it. A crawler that cannot be stopped is worse than one that is slow.
 @goal A slow fetch times out and retries, and a cancelled crawl stops and says so.
 
 ~~~starter
-import collections
-
 import asyncio
+import collections
 from dataclasses import dataclass, field
+from html.parser import HTMLParser
 from urllib.parse import urldefrag, urljoin, urlparse
 
 
@@ -2003,9 +1981,6 @@ def normalise(url, base=None):
 def same_host(url, other):
     """Whether two urls are on the same host."""
     return urlparse(url).netloc.lower() == urlparse(other).netloc.lower()
-
-
-from html.parser import HTMLParser
 
 
 class LinkFinder(HTMLParser):
@@ -2298,10 +2273,10 @@ assert asyncio.run(outer_timeout()), "an outer timeout should stop the crawl"
 ~~~
 
 ~~~solution
-import collections
-
 import asyncio
+import collections
 from dataclasses import dataclass, field
+from html.parser import HTMLParser
 from urllib.parse import urldefrag, urljoin, urlparse
 
 
@@ -2343,9 +2318,6 @@ def normalise(url, base=None):
 def same_host(url, other):
     """Whether two urls are on the same host."""
     return urlparse(url).netloc.lower() == urlparse(other).netloc.lower()
-
-
-from html.parser import HTMLParser
 
 
 class LinkFinder(HTMLParser):
@@ -2595,10 +2567,10 @@ built the limiter as a separate object.
 @goal `robots.txt` is honoured, longest match wins, and a crawl delay sets the rate.
 
 ~~~starter
-import collections
-
 import asyncio
+import collections
 from dataclasses import dataclass, field
+from html.parser import HTMLParser
 from urllib.parse import urldefrag, urljoin, urlparse
 
 
@@ -2640,9 +2612,6 @@ def normalise(url, base=None):
 def same_host(url, other):
     """Whether two urls are on the same host."""
     return urlparse(url).netloc.lower() == urlparse(other).netloc.lower()
-
-
-from html.parser import HTMLParser
 
 
 class LinkFinder(HTMLParser):
@@ -2981,10 +2950,11 @@ assert crawler.limiter is not None, "a crawl delay should have set a rate limit"
 ~~~
 
 ~~~solution
-import collections
-
 import asyncio
+import collections
+import contextlib
 from dataclasses import dataclass, field
+from html.parser import HTMLParser
 from urllib.parse import urldefrag, urljoin, urlparse
 
 
@@ -3026,9 +2996,6 @@ def normalise(url, base=None):
 def same_host(url, other):
     """Whether two urls are on the same host."""
     return urlparse(url).netloc.lower() == urlparse(other).netloc.lower()
-
-
-from html.parser import HTMLParser
 
 
 class LinkFinder(HTMLParser):
@@ -3309,10 +3276,8 @@ class Robots:
             elif applies and key in ("allow", "disallow") and value:
                 self.rules.append((value, key == "allow"))
             elif applies and key == "crawl-delay":
-                try:
+                with contextlib.suppress(ValueError):
                     self.crawl_delay = float(value)
-                except ValueError:
-                    pass
 
     def allows(self, url):
         """Whether this url may be fetched."""
@@ -3345,10 +3310,11 @@ you cannot trust. Every counter the earlier stages added is already there.
 @goal Pages stream out as they land, and the crawl can say what it did.
 
 ~~~starter
-import collections
-
 import asyncio
+import collections
+import contextlib
 from dataclasses import dataclass, field
+from html.parser import HTMLParser
 from urllib.parse import urldefrag, urljoin, urlparse
 
 
@@ -3405,9 +3371,6 @@ def normalise(url, base=None):
 def same_host(url, other):
     """Whether two urls are on the same host."""
     return urlparse(url).netloc.lower() == urlparse(other).netloc.lower()
-
-
-from html.parser import HTMLParser
 
 
 class LinkFinder(HTMLParser):
@@ -3698,10 +3661,8 @@ class Robots:
             elif applies and key in ("allow", "disallow") and value:
                 self.rules.append((value, key == "allow"))
             elif applies and key == "crawl-delay":
-                try:
+                with contextlib.suppress(ValueError):
                     self.crawl_delay = float(value)
-                except ValueError:
-                    pass
 
     def allows(self, url):
         """Whether this url may be fetched."""
@@ -3813,10 +3774,11 @@ assert "example.com 4" in text, text
 ~~~
 
 ~~~solution
-import collections
-
 import asyncio
+import collections
+import contextlib
 from dataclasses import dataclass, field
+from html.parser import HTMLParser
 from urllib.parse import urldefrag, urljoin, urlparse
 
 
@@ -3883,9 +3845,6 @@ def normalise(url, base=None):
 def same_host(url, other):
     """Whether two urls are on the same host."""
     return urlparse(url).netloc.lower() == urlparse(other).netloc.lower()
-
-
-from html.parser import HTMLParser
 
 
 class LinkFinder(HTMLParser):
@@ -4207,10 +4166,8 @@ class Robots:
             elif applies and key in ("allow", "disallow") and value:
                 self.rules.append((value, key == "allow"))
             elif applies and key == "crawl-delay":
-                try:
+                with contextlib.suppress(ValueError):
                     self.crawl_delay = float(value)
-                except ValueError:
-                    pass
 
     def allows(self, url):
         """Whether this url may be fetched."""
