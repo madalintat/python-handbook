@@ -16,11 +16,21 @@ The adding matters: a value used twice is on two paths and both of them count,
 which is why gradients accumulate and why zeroing them is a separate step you
 have to remember.
 
-One thing is different, and it is not tidiness. The topological sort is a loop
-with an explicit stack rather than a recursive function. A graph running
-through a few transformer layers is thousands of nodes deep, and a recursive
-walk of it runs out of stack long before it runs out of graph. The test builds
-a chain of two thousand and checks the gradient arrives at the far end.
+Two things are different, and neither is tidiness.
+
+The topological sort is a loop with an explicit stack rather than a recursive
+function. A graph running through a few transformer layers is thousands of
+nodes deep, and a recursive walk of it runs out of stack long before it runs
+out of graph. The test builds a chain of two thousand and checks the gradient
+arrives at the far end.
+
+And each backward closure takes the gradient as an argument rather than reading
+it off the value it belongs to. Reading it would mean the closure holds that
+value and the value holds the closure, which is a cycle, and a cycle is the one
+thing reference counting cannot free. Every node in the graph would be one.
+This way the graph only ever points downward, at the values an operation came
+from, and it is freed as soon as the last name for it goes away. It costs one
+parameter, and stage ten is where the bill for the other choice would land.
 
 The way to test an autograd engine is not to check the numbers you derived by
 hand. It is finite differences: nudge an input, see how much the output moved,
@@ -95,7 +105,7 @@ class Value:
         return f"Value({self.data:.4f}, grad={self.grad:.4f})"
 
 
-def _nothing():
+def _nothing(grad):
     """What a leaf does on the way back, which is nothing."""
 ~~~
 
@@ -255,9 +265,9 @@ class Value:
         other = other if isinstance(other, Value) else Value(other)
         out = Value(self.data + other.data, (self, other))
 
-        def back():
-            self.grad += out.grad
-            other.grad += out.grad
+        def back(grad):
+            self.grad += grad
+            other.grad += grad
 
         out._back = back
         return out
@@ -266,9 +276,9 @@ class Value:
         other = other if isinstance(other, Value) else Value(other)
         out = Value(self.data * other.data, (self, other))
 
-        def back():
-            self.grad += other.data * out.grad
-            other.grad += self.data * out.grad
+        def back(grad):
+            self.grad += other.data * grad
+            other.grad += self.data * grad
 
         out._back = back
         return out
@@ -278,18 +288,19 @@ class Value:
             raise TypeError("only a number power, so the rule stays one line")
         out = Value(self.data ** power, (self,))
 
-        def back():
-            self.grad += power * self.data ** (power - 1) * out.grad
+        def back(grad):
+            self.grad += power * self.data ** (power - 1) * grad
 
         out._back = back
         return out
 
     def exp(self):
-        out = Value(math.exp(self.data), (self,))
+        value = math.exp(self.data)
+        out = Value(value, (self,))
 
-        def back():
+        def back(grad):
             # the derivative of exp is exp, which is the value already computed
-            self.grad += out.data * out.grad
+            self.grad += value * grad
 
         out._back = back
         return out
@@ -299,8 +310,8 @@ class Value:
             raise ValueError(f"log of {self.data}, which has no gradient to give")
         out = Value(math.log(self.data), (self,))
 
-        def back():
-            self.grad += out.grad / self.data
+        def back(grad):
+            self.grad += grad / self.data
 
         out._back = back
         return out
@@ -309,17 +320,18 @@ class Value:
         t = math.tanh(self.data)
         out = Value(t, (self,))
 
-        def back():
-            self.grad += (1 - t * t) * out.grad
+        def back(grad):
+            self.grad += (1 - t * t) * grad
 
         out._back = back
         return out
 
     def relu(self):
-        out = Value(self.data if self.data > 0 else 0.0, (self,))
+        positive = self.data > 0
+        out = Value(self.data if positive else 0.0, (self,))
 
-        def back():
-            self.grad += (out.data > 0) * out.grad
+        def back(grad):
+            self.grad += positive * grad
 
         out._back = back
         return out
@@ -370,13 +382,13 @@ class Value:
                     pending.append((child, False))
         self.grad = 1.0
         for node in reversed(order):
-            node._back()
+            node._back(node.grad)
 
     def __repr__(self):
         return f"Value({self.data:.4f}, grad={self.grad:.4f})"
 
 
-def _nothing():
+def _nothing(grad):
     """What a leaf does on the way back, which is nothing."""
 ~~~
 
@@ -436,9 +448,9 @@ class Value:
         other = other if isinstance(other, Value) else Value(other)
         out = Value(self.data + other.data, (self, other))
 
-        def back():
-            self.grad += out.grad
-            other.grad += out.grad
+        def back(grad):
+            self.grad += grad
+            other.grad += grad
 
         out._back = back
         return out
@@ -447,9 +459,9 @@ class Value:
         other = other if isinstance(other, Value) else Value(other)
         out = Value(self.data * other.data, (self, other))
 
-        def back():
-            self.grad += other.data * out.grad
-            other.grad += self.data * out.grad
+        def back(grad):
+            self.grad += other.data * grad
+            other.grad += self.data * grad
 
         out._back = back
         return out
@@ -459,18 +471,19 @@ class Value:
             raise TypeError("only a number power, so the rule stays one line")
         out = Value(self.data ** power, (self,))
 
-        def back():
-            self.grad += power * self.data ** (power - 1) * out.grad
+        def back(grad):
+            self.grad += power * self.data ** (power - 1) * grad
 
         out._back = back
         return out
 
     def exp(self):
-        out = Value(math.exp(self.data), (self,))
+        value = math.exp(self.data)
+        out = Value(value, (self,))
 
-        def back():
+        def back(grad):
             # the derivative of exp is exp, which is the value already computed
-            self.grad += out.data * out.grad
+            self.grad += value * grad
 
         out._back = back
         return out
@@ -480,8 +493,8 @@ class Value:
             raise ValueError(f"log of {self.data}, which has no gradient to give")
         out = Value(math.log(self.data), (self,))
 
-        def back():
-            self.grad += out.grad / self.data
+        def back(grad):
+            self.grad += grad / self.data
 
         out._back = back
         return out
@@ -490,17 +503,18 @@ class Value:
         t = math.tanh(self.data)
         out = Value(t, (self,))
 
-        def back():
-            self.grad += (1 - t * t) * out.grad
+        def back(grad):
+            self.grad += (1 - t * t) * grad
 
         out._back = back
         return out
 
     def relu(self):
-        out = Value(self.data if self.data > 0 else 0.0, (self,))
+        positive = self.data > 0
+        out = Value(self.data if positive else 0.0, (self,))
 
-        def back():
-            self.grad += (out.data > 0) * out.grad
+        def back(grad):
+            self.grad += positive * grad
 
         out._back = back
         return out
@@ -551,13 +565,13 @@ class Value:
                     pending.append((child, False))
         self.grad = 1.0
         for node in reversed(order):
-            node._back()
+            node._back(node.grad)
 
     def __repr__(self):
         return f"Value({self.data:.4f}, grad={self.grad:.4f})"
 
 
-def _nothing():
+def _nothing(grad):
     """What a leaf does on the way back, which is nothing."""
 
 
@@ -773,9 +787,9 @@ class Value:
         other = other if isinstance(other, Value) else Value(other)
         out = Value(self.data + other.data, (self, other))
 
-        def back():
-            self.grad += out.grad
-            other.grad += out.grad
+        def back(grad):
+            self.grad += grad
+            other.grad += grad
 
         out._back = back
         return out
@@ -784,9 +798,9 @@ class Value:
         other = other if isinstance(other, Value) else Value(other)
         out = Value(self.data * other.data, (self, other))
 
-        def back():
-            self.grad += other.data * out.grad
-            other.grad += self.data * out.grad
+        def back(grad):
+            self.grad += other.data * grad
+            other.grad += self.data * grad
 
         out._back = back
         return out
@@ -796,18 +810,19 @@ class Value:
             raise TypeError("only a number power, so the rule stays one line")
         out = Value(self.data ** power, (self,))
 
-        def back():
-            self.grad += power * self.data ** (power - 1) * out.grad
+        def back(grad):
+            self.grad += power * self.data ** (power - 1) * grad
 
         out._back = back
         return out
 
     def exp(self):
-        out = Value(math.exp(self.data), (self,))
+        value = math.exp(self.data)
+        out = Value(value, (self,))
 
-        def back():
+        def back(grad):
             # the derivative of exp is exp, which is the value already computed
-            self.grad += out.data * out.grad
+            self.grad += value * grad
 
         out._back = back
         return out
@@ -817,8 +832,8 @@ class Value:
             raise ValueError(f"log of {self.data}, which has no gradient to give")
         out = Value(math.log(self.data), (self,))
 
-        def back():
-            self.grad += out.grad / self.data
+        def back(grad):
+            self.grad += grad / self.data
 
         out._back = back
         return out
@@ -827,17 +842,18 @@ class Value:
         t = math.tanh(self.data)
         out = Value(t, (self,))
 
-        def back():
-            self.grad += (1 - t * t) * out.grad
+        def back(grad):
+            self.grad += (1 - t * t) * grad
 
         out._back = back
         return out
 
     def relu(self):
-        out = Value(self.data if self.data > 0 else 0.0, (self,))
+        positive = self.data > 0
+        out = Value(self.data if positive else 0.0, (self,))
 
-        def back():
-            self.grad += (out.data > 0) * out.grad
+        def back(grad):
+            self.grad += positive * grad
 
         out._back = back
         return out
@@ -888,13 +904,13 @@ class Value:
                     pending.append((child, False))
         self.grad = 1.0
         for node in reversed(order):
-            node._back()
+            node._back(node.grad)
 
     def __repr__(self):
         return f"Value({self.data:.4f}, grad={self.grad:.4f})"
 
 
-def _nothing():
+def _nothing(grad):
     """What a leaf does on the way back, which is nothing."""
 
 
@@ -1070,9 +1086,9 @@ class Value:
         other = other if isinstance(other, Value) else Value(other)
         out = Value(self.data + other.data, (self, other))
 
-        def back():
-            self.grad += out.grad
-            other.grad += out.grad
+        def back(grad):
+            self.grad += grad
+            other.grad += grad
 
         out._back = back
         return out
@@ -1081,9 +1097,9 @@ class Value:
         other = other if isinstance(other, Value) else Value(other)
         out = Value(self.data * other.data, (self, other))
 
-        def back():
-            self.grad += other.data * out.grad
-            other.grad += self.data * out.grad
+        def back(grad):
+            self.grad += other.data * grad
+            other.grad += self.data * grad
 
         out._back = back
         return out
@@ -1093,18 +1109,19 @@ class Value:
             raise TypeError("only a number power, so the rule stays one line")
         out = Value(self.data ** power, (self,))
 
-        def back():
-            self.grad += power * self.data ** (power - 1) * out.grad
+        def back(grad):
+            self.grad += power * self.data ** (power - 1) * grad
 
         out._back = back
         return out
 
     def exp(self):
-        out = Value(math.exp(self.data), (self,))
+        value = math.exp(self.data)
+        out = Value(value, (self,))
 
-        def back():
+        def back(grad):
             # the derivative of exp is exp, which is the value already computed
-            self.grad += out.data * out.grad
+            self.grad += value * grad
 
         out._back = back
         return out
@@ -1114,8 +1131,8 @@ class Value:
             raise ValueError(f"log of {self.data}, which has no gradient to give")
         out = Value(math.log(self.data), (self,))
 
-        def back():
-            self.grad += out.grad / self.data
+        def back(grad):
+            self.grad += grad / self.data
 
         out._back = back
         return out
@@ -1124,17 +1141,18 @@ class Value:
         t = math.tanh(self.data)
         out = Value(t, (self,))
 
-        def back():
-            self.grad += (1 - t * t) * out.grad
+        def back(grad):
+            self.grad += (1 - t * t) * grad
 
         out._back = back
         return out
 
     def relu(self):
-        out = Value(self.data if self.data > 0 else 0.0, (self,))
+        positive = self.data > 0
+        out = Value(self.data if positive else 0.0, (self,))
 
-        def back():
-            self.grad += (out.data > 0) * out.grad
+        def back(grad):
+            self.grad += positive * grad
 
         out._back = back
         return out
@@ -1185,13 +1203,13 @@ class Value:
                     pending.append((child, False))
         self.grad = 1.0
         for node in reversed(order):
-            node._back()
+            node._back(node.grad)
 
     def __repr__(self):
         return f"Value({self.data:.4f}, grad={self.grad:.4f})"
 
 
-def _nothing():
+def _nothing(grad):
     """What a leaf does on the way back, which is nothing."""
 
 
@@ -1499,9 +1517,9 @@ class Value:
         other = other if isinstance(other, Value) else Value(other)
         out = Value(self.data + other.data, (self, other))
 
-        def back():
-            self.grad += out.grad
-            other.grad += out.grad
+        def back(grad):
+            self.grad += grad
+            other.grad += grad
 
         out._back = back
         return out
@@ -1510,9 +1528,9 @@ class Value:
         other = other if isinstance(other, Value) else Value(other)
         out = Value(self.data * other.data, (self, other))
 
-        def back():
-            self.grad += other.data * out.grad
-            other.grad += self.data * out.grad
+        def back(grad):
+            self.grad += other.data * grad
+            other.grad += self.data * grad
 
         out._back = back
         return out
@@ -1522,18 +1540,19 @@ class Value:
             raise TypeError("only a number power, so the rule stays one line")
         out = Value(self.data ** power, (self,))
 
-        def back():
-            self.grad += power * self.data ** (power - 1) * out.grad
+        def back(grad):
+            self.grad += power * self.data ** (power - 1) * grad
 
         out._back = back
         return out
 
     def exp(self):
-        out = Value(math.exp(self.data), (self,))
+        value = math.exp(self.data)
+        out = Value(value, (self,))
 
-        def back():
+        def back(grad):
             # the derivative of exp is exp, which is the value already computed
-            self.grad += out.data * out.grad
+            self.grad += value * grad
 
         out._back = back
         return out
@@ -1543,8 +1562,8 @@ class Value:
             raise ValueError(f"log of {self.data}, which has no gradient to give")
         out = Value(math.log(self.data), (self,))
 
-        def back():
-            self.grad += out.grad / self.data
+        def back(grad):
+            self.grad += grad / self.data
 
         out._back = back
         return out
@@ -1553,17 +1572,18 @@ class Value:
         t = math.tanh(self.data)
         out = Value(t, (self,))
 
-        def back():
-            self.grad += (1 - t * t) * out.grad
+        def back(grad):
+            self.grad += (1 - t * t) * grad
 
         out._back = back
         return out
 
     def relu(self):
-        out = Value(self.data if self.data > 0 else 0.0, (self,))
+        positive = self.data > 0
+        out = Value(self.data if positive else 0.0, (self,))
 
-        def back():
-            self.grad += (out.data > 0) * out.grad
+        def back(grad):
+            self.grad += positive * grad
 
         out._back = back
         return out
@@ -1614,13 +1634,13 @@ class Value:
                     pending.append((child, False))
         self.grad = 1.0
         for node in reversed(order):
-            node._back()
+            node._back(node.grad)
 
     def __repr__(self):
         return f"Value({self.data:.4f}, grad={self.grad:.4f})"
 
 
-def _nothing():
+def _nothing(grad):
     """What a leaf does on the way back, which is nothing."""
 
 
@@ -1916,9 +1936,9 @@ class Value:
         other = other if isinstance(other, Value) else Value(other)
         out = Value(self.data + other.data, (self, other))
 
-        def back():
-            self.grad += out.grad
-            other.grad += out.grad
+        def back(grad):
+            self.grad += grad
+            other.grad += grad
 
         out._back = back
         return out
@@ -1927,9 +1947,9 @@ class Value:
         other = other if isinstance(other, Value) else Value(other)
         out = Value(self.data * other.data, (self, other))
 
-        def back():
-            self.grad += other.data * out.grad
-            other.grad += self.data * out.grad
+        def back(grad):
+            self.grad += other.data * grad
+            other.grad += self.data * grad
 
         out._back = back
         return out
@@ -1939,18 +1959,19 @@ class Value:
             raise TypeError("only a number power, so the rule stays one line")
         out = Value(self.data ** power, (self,))
 
-        def back():
-            self.grad += power * self.data ** (power - 1) * out.grad
+        def back(grad):
+            self.grad += power * self.data ** (power - 1) * grad
 
         out._back = back
         return out
 
     def exp(self):
-        out = Value(math.exp(self.data), (self,))
+        value = math.exp(self.data)
+        out = Value(value, (self,))
 
-        def back():
+        def back(grad):
             # the derivative of exp is exp, which is the value already computed
-            self.grad += out.data * out.grad
+            self.grad += value * grad
 
         out._back = back
         return out
@@ -1960,8 +1981,8 @@ class Value:
             raise ValueError(f"log of {self.data}, which has no gradient to give")
         out = Value(math.log(self.data), (self,))
 
-        def back():
-            self.grad += out.grad / self.data
+        def back(grad):
+            self.grad += grad / self.data
 
         out._back = back
         return out
@@ -1970,17 +1991,18 @@ class Value:
         t = math.tanh(self.data)
         out = Value(t, (self,))
 
-        def back():
-            self.grad += (1 - t * t) * out.grad
+        def back(grad):
+            self.grad += (1 - t * t) * grad
 
         out._back = back
         return out
 
     def relu(self):
-        out = Value(self.data if self.data > 0 else 0.0, (self,))
+        positive = self.data > 0
+        out = Value(self.data if positive else 0.0, (self,))
 
-        def back():
-            self.grad += (out.data > 0) * out.grad
+        def back(grad):
+            self.grad += positive * grad
 
         out._back = back
         return out
@@ -2031,13 +2053,13 @@ class Value:
                     pending.append((child, False))
         self.grad = 1.0
         for node in reversed(order):
-            node._back()
+            node._back(node.grad)
 
     def __repr__(self):
         return f"Value({self.data:.4f}, grad={self.grad:.4f})"
 
 
-def _nothing():
+def _nothing(grad):
     """What a leaf does on the way back, which is nothing."""
 
 
@@ -2451,9 +2473,9 @@ class Value:
         other = other if isinstance(other, Value) else Value(other)
         out = Value(self.data + other.data, (self, other))
 
-        def back():
-            self.grad += out.grad
-            other.grad += out.grad
+        def back(grad):
+            self.grad += grad
+            other.grad += grad
 
         out._back = back
         return out
@@ -2462,9 +2484,9 @@ class Value:
         other = other if isinstance(other, Value) else Value(other)
         out = Value(self.data * other.data, (self, other))
 
-        def back():
-            self.grad += other.data * out.grad
-            other.grad += self.data * out.grad
+        def back(grad):
+            self.grad += other.data * grad
+            other.grad += self.data * grad
 
         out._back = back
         return out
@@ -2474,18 +2496,19 @@ class Value:
             raise TypeError("only a number power, so the rule stays one line")
         out = Value(self.data ** power, (self,))
 
-        def back():
-            self.grad += power * self.data ** (power - 1) * out.grad
+        def back(grad):
+            self.grad += power * self.data ** (power - 1) * grad
 
         out._back = back
         return out
 
     def exp(self):
-        out = Value(math.exp(self.data), (self,))
+        value = math.exp(self.data)
+        out = Value(value, (self,))
 
-        def back():
+        def back(grad):
             # the derivative of exp is exp, which is the value already computed
-            self.grad += out.data * out.grad
+            self.grad += value * grad
 
         out._back = back
         return out
@@ -2495,8 +2518,8 @@ class Value:
             raise ValueError(f"log of {self.data}, which has no gradient to give")
         out = Value(math.log(self.data), (self,))
 
-        def back():
-            self.grad += out.grad / self.data
+        def back(grad):
+            self.grad += grad / self.data
 
         out._back = back
         return out
@@ -2505,17 +2528,18 @@ class Value:
         t = math.tanh(self.data)
         out = Value(t, (self,))
 
-        def back():
-            self.grad += (1 - t * t) * out.grad
+        def back(grad):
+            self.grad += (1 - t * t) * grad
 
         out._back = back
         return out
 
     def relu(self):
-        out = Value(self.data if self.data > 0 else 0.0, (self,))
+        positive = self.data > 0
+        out = Value(self.data if positive else 0.0, (self,))
 
-        def back():
-            self.grad += (out.data > 0) * out.grad
+        def back(grad):
+            self.grad += positive * grad
 
         out._back = back
         return out
@@ -2566,13 +2590,13 @@ class Value:
                     pending.append((child, False))
         self.grad = 1.0
         for node in reversed(order):
-            node._back()
+            node._back(node.grad)
 
     def __repr__(self):
         return f"Value({self.data:.4f}, grad={self.grad:.4f})"
 
 
-def _nothing():
+def _nothing(grad):
     """What a leaf does on the way back, which is nothing."""
 
 
@@ -2949,9 +2973,9 @@ class Value:
         other = other if isinstance(other, Value) else Value(other)
         out = Value(self.data + other.data, (self, other))
 
-        def back():
-            self.grad += out.grad
-            other.grad += out.grad
+        def back(grad):
+            self.grad += grad
+            other.grad += grad
 
         out._back = back
         return out
@@ -2960,9 +2984,9 @@ class Value:
         other = other if isinstance(other, Value) else Value(other)
         out = Value(self.data * other.data, (self, other))
 
-        def back():
-            self.grad += other.data * out.grad
-            other.grad += self.data * out.grad
+        def back(grad):
+            self.grad += other.data * grad
+            other.grad += self.data * grad
 
         out._back = back
         return out
@@ -2972,18 +2996,19 @@ class Value:
             raise TypeError("only a number power, so the rule stays one line")
         out = Value(self.data ** power, (self,))
 
-        def back():
-            self.grad += power * self.data ** (power - 1) * out.grad
+        def back(grad):
+            self.grad += power * self.data ** (power - 1) * grad
 
         out._back = back
         return out
 
     def exp(self):
-        out = Value(math.exp(self.data), (self,))
+        value = math.exp(self.data)
+        out = Value(value, (self,))
 
-        def back():
+        def back(grad):
             # the derivative of exp is exp, which is the value already computed
-            self.grad += out.data * out.grad
+            self.grad += value * grad
 
         out._back = back
         return out
@@ -2993,8 +3018,8 @@ class Value:
             raise ValueError(f"log of {self.data}, which has no gradient to give")
         out = Value(math.log(self.data), (self,))
 
-        def back():
-            self.grad += out.grad / self.data
+        def back(grad):
+            self.grad += grad / self.data
 
         out._back = back
         return out
@@ -3003,17 +3028,18 @@ class Value:
         t = math.tanh(self.data)
         out = Value(t, (self,))
 
-        def back():
-            self.grad += (1 - t * t) * out.grad
+        def back(grad):
+            self.grad += (1 - t * t) * grad
 
         out._back = back
         return out
 
     def relu(self):
-        out = Value(self.data if self.data > 0 else 0.0, (self,))
+        positive = self.data > 0
+        out = Value(self.data if positive else 0.0, (self,))
 
-        def back():
-            self.grad += (out.data > 0) * out.grad
+        def back(grad):
+            self.grad += positive * grad
 
         out._back = back
         return out
@@ -3064,13 +3090,13 @@ class Value:
                     pending.append((child, False))
         self.grad = 1.0
         for node in reversed(order):
-            node._back()
+            node._back(node.grad)
 
     def __repr__(self):
         return f"Value({self.data:.4f}, grad={self.grad:.4f})"
 
 
-def _nothing():
+def _nothing(grad):
     """What a leaf does on the way back, which is nothing."""
 
 
@@ -3555,9 +3581,9 @@ class Value:
         other = other if isinstance(other, Value) else Value(other)
         out = Value(self.data + other.data, (self, other))
 
-        def back():
-            self.grad += out.grad
-            other.grad += out.grad
+        def back(grad):
+            self.grad += grad
+            other.grad += grad
 
         out._back = back
         return out
@@ -3566,9 +3592,9 @@ class Value:
         other = other if isinstance(other, Value) else Value(other)
         out = Value(self.data * other.data, (self, other))
 
-        def back():
-            self.grad += other.data * out.grad
-            other.grad += self.data * out.grad
+        def back(grad):
+            self.grad += other.data * grad
+            other.grad += self.data * grad
 
         out._back = back
         return out
@@ -3578,18 +3604,19 @@ class Value:
             raise TypeError("only a number power, so the rule stays one line")
         out = Value(self.data ** power, (self,))
 
-        def back():
-            self.grad += power * self.data ** (power - 1) * out.grad
+        def back(grad):
+            self.grad += power * self.data ** (power - 1) * grad
 
         out._back = back
         return out
 
     def exp(self):
-        out = Value(math.exp(self.data), (self,))
+        value = math.exp(self.data)
+        out = Value(value, (self,))
 
-        def back():
+        def back(grad):
             # the derivative of exp is exp, which is the value already computed
-            self.grad += out.data * out.grad
+            self.grad += value * grad
 
         out._back = back
         return out
@@ -3599,8 +3626,8 @@ class Value:
             raise ValueError(f"log of {self.data}, which has no gradient to give")
         out = Value(math.log(self.data), (self,))
 
-        def back():
-            self.grad += out.grad / self.data
+        def back(grad):
+            self.grad += grad / self.data
 
         out._back = back
         return out
@@ -3609,17 +3636,18 @@ class Value:
         t = math.tanh(self.data)
         out = Value(t, (self,))
 
-        def back():
-            self.grad += (1 - t * t) * out.grad
+        def back(grad):
+            self.grad += (1 - t * t) * grad
 
         out._back = back
         return out
 
     def relu(self):
-        out = Value(self.data if self.data > 0 else 0.0, (self,))
+        positive = self.data > 0
+        out = Value(self.data if positive else 0.0, (self,))
 
-        def back():
-            self.grad += (out.data > 0) * out.grad
+        def back(grad):
+            self.grad += positive * grad
 
         out._back = back
         return out
@@ -3670,13 +3698,13 @@ class Value:
                     pending.append((child, False))
         self.grad = 1.0
         for node in reversed(order):
-            node._back()
+            node._back(node.grad)
 
     def __repr__(self):
         return f"Value({self.data:.4f}, grad={self.grad:.4f})"
 
 
-def _nothing():
+def _nothing(grad):
     """What a leaf does on the way back, which is nothing."""
 
 
@@ -4128,9 +4156,9 @@ class Value:
         other = other if isinstance(other, Value) else Value(other)
         out = Value(self.data + other.data, (self, other))
 
-        def back():
-            self.grad += out.grad
-            other.grad += out.grad
+        def back(grad):
+            self.grad += grad
+            other.grad += grad
 
         out._back = back
         return out
@@ -4139,9 +4167,9 @@ class Value:
         other = other if isinstance(other, Value) else Value(other)
         out = Value(self.data * other.data, (self, other))
 
-        def back():
-            self.grad += other.data * out.grad
-            other.grad += self.data * out.grad
+        def back(grad):
+            self.grad += other.data * grad
+            other.grad += self.data * grad
 
         out._back = back
         return out
@@ -4151,18 +4179,19 @@ class Value:
             raise TypeError("only a number power, so the rule stays one line")
         out = Value(self.data ** power, (self,))
 
-        def back():
-            self.grad += power * self.data ** (power - 1) * out.grad
+        def back(grad):
+            self.grad += power * self.data ** (power - 1) * grad
 
         out._back = back
         return out
 
     def exp(self):
-        out = Value(math.exp(self.data), (self,))
+        value = math.exp(self.data)
+        out = Value(value, (self,))
 
-        def back():
+        def back(grad):
             # the derivative of exp is exp, which is the value already computed
-            self.grad += out.data * out.grad
+            self.grad += value * grad
 
         out._back = back
         return out
@@ -4172,8 +4201,8 @@ class Value:
             raise ValueError(f"log of {self.data}, which has no gradient to give")
         out = Value(math.log(self.data), (self,))
 
-        def back():
-            self.grad += out.grad / self.data
+        def back(grad):
+            self.grad += grad / self.data
 
         out._back = back
         return out
@@ -4182,17 +4211,18 @@ class Value:
         t = math.tanh(self.data)
         out = Value(t, (self,))
 
-        def back():
-            self.grad += (1 - t * t) * out.grad
+        def back(grad):
+            self.grad += (1 - t * t) * grad
 
         out._back = back
         return out
 
     def relu(self):
-        out = Value(self.data if self.data > 0 else 0.0, (self,))
+        positive = self.data > 0
+        out = Value(self.data if positive else 0.0, (self,))
 
-        def back():
-            self.grad += (out.data > 0) * out.grad
+        def back(grad):
+            self.grad += positive * grad
 
         out._back = back
         return out
@@ -4243,13 +4273,13 @@ class Value:
                     pending.append((child, False))
         self.grad = 1.0
         for node in reversed(order):
-            node._back()
+            node._back(node.grad)
 
     def __repr__(self):
         return f"Value({self.data:.4f}, grad={self.grad:.4f})"
 
 
-def _nothing():
+def _nothing(grad):
     """What a leaf does on the way back, which is nothing."""
 
 
@@ -4805,9 +4835,9 @@ class Value:
         other = other if isinstance(other, Value) else Value(other)
         out = Value(self.data + other.data, (self, other))
 
-        def back():
-            self.grad += out.grad
-            other.grad += out.grad
+        def back(grad):
+            self.grad += grad
+            other.grad += grad
 
         out._back = back
         return out
@@ -4816,9 +4846,9 @@ class Value:
         other = other if isinstance(other, Value) else Value(other)
         out = Value(self.data * other.data, (self, other))
 
-        def back():
-            self.grad += other.data * out.grad
-            other.grad += self.data * out.grad
+        def back(grad):
+            self.grad += other.data * grad
+            other.grad += self.data * grad
 
         out._back = back
         return out
@@ -4828,18 +4858,19 @@ class Value:
             raise TypeError("only a number power, so the rule stays one line")
         out = Value(self.data ** power, (self,))
 
-        def back():
-            self.grad += power * self.data ** (power - 1) * out.grad
+        def back(grad):
+            self.grad += power * self.data ** (power - 1) * grad
 
         out._back = back
         return out
 
     def exp(self):
-        out = Value(math.exp(self.data), (self,))
+        value = math.exp(self.data)
+        out = Value(value, (self,))
 
-        def back():
+        def back(grad):
             # the derivative of exp is exp, which is the value already computed
-            self.grad += out.data * out.grad
+            self.grad += value * grad
 
         out._back = back
         return out
@@ -4849,8 +4880,8 @@ class Value:
             raise ValueError(f"log of {self.data}, which has no gradient to give")
         out = Value(math.log(self.data), (self,))
 
-        def back():
-            self.grad += out.grad / self.data
+        def back(grad):
+            self.grad += grad / self.data
 
         out._back = back
         return out
@@ -4859,17 +4890,18 @@ class Value:
         t = math.tanh(self.data)
         out = Value(t, (self,))
 
-        def back():
-            self.grad += (1 - t * t) * out.grad
+        def back(grad):
+            self.grad += (1 - t * t) * grad
 
         out._back = back
         return out
 
     def relu(self):
-        out = Value(self.data if self.data > 0 else 0.0, (self,))
+        positive = self.data > 0
+        out = Value(self.data if positive else 0.0, (self,))
 
-        def back():
-            self.grad += (out.data > 0) * out.grad
+        def back(grad):
+            self.grad += positive * grad
 
         out._back = back
         return out
@@ -4920,13 +4952,13 @@ class Value:
                     pending.append((child, False))
         self.grad = 1.0
         for node in reversed(order):
-            node._back()
+            node._back(node.grad)
 
     def __repr__(self):
         return f"Value({self.data:.4f}, grad={self.grad:.4f})"
 
 
-def _nothing():
+def _nothing(grad):
     """What a leaf does on the way back, which is nothing."""
 
 
@@ -5432,9 +5464,9 @@ class Value:
         other = other if isinstance(other, Value) else Value(other)
         out = Value(self.data + other.data, (self, other))
 
-        def back():
-            self.grad += out.grad
-            other.grad += out.grad
+        def back(grad):
+            self.grad += grad
+            other.grad += grad
 
         out._back = back
         return out
@@ -5443,9 +5475,9 @@ class Value:
         other = other if isinstance(other, Value) else Value(other)
         out = Value(self.data * other.data, (self, other))
 
-        def back():
-            self.grad += other.data * out.grad
-            other.grad += self.data * out.grad
+        def back(grad):
+            self.grad += other.data * grad
+            other.grad += self.data * grad
 
         out._back = back
         return out
@@ -5455,18 +5487,19 @@ class Value:
             raise TypeError("only a number power, so the rule stays one line")
         out = Value(self.data ** power, (self,))
 
-        def back():
-            self.grad += power * self.data ** (power - 1) * out.grad
+        def back(grad):
+            self.grad += power * self.data ** (power - 1) * grad
 
         out._back = back
         return out
 
     def exp(self):
-        out = Value(math.exp(self.data), (self,))
+        value = math.exp(self.data)
+        out = Value(value, (self,))
 
-        def back():
+        def back(grad):
             # the derivative of exp is exp, which is the value already computed
-            self.grad += out.data * out.grad
+            self.grad += value * grad
 
         out._back = back
         return out
@@ -5476,8 +5509,8 @@ class Value:
             raise ValueError(f"log of {self.data}, which has no gradient to give")
         out = Value(math.log(self.data), (self,))
 
-        def back():
-            self.grad += out.grad / self.data
+        def back(grad):
+            self.grad += grad / self.data
 
         out._back = back
         return out
@@ -5486,17 +5519,18 @@ class Value:
         t = math.tanh(self.data)
         out = Value(t, (self,))
 
-        def back():
-            self.grad += (1 - t * t) * out.grad
+        def back(grad):
+            self.grad += (1 - t * t) * grad
 
         out._back = back
         return out
 
     def relu(self):
-        out = Value(self.data if self.data > 0 else 0.0, (self,))
+        positive = self.data > 0
+        out = Value(self.data if positive else 0.0, (self,))
 
-        def back():
-            self.grad += (out.data > 0) * out.grad
+        def back(grad):
+            self.grad += positive * grad
 
         out._back = back
         return out
@@ -5547,13 +5581,13 @@ class Value:
                     pending.append((child, False))
         self.grad = 1.0
         for node in reversed(order):
-            node._back()
+            node._back(node.grad)
 
     def __repr__(self):
         return f"Value({self.data:.4f}, grad={self.grad:.4f})"
 
 
-def _nothing():
+def _nothing(grad):
     """What a leaf does on the way back, which is nothing."""
 
 
@@ -6178,9 +6212,9 @@ class Value:
         other = other if isinstance(other, Value) else Value(other)
         out = Value(self.data + other.data, (self, other))
 
-        def back():
-            self.grad += out.grad
-            other.grad += out.grad
+        def back(grad):
+            self.grad += grad
+            other.grad += grad
 
         out._back = back
         return out
@@ -6189,9 +6223,9 @@ class Value:
         other = other if isinstance(other, Value) else Value(other)
         out = Value(self.data * other.data, (self, other))
 
-        def back():
-            self.grad += other.data * out.grad
-            other.grad += self.data * out.grad
+        def back(grad):
+            self.grad += other.data * grad
+            other.grad += self.data * grad
 
         out._back = back
         return out
@@ -6201,18 +6235,19 @@ class Value:
             raise TypeError("only a number power, so the rule stays one line")
         out = Value(self.data ** power, (self,))
 
-        def back():
-            self.grad += power * self.data ** (power - 1) * out.grad
+        def back(grad):
+            self.grad += power * self.data ** (power - 1) * grad
 
         out._back = back
         return out
 
     def exp(self):
-        out = Value(math.exp(self.data), (self,))
+        value = math.exp(self.data)
+        out = Value(value, (self,))
 
-        def back():
+        def back(grad):
             # the derivative of exp is exp, which is the value already computed
-            self.grad += out.data * out.grad
+            self.grad += value * grad
 
         out._back = back
         return out
@@ -6222,8 +6257,8 @@ class Value:
             raise ValueError(f"log of {self.data}, which has no gradient to give")
         out = Value(math.log(self.data), (self,))
 
-        def back():
-            self.grad += out.grad / self.data
+        def back(grad):
+            self.grad += grad / self.data
 
         out._back = back
         return out
@@ -6232,17 +6267,18 @@ class Value:
         t = math.tanh(self.data)
         out = Value(t, (self,))
 
-        def back():
-            self.grad += (1 - t * t) * out.grad
+        def back(grad):
+            self.grad += (1 - t * t) * grad
 
         out._back = back
         return out
 
     def relu(self):
-        out = Value(self.data if self.data > 0 else 0.0, (self,))
+        positive = self.data > 0
+        out = Value(self.data if positive else 0.0, (self,))
 
-        def back():
-            self.grad += (out.data > 0) * out.grad
+        def back(grad):
+            self.grad += positive * grad
 
         out._back = back
         return out
@@ -6293,13 +6329,13 @@ class Value:
                     pending.append((child, False))
         self.grad = 1.0
         for node in reversed(order):
-            node._back()
+            node._back(node.grad)
 
     def __repr__(self):
         return f"Value({self.data:.4f}, grad={self.grad:.4f})"
 
 
-def _nothing():
+def _nothing(grad):
     """What a leaf does on the way back, which is nothing."""
 
 
@@ -6873,9 +6909,9 @@ class Value:
         other = other if isinstance(other, Value) else Value(other)
         out = Value(self.data + other.data, (self, other))
 
-        def back():
-            self.grad += out.grad
-            other.grad += out.grad
+        def back(grad):
+            self.grad += grad
+            other.grad += grad
 
         out._back = back
         return out
@@ -6884,9 +6920,9 @@ class Value:
         other = other if isinstance(other, Value) else Value(other)
         out = Value(self.data * other.data, (self, other))
 
-        def back():
-            self.grad += other.data * out.grad
-            other.grad += self.data * out.grad
+        def back(grad):
+            self.grad += other.data * grad
+            other.grad += self.data * grad
 
         out._back = back
         return out
@@ -6896,18 +6932,19 @@ class Value:
             raise TypeError("only a number power, so the rule stays one line")
         out = Value(self.data ** power, (self,))
 
-        def back():
-            self.grad += power * self.data ** (power - 1) * out.grad
+        def back(grad):
+            self.grad += power * self.data ** (power - 1) * grad
 
         out._back = back
         return out
 
     def exp(self):
-        out = Value(math.exp(self.data), (self,))
+        value = math.exp(self.data)
+        out = Value(value, (self,))
 
-        def back():
+        def back(grad):
             # the derivative of exp is exp, which is the value already computed
-            self.grad += out.data * out.grad
+            self.grad += value * grad
 
         out._back = back
         return out
@@ -6917,8 +6954,8 @@ class Value:
             raise ValueError(f"log of {self.data}, which has no gradient to give")
         out = Value(math.log(self.data), (self,))
 
-        def back():
-            self.grad += out.grad / self.data
+        def back(grad):
+            self.grad += grad / self.data
 
         out._back = back
         return out
@@ -6927,17 +6964,18 @@ class Value:
         t = math.tanh(self.data)
         out = Value(t, (self,))
 
-        def back():
-            self.grad += (1 - t * t) * out.grad
+        def back(grad):
+            self.grad += (1 - t * t) * grad
 
         out._back = back
         return out
 
     def relu(self):
-        out = Value(self.data if self.data > 0 else 0.0, (self,))
+        positive = self.data > 0
+        out = Value(self.data if positive else 0.0, (self,))
 
-        def back():
-            self.grad += (out.data > 0) * out.grad
+        def back(grad):
+            self.grad += positive * grad
 
         out._back = back
         return out
@@ -6988,13 +7026,13 @@ class Value:
                     pending.append((child, False))
         self.grad = 1.0
         for node in reversed(order):
-            node._back()
+            node._back(node.grad)
 
     def __repr__(self):
         return f"Value({self.data:.4f}, grad={self.grad:.4f})"
 
 
-def _nothing():
+def _nothing(grad):
     """What a leaf does on the way back, which is nothing."""
 
 
@@ -7644,9 +7682,9 @@ class Value:
         other = other if isinstance(other, Value) else Value(other)
         out = Value(self.data + other.data, (self, other))
 
-        def back():
-            self.grad += out.grad
-            other.grad += out.grad
+        def back(grad):
+            self.grad += grad
+            other.grad += grad
 
         out._back = back
         return out
@@ -7655,9 +7693,9 @@ class Value:
         other = other if isinstance(other, Value) else Value(other)
         out = Value(self.data * other.data, (self, other))
 
-        def back():
-            self.grad += other.data * out.grad
-            other.grad += self.data * out.grad
+        def back(grad):
+            self.grad += other.data * grad
+            other.grad += self.data * grad
 
         out._back = back
         return out
@@ -7667,18 +7705,19 @@ class Value:
             raise TypeError("only a number power, so the rule stays one line")
         out = Value(self.data ** power, (self,))
 
-        def back():
-            self.grad += power * self.data ** (power - 1) * out.grad
+        def back(grad):
+            self.grad += power * self.data ** (power - 1) * grad
 
         out._back = back
         return out
 
     def exp(self):
-        out = Value(math.exp(self.data), (self,))
+        value = math.exp(self.data)
+        out = Value(value, (self,))
 
-        def back():
+        def back(grad):
             # the derivative of exp is exp, which is the value already computed
-            self.grad += out.data * out.grad
+            self.grad += value * grad
 
         out._back = back
         return out
@@ -7688,8 +7727,8 @@ class Value:
             raise ValueError(f"log of {self.data}, which has no gradient to give")
         out = Value(math.log(self.data), (self,))
 
-        def back():
-            self.grad += out.grad / self.data
+        def back(grad):
+            self.grad += grad / self.data
 
         out._back = back
         return out
@@ -7698,17 +7737,18 @@ class Value:
         t = math.tanh(self.data)
         out = Value(t, (self,))
 
-        def back():
-            self.grad += (1 - t * t) * out.grad
+        def back(grad):
+            self.grad += (1 - t * t) * grad
 
         out._back = back
         return out
 
     def relu(self):
-        out = Value(self.data if self.data > 0 else 0.0, (self,))
+        positive = self.data > 0
+        out = Value(self.data if positive else 0.0, (self,))
 
-        def back():
-            self.grad += (out.data > 0) * out.grad
+        def back(grad):
+            self.grad += positive * grad
 
         out._back = back
         return out
@@ -7759,13 +7799,13 @@ class Value:
                     pending.append((child, False))
         self.grad = 1.0
         for node in reversed(order):
-            node._back()
+            node._back(node.grad)
 
     def __repr__(self):
         return f"Value({self.data:.4f}, grad={self.grad:.4f})"
 
 
-def _nothing():
+def _nothing(grad):
     """What a leaf does on the way back, which is nothing."""
 
 
@@ -8390,9 +8430,9 @@ class Value:
         other = other if isinstance(other, Value) else Value(other)
         out = Value(self.data + other.data, (self, other))
 
-        def back():
-            self.grad += out.grad
-            other.grad += out.grad
+        def back(grad):
+            self.grad += grad
+            other.grad += grad
 
         out._back = back
         return out
@@ -8401,9 +8441,9 @@ class Value:
         other = other if isinstance(other, Value) else Value(other)
         out = Value(self.data * other.data, (self, other))
 
-        def back():
-            self.grad += other.data * out.grad
-            other.grad += self.data * out.grad
+        def back(grad):
+            self.grad += other.data * grad
+            other.grad += self.data * grad
 
         out._back = back
         return out
@@ -8413,18 +8453,19 @@ class Value:
             raise TypeError("only a number power, so the rule stays one line")
         out = Value(self.data ** power, (self,))
 
-        def back():
-            self.grad += power * self.data ** (power - 1) * out.grad
+        def back(grad):
+            self.grad += power * self.data ** (power - 1) * grad
 
         out._back = back
         return out
 
     def exp(self):
-        out = Value(math.exp(self.data), (self,))
+        value = math.exp(self.data)
+        out = Value(value, (self,))
 
-        def back():
+        def back(grad):
             # the derivative of exp is exp, which is the value already computed
-            self.grad += out.data * out.grad
+            self.grad += value * grad
 
         out._back = back
         return out
@@ -8434,8 +8475,8 @@ class Value:
             raise ValueError(f"log of {self.data}, which has no gradient to give")
         out = Value(math.log(self.data), (self,))
 
-        def back():
-            self.grad += out.grad / self.data
+        def back(grad):
+            self.grad += grad / self.data
 
         out._back = back
         return out
@@ -8444,17 +8485,18 @@ class Value:
         t = math.tanh(self.data)
         out = Value(t, (self,))
 
-        def back():
-            self.grad += (1 - t * t) * out.grad
+        def back(grad):
+            self.grad += (1 - t * t) * grad
 
         out._back = back
         return out
 
     def relu(self):
-        out = Value(self.data if self.data > 0 else 0.0, (self,))
+        positive = self.data > 0
+        out = Value(self.data if positive else 0.0, (self,))
 
-        def back():
-            self.grad += (out.data > 0) * out.grad
+        def back(grad):
+            self.grad += positive * grad
 
         out._back = back
         return out
@@ -8505,13 +8547,13 @@ class Value:
                     pending.append((child, False))
         self.grad = 1.0
         for node in reversed(order):
-            node._back()
+            node._back(node.grad)
 
     def __repr__(self):
         return f"Value({self.data:.4f}, grad={self.grad:.4f})"
 
 
-def _nothing():
+def _nothing(grad):
     """What a leaf does on the way back, which is nothing."""
 
 
@@ -9251,9 +9293,9 @@ class Value:
         other = other if isinstance(other, Value) else Value(other)
         out = Value(self.data + other.data, (self, other))
 
-        def back():
-            self.grad += out.grad
-            other.grad += out.grad
+        def back(grad):
+            self.grad += grad
+            other.grad += grad
 
         out._back = back
         return out
@@ -9262,9 +9304,9 @@ class Value:
         other = other if isinstance(other, Value) else Value(other)
         out = Value(self.data * other.data, (self, other))
 
-        def back():
-            self.grad += other.data * out.grad
-            other.grad += self.data * out.grad
+        def back(grad):
+            self.grad += other.data * grad
+            other.grad += self.data * grad
 
         out._back = back
         return out
@@ -9274,18 +9316,19 @@ class Value:
             raise TypeError("only a number power, so the rule stays one line")
         out = Value(self.data ** power, (self,))
 
-        def back():
-            self.grad += power * self.data ** (power - 1) * out.grad
+        def back(grad):
+            self.grad += power * self.data ** (power - 1) * grad
 
         out._back = back
         return out
 
     def exp(self):
-        out = Value(math.exp(self.data), (self,))
+        value = math.exp(self.data)
+        out = Value(value, (self,))
 
-        def back():
+        def back(grad):
             # the derivative of exp is exp, which is the value already computed
-            self.grad += out.data * out.grad
+            self.grad += value * grad
 
         out._back = back
         return out
@@ -9295,8 +9338,8 @@ class Value:
             raise ValueError(f"log of {self.data}, which has no gradient to give")
         out = Value(math.log(self.data), (self,))
 
-        def back():
-            self.grad += out.grad / self.data
+        def back(grad):
+            self.grad += grad / self.data
 
         out._back = back
         return out
@@ -9305,17 +9348,18 @@ class Value:
         t = math.tanh(self.data)
         out = Value(t, (self,))
 
-        def back():
-            self.grad += (1 - t * t) * out.grad
+        def back(grad):
+            self.grad += (1 - t * t) * grad
 
         out._back = back
         return out
 
     def relu(self):
-        out = Value(self.data if self.data > 0 else 0.0, (self,))
+        positive = self.data > 0
+        out = Value(self.data if positive else 0.0, (self,))
 
-        def back():
-            self.grad += (out.data > 0) * out.grad
+        def back(grad):
+            self.grad += positive * grad
 
         out._back = back
         return out
@@ -9366,13 +9410,13 @@ class Value:
                     pending.append((child, False))
         self.grad = 1.0
         for node in reversed(order):
-            node._back()
+            node._back(node.grad)
 
     def __repr__(self):
         return f"Value({self.data:.4f}, grad={self.grad:.4f})"
 
 
-def _nothing():
+def _nothing(grad):
     """What a leaf does on the way back, which is nothing."""
 
 
@@ -10050,16 +10094,18 @@ each one once. An optimiser handed the same value twice applies its update
 twice, and that is a bug that looks exactly like a badly chosen learning rate.
 
 Then the line that makes the rest of this project possible in the time you
-have. A forward pass builds well over a hundred thousand small objects that all
-reference each other, and every one is part of a cycle: a value holds the
-closure that pushes its gradient back, and the closure holds the value. Python's
-generational collector walks all of them looking for garbage, again and again
-while the graph is still being built, and finds none, because none of it is
-garbage yet. Measured here, that search is most of the running time, and
-turning it off for the step is around twenty times faster.
+have. One forward pass builds about a quarter of a million small objects, and
+Python's generational collector walks every tracked object looking for cycles,
+over and over while the graph is still being built, finding none each time.
+Measured here, 80 milliseconds a step with it on and 31 with it off.
 
-The collect afterwards is not optional. The cycles are real, and reference
-counting alone will never free them. Unit 36 explained why; this is the bill.
+Nothing leaks while it is off, and that is stage one's doing rather than luck.
+A backward closure that captured the value it belongs to would make every node
+part of a cycle, and a cycle is the one thing reference counting cannot free,
+so the graph would pile up for as long as the collector stayed off. Passing the
+gradient in as an argument instead leaves a graph that only ever points
+downward, which reference counting clears the moment the last name for it goes
+away. Unit 36 explained the difference; this is where it pays.
 
 @goal `GPT` predicts, ties its weights, counts them once, and runs at speed.
 
@@ -10091,9 +10137,9 @@ class Value:
         other = other if isinstance(other, Value) else Value(other)
         out = Value(self.data + other.data, (self, other))
 
-        def back():
-            self.grad += out.grad
-            other.grad += out.grad
+        def back(grad):
+            self.grad += grad
+            other.grad += grad
 
         out._back = back
         return out
@@ -10102,9 +10148,9 @@ class Value:
         other = other if isinstance(other, Value) else Value(other)
         out = Value(self.data * other.data, (self, other))
 
-        def back():
-            self.grad += other.data * out.grad
-            other.grad += self.data * out.grad
+        def back(grad):
+            self.grad += other.data * grad
+            other.grad += self.data * grad
 
         out._back = back
         return out
@@ -10114,18 +10160,19 @@ class Value:
             raise TypeError("only a number power, so the rule stays one line")
         out = Value(self.data ** power, (self,))
 
-        def back():
-            self.grad += power * self.data ** (power - 1) * out.grad
+        def back(grad):
+            self.grad += power * self.data ** (power - 1) * grad
 
         out._back = back
         return out
 
     def exp(self):
-        out = Value(math.exp(self.data), (self,))
+        value = math.exp(self.data)
+        out = Value(value, (self,))
 
-        def back():
+        def back(grad):
             # the derivative of exp is exp, which is the value already computed
-            self.grad += out.data * out.grad
+            self.grad += value * grad
 
         out._back = back
         return out
@@ -10135,8 +10182,8 @@ class Value:
             raise ValueError(f"log of {self.data}, which has no gradient to give")
         out = Value(math.log(self.data), (self,))
 
-        def back():
-            self.grad += out.grad / self.data
+        def back(grad):
+            self.grad += grad / self.data
 
         out._back = back
         return out
@@ -10145,17 +10192,18 @@ class Value:
         t = math.tanh(self.data)
         out = Value(t, (self,))
 
-        def back():
-            self.grad += (1 - t * t) * out.grad
+        def back(grad):
+            self.grad += (1 - t * t) * grad
 
         out._back = back
         return out
 
     def relu(self):
-        out = Value(self.data if self.data > 0 else 0.0, (self,))
+        positive = self.data > 0
+        out = Value(self.data if positive else 0.0, (self,))
 
-        def back():
-            self.grad += (out.data > 0) * out.grad
+        def back(grad):
+            self.grad += positive * grad
 
         out._back = back
         return out
@@ -10206,13 +10254,13 @@ class Value:
                     pending.append((child, False))
         self.grad = 1.0
         for node in reversed(order):
-            node._back()
+            node._back(node.grad)
 
     def __repr__(self):
         return f"Value({self.data:.4f}, grad={self.grad:.4f})"
 
 
-def _nothing():
+def _nothing(grad):
     """What a leaf does on the way back, which is nothing."""
 
 
@@ -10906,7 +10954,7 @@ class GPT(Module):
 
 @contextlib.contextmanager
 def no_gc():
-    """Turn the cycle collector off for the length of one step."""
+    """Turn the collector off for a stretch of work that makes a lot of graph."""
     raise NotImplementedError
     yield
 ~~~
@@ -11043,9 +11091,9 @@ class Value:
         other = other if isinstance(other, Value) else Value(other)
         out = Value(self.data + other.data, (self, other))
 
-        def back():
-            self.grad += out.grad
-            other.grad += out.grad
+        def back(grad):
+            self.grad += grad
+            other.grad += grad
 
         out._back = back
         return out
@@ -11054,9 +11102,9 @@ class Value:
         other = other if isinstance(other, Value) else Value(other)
         out = Value(self.data * other.data, (self, other))
 
-        def back():
-            self.grad += other.data * out.grad
-            other.grad += self.data * out.grad
+        def back(grad):
+            self.grad += other.data * grad
+            other.grad += self.data * grad
 
         out._back = back
         return out
@@ -11066,18 +11114,19 @@ class Value:
             raise TypeError("only a number power, so the rule stays one line")
         out = Value(self.data ** power, (self,))
 
-        def back():
-            self.grad += power * self.data ** (power - 1) * out.grad
+        def back(grad):
+            self.grad += power * self.data ** (power - 1) * grad
 
         out._back = back
         return out
 
     def exp(self):
-        out = Value(math.exp(self.data), (self,))
+        value = math.exp(self.data)
+        out = Value(value, (self,))
 
-        def back():
+        def back(grad):
             # the derivative of exp is exp, which is the value already computed
-            self.grad += out.data * out.grad
+            self.grad += value * grad
 
         out._back = back
         return out
@@ -11087,8 +11136,8 @@ class Value:
             raise ValueError(f"log of {self.data}, which has no gradient to give")
         out = Value(math.log(self.data), (self,))
 
-        def back():
-            self.grad += out.grad / self.data
+        def back(grad):
+            self.grad += grad / self.data
 
         out._back = back
         return out
@@ -11097,17 +11146,18 @@ class Value:
         t = math.tanh(self.data)
         out = Value(t, (self,))
 
-        def back():
-            self.grad += (1 - t * t) * out.grad
+        def back(grad):
+            self.grad += (1 - t * t) * grad
 
         out._back = back
         return out
 
     def relu(self):
-        out = Value(self.data if self.data > 0 else 0.0, (self,))
+        positive = self.data > 0
+        out = Value(self.data if positive else 0.0, (self,))
 
-        def back():
-            self.grad += (out.data > 0) * out.grad
+        def back(grad):
+            self.grad += positive * grad
 
         out._back = back
         return out
@@ -11158,13 +11208,13 @@ class Value:
                     pending.append((child, False))
         self.grad = 1.0
         for node in reversed(order):
-            node._back()
+            node._back(node.grad)
 
     def __repr__(self):
         return f"Value({self.data:.4f}, grad={self.grad:.4f})"
 
 
-def _nothing():
+def _nothing(grad):
     """What a leaf does on the way back, which is nothing."""
 
 
@@ -11887,19 +11937,19 @@ class GPT(Module):
 
 @contextlib.contextmanager
 def no_gc():
-    """Turn the cycle collector off for the length of one step.
+    """Turn the collector off for a stretch of work that makes a lot of graph.
 
-    A forward pass of this model builds well over a hundred thousand small
-    objects that all reference each other, and every single one is part of a
-    cycle: a value holds the closure that pushes its gradient back, and the
-    closure holds the value. Python's generational collector walks all of them
-    looking for garbage, again and again while the graph is still being built,
-    and finds none, because none of it is garbage yet.
+    One forward pass of this model builds about a quarter of a million small
+    objects. Python's generational collector walks every tracked object looking
+    for cycles, over and over while the graph is still being built, and finds
+    none, because stage one made sure there are none to find. Measured here:
+    80 ms a step with it on, 31 ms with it off.
 
-    Measured on the model in this project, that search is most of the running
-    time: turning it off for the step is around twenty times faster. The
-    collect at the end is not optional, though. The cycles are real, and
-    reference counting alone will never free them.
+    Nothing leaks while it is off, because a graph with no cycles in it is
+    freed by reference counting as soon as the last name for it goes away. The
+    collect on the way out is for whatever else the caller did, not for the
+    graph, which is why this can wrap a whole training run rather than having
+    to sit inside the loop.
     """
     gc.disable()
     try:
@@ -11976,9 +12026,9 @@ class Value:
         other = other if isinstance(other, Value) else Value(other)
         out = Value(self.data + other.data, (self, other))
 
-        def back():
-            self.grad += out.grad
-            other.grad += out.grad
+        def back(grad):
+            self.grad += grad
+            other.grad += grad
 
         out._back = back
         return out
@@ -11987,9 +12037,9 @@ class Value:
         other = other if isinstance(other, Value) else Value(other)
         out = Value(self.data * other.data, (self, other))
 
-        def back():
-            self.grad += other.data * out.grad
-            other.grad += self.data * out.grad
+        def back(grad):
+            self.grad += other.data * grad
+            other.grad += self.data * grad
 
         out._back = back
         return out
@@ -11999,18 +12049,19 @@ class Value:
             raise TypeError("only a number power, so the rule stays one line")
         out = Value(self.data ** power, (self,))
 
-        def back():
-            self.grad += power * self.data ** (power - 1) * out.grad
+        def back(grad):
+            self.grad += power * self.data ** (power - 1) * grad
 
         out._back = back
         return out
 
     def exp(self):
-        out = Value(math.exp(self.data), (self,))
+        value = math.exp(self.data)
+        out = Value(value, (self,))
 
-        def back():
+        def back(grad):
             # the derivative of exp is exp, which is the value already computed
-            self.grad += out.data * out.grad
+            self.grad += value * grad
 
         out._back = back
         return out
@@ -12020,8 +12071,8 @@ class Value:
             raise ValueError(f"log of {self.data}, which has no gradient to give")
         out = Value(math.log(self.data), (self,))
 
-        def back():
-            self.grad += out.grad / self.data
+        def back(grad):
+            self.grad += grad / self.data
 
         out._back = back
         return out
@@ -12030,17 +12081,18 @@ class Value:
         t = math.tanh(self.data)
         out = Value(t, (self,))
 
-        def back():
-            self.grad += (1 - t * t) * out.grad
+        def back(grad):
+            self.grad += (1 - t * t) * grad
 
         out._back = back
         return out
 
     def relu(self):
-        out = Value(self.data if self.data > 0 else 0.0, (self,))
+        positive = self.data > 0
+        out = Value(self.data if positive else 0.0, (self,))
 
-        def back():
-            self.grad += (out.data > 0) * out.grad
+        def back(grad):
+            self.grad += positive * grad
 
         out._back = back
         return out
@@ -12091,13 +12143,13 @@ class Value:
                     pending.append((child, False))
         self.grad = 1.0
         for node in reversed(order):
-            node._back()
+            node._back(node.grad)
 
     def __repr__(self):
         return f"Value({self.data:.4f}, grad={self.grad:.4f})"
 
 
-def _nothing():
+def _nothing(grad):
     """What a leaf does on the way back, which is nothing."""
 
 
@@ -12820,19 +12872,19 @@ class GPT(Module):
 
 @contextlib.contextmanager
 def no_gc():
-    """Turn the cycle collector off for the length of one step.
+    """Turn the collector off for a stretch of work that makes a lot of graph.
 
-    A forward pass of this model builds well over a hundred thousand small
-    objects that all reference each other, and every single one is part of a
-    cycle: a value holds the closure that pushes its gradient back, and the
-    closure holds the value. Python's generational collector walks all of them
-    looking for garbage, again and again while the graph is still being built,
-    and finds none, because none of it is garbage yet.
+    One forward pass of this model builds about a quarter of a million small
+    objects. Python's generational collector walks every tracked object looking
+    for cycles, over and over while the graph is still being built, and finds
+    none, because stage one made sure there are none to find. Measured here:
+    80 ms a step with it on, 31 ms with it off.
 
-    Measured on the model in this project, that search is most of the running
-    time: turning it off for the step is around twenty times faster. The
-    collect at the end is not optional, though. The cycles are real, and
-    reference counting alone will never free them.
+    Nothing leaks while it is off, because a graph with no cycles in it is
+    freed by reference counting as soon as the last name for it goes away. The
+    collect on the way out is for whatever else the caller did, not for the
+    graph, which is why this can wrap a whole training run rather than having
+    to sit inside the loop.
     """
     gc.disable()
     try:
@@ -12953,6 +13005,7 @@ with no_gc():
         loss.backward()
         fitting.step()
         losses.append(loss.data)
+
     # measured after the last update rather than before it, which is the state
     # the model is actually left in. the two differ, and a run that looks
     # converged on the value it reports can be mid-bounce on the value it kept
@@ -12996,8 +13049,30 @@ again = train(GPT(tokenizer.vocab_size, 8, 12, 2, 1, random.Random(3)), ids,
               steps=5, rng=random.Random(9), lr=0.1)
 assert first == again
 
-# and the collector is back on when it is over
+# each step's graph is gone before the next one is built, with the collector
+# off for the whole run. that only holds because the graph has no cycles in it,
+# and if it had any this number would climb by a quarter of a million a step
+# until the run ended or the memory did.
 import gc as gc_module
+
+live = []
+train(GPT(tokenizer.vocab_size, 8, 8, 2, 1, random.Random(5)), ids, steps=6,
+      rng=random.Random(0), lr=0.05,
+      report=lambda step, value: live.append(len(gc_module.get_objects())))
+assert max(live) - min(live) < 5000, f"the graphs are piling up: {live}"
+
+# and the same thing said directly: a graph dropped with the collector off
+# leaves nothing behind for it to find
+gc_module.collect()
+with no_gc():
+    scratch = Value(1.0)
+    for _ in range(500):
+        scratch = scratch * 1.0 + 0.5
+    scratch.backward()
+    del scratch
+assert gc_module.collect() == 0, "a cycle-free graph needs no collector"
+
+# and the collector is back on when it is over
 assert gc_module.isenabled()
 ~~~
 
@@ -13029,9 +13104,9 @@ class Value:
         other = other if isinstance(other, Value) else Value(other)
         out = Value(self.data + other.data, (self, other))
 
-        def back():
-            self.grad += out.grad
-            other.grad += out.grad
+        def back(grad):
+            self.grad += grad
+            other.grad += grad
 
         out._back = back
         return out
@@ -13040,9 +13115,9 @@ class Value:
         other = other if isinstance(other, Value) else Value(other)
         out = Value(self.data * other.data, (self, other))
 
-        def back():
-            self.grad += other.data * out.grad
-            other.grad += self.data * out.grad
+        def back(grad):
+            self.grad += other.data * grad
+            other.grad += self.data * grad
 
         out._back = back
         return out
@@ -13052,18 +13127,19 @@ class Value:
             raise TypeError("only a number power, so the rule stays one line")
         out = Value(self.data ** power, (self,))
 
-        def back():
-            self.grad += power * self.data ** (power - 1) * out.grad
+        def back(grad):
+            self.grad += power * self.data ** (power - 1) * grad
 
         out._back = back
         return out
 
     def exp(self):
-        out = Value(math.exp(self.data), (self,))
+        value = math.exp(self.data)
+        out = Value(value, (self,))
 
-        def back():
+        def back(grad):
             # the derivative of exp is exp, which is the value already computed
-            self.grad += out.data * out.grad
+            self.grad += value * grad
 
         out._back = back
         return out
@@ -13073,8 +13149,8 @@ class Value:
             raise ValueError(f"log of {self.data}, which has no gradient to give")
         out = Value(math.log(self.data), (self,))
 
-        def back():
-            self.grad += out.grad / self.data
+        def back(grad):
+            self.grad += grad / self.data
 
         out._back = back
         return out
@@ -13083,17 +13159,18 @@ class Value:
         t = math.tanh(self.data)
         out = Value(t, (self,))
 
-        def back():
-            self.grad += (1 - t * t) * out.grad
+        def back(grad):
+            self.grad += (1 - t * t) * grad
 
         out._back = back
         return out
 
     def relu(self):
-        out = Value(self.data if self.data > 0 else 0.0, (self,))
+        positive = self.data > 0
+        out = Value(self.data if positive else 0.0, (self,))
 
-        def back():
-            self.grad += (out.data > 0) * out.grad
+        def back(grad):
+            self.grad += positive * grad
 
         out._back = back
         return out
@@ -13144,13 +13221,13 @@ class Value:
                     pending.append((child, False))
         self.grad = 1.0
         for node in reversed(order):
-            node._back()
+            node._back(node.grad)
 
     def __repr__(self):
         return f"Value({self.data:.4f}, grad={self.grad:.4f})"
 
 
-def _nothing():
+def _nothing(grad):
     """What a leaf does on the way back, which is nothing."""
 
 
@@ -13873,19 +13950,19 @@ class GPT(Module):
 
 @contextlib.contextmanager
 def no_gc():
-    """Turn the cycle collector off for the length of one step.
+    """Turn the collector off for a stretch of work that makes a lot of graph.
 
-    A forward pass of this model builds well over a hundred thousand small
-    objects that all reference each other, and every single one is part of a
-    cycle: a value holds the closure that pushes its gradient back, and the
-    closure holds the value. Python's generational collector walks all of them
-    looking for garbage, again and again while the graph is still being built,
-    and finds none, because none of it is garbage yet.
+    One forward pass of this model builds about a quarter of a million small
+    objects. Python's generational collector walks every tracked object looking
+    for cycles, over and over while the graph is still being built, and finds
+    none, because stage one made sure there are none to find. Measured here:
+    80 ms a step with it on, 31 ms with it off.
 
-    Measured on the model in this project, that search is most of the running
-    time: turning it off for the step is around twenty times faster. The
-    collect at the end is not optional, though. The cycles are real, and
-    reference counting alone will never free them.
+    Nothing leaks while it is off, because a graph with no cycles in it is
+    freed by reference counting as soon as the last name for it goes away. The
+    collect on the way out is for whatever else the caller did, not for the
+    graph, which is why this can wrap a whole training run rather than having
+    to sit inside the loop.
     """
     gc.disable()
     try:
@@ -13963,6 +14040,10 @@ def train(model, ids, steps, rng, lr=0.05, batch_size=1, weight_decay=0.01,
     """
     optimiser = AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
     history = []
+    # Around the whole run, not around each step. Each step's graph is freed by
+    # reference counting the moment the next step rebinds `total`, because the
+    # graph has no cycles in it, so there is nothing here for a per-step
+    # collect to do. The test measures that the live count stays flat.
     with no_gc():
         for step in range(steps):
             inputs, targets = batch(ids, model.block_size, batch_size, rng)
@@ -14043,9 +14124,9 @@ class Value:
         other = other if isinstance(other, Value) else Value(other)
         out = Value(self.data + other.data, (self, other))
 
-        def back():
-            self.grad += out.grad
-            other.grad += out.grad
+        def back(grad):
+            self.grad += grad
+            other.grad += grad
 
         out._back = back
         return out
@@ -14054,9 +14135,9 @@ class Value:
         other = other if isinstance(other, Value) else Value(other)
         out = Value(self.data * other.data, (self, other))
 
-        def back():
-            self.grad += other.data * out.grad
-            other.grad += self.data * out.grad
+        def back(grad):
+            self.grad += other.data * grad
+            other.grad += self.data * grad
 
         out._back = back
         return out
@@ -14066,18 +14147,19 @@ class Value:
             raise TypeError("only a number power, so the rule stays one line")
         out = Value(self.data ** power, (self,))
 
-        def back():
-            self.grad += power * self.data ** (power - 1) * out.grad
+        def back(grad):
+            self.grad += power * self.data ** (power - 1) * grad
 
         out._back = back
         return out
 
     def exp(self):
-        out = Value(math.exp(self.data), (self,))
+        value = math.exp(self.data)
+        out = Value(value, (self,))
 
-        def back():
+        def back(grad):
             # the derivative of exp is exp, which is the value already computed
-            self.grad += out.data * out.grad
+            self.grad += value * grad
 
         out._back = back
         return out
@@ -14087,8 +14169,8 @@ class Value:
             raise ValueError(f"log of {self.data}, which has no gradient to give")
         out = Value(math.log(self.data), (self,))
 
-        def back():
-            self.grad += out.grad / self.data
+        def back(grad):
+            self.grad += grad / self.data
 
         out._back = back
         return out
@@ -14097,17 +14179,18 @@ class Value:
         t = math.tanh(self.data)
         out = Value(t, (self,))
 
-        def back():
-            self.grad += (1 - t * t) * out.grad
+        def back(grad):
+            self.grad += (1 - t * t) * grad
 
         out._back = back
         return out
 
     def relu(self):
-        out = Value(self.data if self.data > 0 else 0.0, (self,))
+        positive = self.data > 0
+        out = Value(self.data if positive else 0.0, (self,))
 
-        def back():
-            self.grad += (out.data > 0) * out.grad
+        def back(grad):
+            self.grad += positive * grad
 
         out._back = back
         return out
@@ -14158,13 +14241,13 @@ class Value:
                     pending.append((child, False))
         self.grad = 1.0
         for node in reversed(order):
-            node._back()
+            node._back(node.grad)
 
     def __repr__(self):
         return f"Value({self.data:.4f}, grad={self.grad:.4f})"
 
 
-def _nothing():
+def _nothing(grad):
     """What a leaf does on the way back, which is nothing."""
 
 
@@ -14887,19 +14970,19 @@ class GPT(Module):
 
 @contextlib.contextmanager
 def no_gc():
-    """Turn the cycle collector off for the length of one step.
+    """Turn the collector off for a stretch of work that makes a lot of graph.
 
-    A forward pass of this model builds well over a hundred thousand small
-    objects that all reference each other, and every single one is part of a
-    cycle: a value holds the closure that pushes its gradient back, and the
-    closure holds the value. Python's generational collector walks all of them
-    looking for garbage, again and again while the graph is still being built,
-    and finds none, because none of it is garbage yet.
+    One forward pass of this model builds about a quarter of a million small
+    objects. Python's generational collector walks every tracked object looking
+    for cycles, over and over while the graph is still being built, and finds
+    none, because stage one made sure there are none to find. Measured here:
+    80 ms a step with it on, 31 ms with it off.
 
-    Measured on the model in this project, that search is most of the running
-    time: turning it off for the step is around twenty times faster. The
-    collect at the end is not optional, though. The cycles are real, and
-    reference counting alone will never free them.
+    Nothing leaks while it is off, because a graph with no cycles in it is
+    freed by reference counting as soon as the last name for it goes away. The
+    collect on the way out is for whatever else the caller did, not for the
+    graph, which is why this can wrap a whole training run rather than having
+    to sit inside the loop.
     """
     gc.disable()
     try:
@@ -14977,6 +15060,10 @@ def train(model, ids, steps, rng, lr=0.05, batch_size=1, weight_decay=0.01,
     """
     optimiser = AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
     history = []
+    # Around the whole run, not around each step. Each step's graph is freed by
+    # reference counting the moment the next step rebinds `total`, because the
+    # graph has no cycles in it, so there is nothing here for a per-step
+    # collect to do. The test measures that the live count stays flat.
     with no_gc():
         for step in range(steps):
             inputs, targets = batch(ids, model.block_size, batch_size, rng)
@@ -15196,9 +15283,9 @@ class Value:
         other = other if isinstance(other, Value) else Value(other)
         out = Value(self.data + other.data, (self, other))
 
-        def back():
-            self.grad += out.grad
-            other.grad += out.grad
+        def back(grad):
+            self.grad += grad
+            other.grad += grad
 
         out._back = back
         return out
@@ -15207,9 +15294,9 @@ class Value:
         other = other if isinstance(other, Value) else Value(other)
         out = Value(self.data * other.data, (self, other))
 
-        def back():
-            self.grad += other.data * out.grad
-            other.grad += self.data * out.grad
+        def back(grad):
+            self.grad += other.data * grad
+            other.grad += self.data * grad
 
         out._back = back
         return out
@@ -15219,18 +15306,19 @@ class Value:
             raise TypeError("only a number power, so the rule stays one line")
         out = Value(self.data ** power, (self,))
 
-        def back():
-            self.grad += power * self.data ** (power - 1) * out.grad
+        def back(grad):
+            self.grad += power * self.data ** (power - 1) * grad
 
         out._back = back
         return out
 
     def exp(self):
-        out = Value(math.exp(self.data), (self,))
+        value = math.exp(self.data)
+        out = Value(value, (self,))
 
-        def back():
+        def back(grad):
             # the derivative of exp is exp, which is the value already computed
-            self.grad += out.data * out.grad
+            self.grad += value * grad
 
         out._back = back
         return out
@@ -15240,8 +15328,8 @@ class Value:
             raise ValueError(f"log of {self.data}, which has no gradient to give")
         out = Value(math.log(self.data), (self,))
 
-        def back():
-            self.grad += out.grad / self.data
+        def back(grad):
+            self.grad += grad / self.data
 
         out._back = back
         return out
@@ -15250,17 +15338,18 @@ class Value:
         t = math.tanh(self.data)
         out = Value(t, (self,))
 
-        def back():
-            self.grad += (1 - t * t) * out.grad
+        def back(grad):
+            self.grad += (1 - t * t) * grad
 
         out._back = back
         return out
 
     def relu(self):
-        out = Value(self.data if self.data > 0 else 0.0, (self,))
+        positive = self.data > 0
+        out = Value(self.data if positive else 0.0, (self,))
 
-        def back():
-            self.grad += (out.data > 0) * out.grad
+        def back(grad):
+            self.grad += positive * grad
 
         out._back = back
         return out
@@ -15311,13 +15400,13 @@ class Value:
                     pending.append((child, False))
         self.grad = 1.0
         for node in reversed(order):
-            node._back()
+            node._back(node.grad)
 
     def __repr__(self):
         return f"Value({self.data:.4f}, grad={self.grad:.4f})"
 
 
-def _nothing():
+def _nothing(grad):
     """What a leaf does on the way back, which is nothing."""
 
 
@@ -16040,19 +16129,19 @@ class GPT(Module):
 
 @contextlib.contextmanager
 def no_gc():
-    """Turn the cycle collector off for the length of one step.
+    """Turn the collector off for a stretch of work that makes a lot of graph.
 
-    A forward pass of this model builds well over a hundred thousand small
-    objects that all reference each other, and every single one is part of a
-    cycle: a value holds the closure that pushes its gradient back, and the
-    closure holds the value. Python's generational collector walks all of them
-    looking for garbage, again and again while the graph is still being built,
-    and finds none, because none of it is garbage yet.
+    One forward pass of this model builds about a quarter of a million small
+    objects. Python's generational collector walks every tracked object looking
+    for cycles, over and over while the graph is still being built, and finds
+    none, because stage one made sure there are none to find. Measured here:
+    80 ms a step with it on, 31 ms with it off.
 
-    Measured on the model in this project, that search is most of the running
-    time: turning it off for the step is around twenty times faster. The
-    collect at the end is not optional, though. The cycles are real, and
-    reference counting alone will never free them.
+    Nothing leaks while it is off, because a graph with no cycles in it is
+    freed by reference counting as soon as the last name for it goes away. The
+    collect on the way out is for whatever else the caller did, not for the
+    graph, which is why this can wrap a whole training run rather than having
+    to sit inside the loop.
     """
     gc.disable()
     try:
@@ -16130,6 +16219,10 @@ def train(model, ids, steps, rng, lr=0.05, batch_size=1, weight_decay=0.01,
     """
     optimiser = AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
     history = []
+    # Around the whole run, not around each step. Each step's graph is freed by
+    # reference counting the moment the next step rebinds `total`, because the
+    # graph has no cycles in it, so there is nothing here for a per-step
+    # collect to do. The test measures that the live count stays flat.
     with no_gc():
         for step in range(steps):
             inputs, targets = batch(ids, model.block_size, batch_size, rng)
