@@ -637,12 +637,25 @@ def build() -> int:
     }))
     written += 1
 
+    # A unit with some of its three parts but not all of them is a defect, not
+    # work in progress: it renders links to pages that are not there.
+    partial = [e["slug"] for e in track
+               if any((e["hasNote"], e["hasEx"], e["hasDrills"]))
+               and not all((e["hasNote"], e["hasEx"], e["hasDrills"]))]
+    for slug in partial:
+        e = by_slug[slug]
+        missing = [name for name, present in
+                   (("note", e["hasNote"]), ("exercises", e["hasEx"]), ("drills", e["hasDrills"]))
+                   if not present]
+        print(f"INCOMPLETE {slug}: no {', no '.join(missing)}", file=sys.stderr)
+
     done = sum(1 for e in track if e["hasNote"] and e["hasEx"] and e["hasDrills"])
     print(f"built {written} files -> data/")
     print(f"units complete: {done}/{len(track)}   projects written: "
           f"{sum(1 for p in projects if p['hasBody'])}/{len(projects)}")
     print(f"errors indexed: {len(errors)}   glossary terms: {len(gloss)}   "
           f"search entries: {len(index)}")
+    return 1 if partial else 0
     return 0
 
 
