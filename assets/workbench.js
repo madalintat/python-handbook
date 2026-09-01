@@ -422,6 +422,10 @@ function buildEditor(host, initial, onRun, starter = initial, opts = {}) {
   // of a long project there are a dozen of them in a thousand line file.
   const workLines = new Set(opts.work || []);
   let shownWork = workLines;             // the same rows, where they are now
+  // Declared here with the rest of the editor's state, not beside the focus
+  // mode code that owns it, because paint() reads it through shownRow on its
+  // first call and a `let` further down is a dead zone until then.
+  let segs = null;                       // non-null exactly while focused
   let lastHl = null, lastLines = -1, lastMarks = "";
   let relTo = null;          // cursor line for vim's relative numbering, or null
 
@@ -661,8 +665,6 @@ function buildEditor(host, initial, onRun, starter = initial, opts = {}) {
      writes them again. `code()` is what everything else must read: the whole
      file, whichever mode the editor happens to be in. */
   const carriedParts = runs.length ? cutStarter(starter, runs) : [];
-  let segs = null;                       // non-null exactly while focused
-
   /* Every line number that crosses this editor's edge is a line of the whole
      file: the judges count them there, the build's work marks are there, the
      outline points there. Focus mode shows a shorter file, so they are
