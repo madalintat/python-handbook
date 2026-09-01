@@ -109,11 +109,14 @@ const manifest = await js(`fetch('data/manifest.json').then(r => r.json())`)
 const only = '@@ONLY@@'.split(/\s+/).filter(Boolean)
 const slugs = manifest.track.filter(u => u.hasEx).map(u => u.slug)
   .filter(s => !only.length || only.some(o => s.startsWith(o)))
+const projects = manifest.projects.filter(p => p.hasBody)
+  .filter(p => !only.length || only.some(o => p.slug.startsWith(o)))
+
 // a mistyped filter must not be a green run: the summary is the verdict, so
 // it has to say so rather than reporting nought exercises and nought problems
-if (!slugs.length) {
-  cliLog(`no unit matched ${JSON.stringify(only)}`)
-  cliLog(`\nBROWSER STARTERS: 0 exercises, 1 problems`)
+if (!slugs.length && !projects.length) {
+  cliLog(`no unit or project matched ${JSON.stringify(only)}`)
+  cliLog(`\nBROWSER STARTERS: 0 exercises and stages, 1 problems`)
   await completeTaskSpace('python handbook qa', { keep: true })
   process.exit(0)
 }
@@ -134,8 +137,6 @@ for (const slug of slugs) {
   }
   cliLog(`  ${slug}: ${rows.length} exercises, ${rows.filter(r => (r.problems||[r.error]).length).length} problems`)
 }
-const projects = manifest.projects.filter(p => p.hasBody)
-  .filter(p => !only.length || only.some(o => p.slug.startsWith(o)))
 for (const p of projects) {
   const proj = await js(`fetch('data/project-${p.slug}.json').then(r => r.json())`)
   const rows = []
