@@ -15,6 +15,8 @@
 #   ./qa-browser.sh 18 19-attributes  only units whose slug starts with one of these
 set -uo pipefail
 cd "$(dirname "$0")"
+out=$(mktemp)
+trap 'rm -f "$out"' EXIT
 # ego's node runtime does not inherit this shell's environment, so the filter is
 # substituted into the script before it is piped in. Unit prefixes are word
 # characters and hyphens; anything else would corrupt the substitution, so it is
@@ -24,7 +26,7 @@ for arg in "$@"; do
     *[!A-Za-z0-9_-]*) echo "unit filters may only contain letters, digits, - and _: $arg" >&2; exit 2;;
   esac
 done
-sed "s|@@ONLY@@|$*|" <<'EOF' | ego-browser nodejs
+sed "s|@@ONLY@@|$*|" <<'EOF' | ego-browser nodejs 2>&1 | tee "$out"
 await useOrCreateTaskSpace('python handbook qa')
 await gotoAndWait('http://127.0.0.1:8848/#/work/00-toolchain/1', { timeout: 30 })
 await cdp('Page.reload', { ignoreCache: true })
@@ -51,7 +53,7 @@ for (let i = 0; i < 30 && !warm; i++) {
 }
 cliLog(warm ? 'judges warm' : 'WARNING: judges did not warm up in 300s')
 
-const HARNESS = String.raw`(async (slug, n) => {
+const HARNESS = String.raw`(async (slug, ex) => {
   const until = async (fn, ms = 90000) => {
     const t0 = Date.now();
     for (;;) {
@@ -63,18 +65,16 @@ const HARNESS = String.raw`(async (slug, n) => {
   // saved editor content persists per exercise, so clear it or the run judges
   // whatever was last typed rather than the starter
   Object.keys(localStorage).filter(k => k.startsWith('ph.code.')).forEach(k => localStorage.removeItem(k));
-  const list = await fetch('data/ex-' + slug + '.json').then(r => r.json());
-  const out = [];
-  for (const ex of list.filter(e => e.n === n)) {
+  {
     location.hash = '/work/' + slug + '/' + ex.n;
     const mounted = await until(() =>
       document.querySelector('#run') &&
       document.querySelector('.wb-brief h1')?.textContent === ex.title, 20000);
-    if (!mounted) { out.push({ n: ex.n, title: ex.title, error: 'did not mount' }); continue; }
+    if (!mounted) return { n: ex.n, title: ex.title, error: 'did not mount' };
     globalThis.__phVerdict = null;
     document.querySelector('#run').click();
     const done = await until(() => globalThis.__phVerdict);
-    if (!done) { out.push({ n: ex.n, title: ex.title, error: 'timed out' }); continue; }
+    if (!done) return { n: ex.n, title: ex.title, error: 'timed out' };
     const v = globalThis.__phVerdict;
 
     const want = { ruff: [], mypy: [], raises: null, silent: false };
@@ -96,25 +96,31 @@ const HARNESS = String.raw`(async (slug, n) => {
     if (v.ok) problems.push('the starter PASSED its own tests');
     const readings = [...document.querySelectorAll('.reading h4')].map(e => e.textContent);
     if (!readings.length) problems.push('no reading shown');
-    out.push({ n: ex.n, title: ex.title, ruff: gotRuff, mypy: gotMypy, raises: v.raises, readings, problems });
+    return { n: ex.n, title: ex.title, ruff: gotRuff, mypy: gotMypy, raises: v.raises, readings, problems };
   }
-  return out;
 })`;
 
 const manifest = await js(`fetch('data/manifest.json').then(r => r.json())`)
 const only = '@@ONLY@@'.split(/\s+/).filter(Boolean)
 const slugs = manifest.track.filter(u => u.hasEx).map(u => u.slug)
   .filter(s => !only.length || only.some(o => s.startsWith(o)))
-if (!slugs.length) { cliLog('no unit matched ' + JSON.stringify(only)); }
+// a mistyped filter must not be a green run: the summary is the verdict, so
+// it has to say so rather than reporting nought exercises and nought problems
+if (!slugs.length) {
+  cliLog(`no unit matched ${JSON.stringify(only)}`)
+  cliLog(`\nBROWSER STARTERS: 0 exercises, 1 problems`)
+  await completeTaskSpace('python handbook qa', { keep: true })
+  process.exit(0)
+}
 let total = 0, bad = 0
 for (const slug of slugs) {
   // One exercise per evaluate. A whole unit in one call can exceed the CDP
   // timeout on a slow judge, and then the sweep reports nothing at all rather
   // than the one exercise that was slow.
-  const numbers = await js(`fetch('data/ex-${slug}.json').then(r => r.json()).then(l => l.map(e => e.n))`)
+  const list = await js(`fetch('data/ex-${slug}.json').then(r => r.json())`)
   const rows = []
-  for (const n of numbers) {
-    rows.push(...await js(HARNESS + `(${JSON.stringify(slug)}, ${n})`))
+  for (const ex of list) {
+    rows.push(await js(HARNESS + `(${JSON.stringify(slug)}, ${JSON.stringify(ex)})`))
   }
   for (const r of rows) {
     total++
@@ -125,3 +131,16 @@ for (const slug of slugs) {
 }
 cliLog(`\nBROWSER STARTERS: ${total} exercises, ${bad} problems`)
 EOF
+
+# The ego-browser CLI's own exit status says nothing about the run, so the
+# verdict is this script's own summary line, and it exits on that. Keeping the
+# format's owner and its reader in one file is what makes these usable in CI
+# alone. The summary is found by its shape rather than by position: a clean run
+# ends with a blank line and a failed one with a message from the CLI, and the
+# per-unit lines are indented so they cannot stand in for the total.
+summary=$(grep -E '^[A-Z][A-Z ]*:.*[0-9]+ problems$' "$out" | tail -1)
+if [ -z "$summary" ]; then
+  echo "the run printed no summary, so it did not finish" >&2
+  exit 1
+fi
+printf '%s\n' "$summary" | grep -qE '(^|[^0-9])0 problems$'

@@ -1,17 +1,19 @@
 #!/usr/bin/env bash
 #
-# Every route, at every breakpoint, in both themes, plus every control.
+# Every route, at every breakpoint, in both themes.
 #
-# qa-browser.sh checks that the judges give the right verdicts. This checks that
-# the pages around them render, fit, and respond: nothing overflows its column,
-# the right chrome appears at each width, and every button does what it says.
+# qa-browser.sh checks that the judges give the right verdicts and qa-controls.sh
+# presses the buttons. This one checks that the pages render and fit: nothing
+# overflows its column, and the right chrome appears at each width.
 #
 # Needs: a server on 8848 (python3 -m http.server 8848) and the ego-browser CLI.
 #
 #   ./qa-views.sh
 set -uo pipefail
 cd "$(dirname "$0")"
-ego-browser nodejs <<'EOF'
+out=$(mktemp)
+trap 'rm -f "$out"' EXIT
+ego-browser nodejs <<'EOF' 2>&1 | tee "$out"
 await useOrCreateTaskSpace('python handbook views')
 await gotoAndWait('http://127.0.0.1:8848/#/', { timeout: 30 })
 await cdp('Page.reload', { ignoreCache: true })
@@ -19,7 +21,7 @@ await wait(4)
 
 const manifest = await js(`fetch('data/manifest.json').then(r => r.json())`)
 const unit = manifest.track.find(u => u.hasEx).slug
-const project = (manifest.projects || [{}])[0]?.slug
+const project = manifest.projects?.[0]?.slug
 
 const ROUTES = [
   '/', '/track', '/projects', '/progress', '/glossary', '/glossary/A',
@@ -28,13 +30,22 @@ const ROUTES = [
   ...(project ? [`/project/${project}`] : []),
 ]
 
+/* The two breakpoints in app.css: the nav gives way to the tab bar at 900, and
+   the contents rail goes at 1060. Deriving the expectations from those rather
+   than writing three booleans per row keeps them consistent with each other and
+   with the stylesheet, and means the 901-1060 band, where the two differ, is
+   actually covered. */
+const NAV_AT = 900, RAIL_AT = 1060
+const chromeFor = w => ({ nav: w > NAV_AT, tabbar: w <= NAV_AT, rail: w > RAIL_AT })
+
 const VIEWPORTS = [
-  { name: 'small',   w: 320,  h: 568,  nav: false, tabbar: true,  rail: false },
-  { name: 'phone',   w: 390,  h: 844,  nav: false, tabbar: true,  rail: false },
-  { name: 'tablet',  w: 820,  h: 1180, nav: false, tabbar: true,  rail: false },
-  { name: 'laptop',  w: 1280, h: 800,  nav: true,  tabbar: false, rail: true  },
-  { name: 'desktop', w: 1600, h: 900,  nav: true,  tabbar: false, rail: true  },
-  { name: 'wide',    w: 2560, h: 1440, nav: true,  tabbar: false, rail: true  },
+  { name: 'small',   w: 320,  h: 568  },
+  { name: 'phone',   w: 390,  h: 844  },
+  { name: 'tablet',  w: 820,  h: 1180 },
+  { name: 'between', w: 1000, h: 800  },
+  { name: 'laptop',  w: 1280, h: 800  },
+  { name: 'desktop', w: 1600, h: 900  },
+  { name: 'wide',    w: 2560, h: 1440 },
 ]
 
 const problems = []
@@ -100,10 +111,11 @@ for (const vp of VIEWPORTS) {
       search: shown(document.getElementById('navsearch')) || shown(document.getElementById('searchbtn')),
     };
   })()`)
-  for (const [key, want] of [['nav', vp.nav], ['tabbar', vp.tabbar], ['rail', vp.rail]]) {
-    if (chrome[key] !== want) note(`${vp.name}: ${key} is ${chrome[key] ? 'shown' : 'hidden'}, expected the opposite`)
+  const want = chromeFor(vp.w)
+  for (const key of ['nav', 'tabbar', 'rail']) {
+    if (chrome[key] !== want[key]) note(`${vp.name}: ${key} is ${chrome[key] ? 'shown' : 'hidden'}, expected the opposite`)
   }
-  if (chrome.sheetbtn === vp.rail) note(`${vp.name}: the contents sheet button and the rail are both ${chrome.rail ? 'shown' : 'hidden'}`)
+  if (chrome.sheetbtn === chrome.rail) note(`${vp.name}: the contents sheet button and the rail are both ${chrome.rail ? 'shown' : 'hidden'}`)
   if (!chrome.search) note(`${vp.name}: no way to reach search`)
 
   // every control a finger has to hit
@@ -118,7 +130,7 @@ for (const vp of VIEWPORTS) {
     }
     return out;
   })()`)
-  if (vp.w < 900 && small.length) {
+  if (want.tabbar && small.length) {
     for (const s of small) note(`${vp.name}: touch target too small: ${s}`)
   }
 }
@@ -126,3 +138,16 @@ for (const vp of VIEWPORTS) {
 await cdp('Emulation.clearDeviceMetricsOverride')
 cliLog(`\nVIEWS: ${problems.length} problems`)
 EOF
+
+# The ego-browser CLI's own exit status says nothing about the run, so the
+# verdict is this script's own summary line, and it exits on that. Keeping the
+# format's owner and its reader in one file is what makes these usable in CI
+# alone. The summary is found by its shape rather than by position: a clean run
+# ends with a blank line and a failed one with a message from the CLI, and the
+# per-unit lines are indented so they cannot stand in for the total.
+summary=$(grep -E '^[A-Z][A-Z ]*:.*[0-9]+ problems$' "$out" | tail -1)
+if [ -z "$summary" ]; then
+  echo "the run printed no summary, so it did not finish" >&2
+  exit 1
+fi
+printf '%s\n' "$summary" | grep -qE '(^|[^0-9])0 problems$'

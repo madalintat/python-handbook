@@ -2,9 +2,13 @@
 import assert from "node:assert/strict";
 import { highlightPython as hl } from "./assets/workbench.js";
 
-const has = (src, cls, text) =>
-  assert.ok(hl(src).includes(`<span class="${cls}">${text}</span>`),
+let checks = 0;
+const has = (src, cls, text) => {
+  checks++;
+  ok(hl(src).includes(`<span class="${cls}">${text}</span>`),
     `expected ${cls}:${text} in ${JSON.stringify(hl(src))}`);
+};
+const ok = (cond, why) => { checks++; assert.ok(cond, why); };
 
 has("def foo():", "tk-kw", "def");
 has("def foo():", "tk-def", " foo");
@@ -17,24 +21,26 @@ has("self.x", "tk-self", "self");
 has("if a is b:", "tk-kw", "is");
 
 // a # inside a string is not a comment
-assert.ok(!hl('s = "# no"').includes("tk-com"), "# inside a string became a comment");
+ok(!hl('s = "# no"').includes("tk-com"), "# inside a string became a comment");
 // a keyword inside a string is not a keyword
-assert.ok(!hl('s = "def"').includes("tk-kw"), "keyword inside a string was highlighted");
+ok(!hl('s = "def"').includes("tk-kw"), "keyword inside a string was highlighted");
 // html in source must be escaped, never emitted raw
-assert.ok(!hl("x = '<script>'").includes("<script>"), "source html was not escaped");
+ok(!hl("x = '<script>'").includes("<script>"), "source html was not escaped");
 // triple-quoted strings survive newlines
-assert.ok(hl('"""a\nb"""').includes('tk-str'), "triple-quoted string not tokenized");
+ok(hl('"""a\nb"""').includes('tk-str'), "triple-quoted string not tokenized");
 // round trip: stripping tags must give back the source (plus the escaping)
 const src = "def f(x):\n    # hi\n    return x + 1\n";
 const back = hl(src).replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">");
-assert.equal(back, src, "tokenizer lost or duplicated characters");
+ok(back === src, "tokenizer lost or duplicated characters");
 
 /* The note renderer. app.js only touches the DOM inside start(), which index.html
    calls and this file does not, so importing it here is enough. */
 import { md } from "./assets/app.js";
 
-const renders = (src, want, why) =>
+const renders = (src, want, why) => {
+  checks++;
   assert.ok(md(src).includes(want), `${why}\n  wanted ${want}\n  in ${md(src)}`);
+};
 
 renders("- a\n- b\n", "<ul><li>a</li><li>b</li></ul>", "bulleted list");
 renders("1. a\n2. b\n", "<ol><li>a</li><li>b</li></ol>", "numbered list");
@@ -48,4 +54,27 @@ renders("plain words\n", "<p>plain words</p>", "paragraph");
 // a numbered line inside a paragraph still ends it, so the list is not swallowed
 renders("words\n1. a\n", "<ol><li>a</li></ol>", "numbered list ends a paragraph");
 
-console.log("tokenizer + renderer: 23 checks clean");
+/* build.py's UNSUPPORTED_MARKDOWN refuses these constructs because md() cannot
+   draw them. That is a contract across two languages, and this is the half that
+   proves the renderer really cannot: for each one, the element it exists to
+   produce must not appear. Teach md() one of them and forget to lift the ban,
+   and this fails.
+
+   `![alt](x.png)` is the instructive case: md() emits `!<a href="x.png">alt</a>`,
+   a stray exclamation mark followed by a link, which is worse than raw source
+   and is the reason the ban is there. */
+const CANNOT_RENDER = [
+  ["blockquote", "> quoted\n", "<blockquote"],
+  ["image", "![alt](x.png)\n", "<img"],
+  ["heading deeper than ####", "##### deep\n", "<h5"],
+  ["setext heading", "Title\n=====\n", "<h1"],
+  ["html block", "<div>raw</div>\n", "<div>"],
+  ["footnote", "[^1]: a note\n", "<sup"],
+];
+for (const [name, src, element] of CANNOT_RENDER) {
+  checks++;
+  assert.ok(!md(src).includes(element),
+    `md() now renders ${name} as ${element}; build.py still refuses it in UNSUPPORTED_MARKDOWN`);
+}
+
+console.log(`tokenizer + renderer: ${checks} checks clean`);

@@ -78,6 +78,10 @@ export const cached = (key, make) => {
   return memo[key];
 };
 
+// Dropping a resolved entry so the next call rebuilds it. Here rather than at
+// the call site, because `memo` is this function's and the keys are its own.
+cached.forget = (...keys) => { for (const k of keys) memo[k] = null; };
+
 /* A Pyodide that resolved and later died is still cached, and every call after
    that reports "already fatally failed" for the life of the tab. runner.py keeps
    ordinary runaway recursion from getting here, but a big enough allocation
@@ -85,8 +89,8 @@ export const cached = (key, make) => {
    instead of leaving the page permanently unable to judge anything. */
 const forgetIfFatal = err => {
   if (/fatally failed|call stack size exceeded|memory access out of bounds/i.test(err?.message || "")) {
-    memo.py = null;
-    memo.mypy = null;
+    // "mypy" is installed into the same interpreter "py" holds, so it dies with it
+    cached.forget("py", "mypy");
   }
 };
 
@@ -160,7 +164,7 @@ async function judgeRun(src, tests, say) {
   const py = await getPyodide(say);
   const fn = py.globals.get("run_json");
   try {
-    if (canSuspend && fn.callPromising) {
+    if (canSuspend) {
       try {
         return JSON.parse(await fn.callPromising(src, tests));
       } catch (err) {

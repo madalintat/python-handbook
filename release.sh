@@ -13,17 +13,12 @@ cd "$(dirname "$0")"
 
 fail=0
 
-# The ego-browser CLI exits non-zero even on a clean run, so the verdict comes
-# from the script's own summary. It has to be the LAST line: every one of these
-# also prints a per-item line, and "8 exercises, 0 problems" for one unit is not
-# a statement about the run.
+# Each qa-*.sh owns its own output format and exits on its own verdict, so
+# these are ordinary steps.
 browser_step() {
-  local name="$1" script="$2" out
-  step "$name"
-  out=$("$script" 2>&1)
-  echo "$out" | grep -E "^ *FAIL|  FAIL" || true
-  echo "$out" | tail -1
-  if echo "$out" | tail -1 | grep -qE "(^|[^0-9])0 problems$"; then note 0; else note 1; fi
+  step "$1"
+  "$2" | grep -E "^ *FAIL|: [0-9]+ problems$|^[A-Z].*problems$"
+  note "${PIPESTATUS[0]}"
 }
 
 step() { printf '\n\033[1m== %s\033[0m\n' "$1"; }

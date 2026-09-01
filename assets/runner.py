@@ -76,11 +76,11 @@ def run(src, tests):
     finally:
         sys.stdout = real_stdout
         sys.setrecursionlimit(real_limit)
-        for name in set(sys.modules) - set(real_modules):
-            del sys.modules[name]
-        for name, module in real_modules.items():
-            if sys.modules.get(name) is not module:
-                sys.modules[name] = module
+        # clear-and-update rather than a diff: it is shorter, it also restores
+        # anything the run deleted, and it keeps the same dict object, which is
+        # what the import machinery holds a reference to.
+        sys.modules.clear()
+        sys.modules.update(real_modules)
 
 
 def run_json(src, tests):

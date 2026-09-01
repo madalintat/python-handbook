@@ -11,7 +11,9 @@
 #   ./qa-controls.sh
 set -uo pipefail
 cd "$(dirname "$0")"
-ego-browser nodejs <<'EOF'
+out=$(mktemp)
+trap 'rm -f "$out"' EXIT
+ego-browser nodejs <<'EOF' 2>&1 | tee "$out"
 await useOrCreateTaskSpace('python handbook controls')
 await gotoAndWait('http://127.0.0.1:8848/#/', { timeout: 30 })
 await cdp('Page.reload', { ignoreCache: true })
@@ -97,25 +99,18 @@ await q(`document.getElementById('sheetbtn').click(); return 1`)
 await wait(0.4)
 ok(!await q(`return document.getElementById('sheet').classList.contains('open')`), 'the sheet closes again')
 
-// tapping a link inside the sheet closes it, including a link to the section
-// already showing, which changes no hash and so fires no route
-await q(`document.getElementById('sheetbtn').click(); return 1`)
-await wait(0.5)
-await q(`document.querySelector('#sheet-body a')?.click(); return 1`)
-await wait(0.6)
-ok(!await q(`return document.getElementById('sheet').classList.contains('open')`),
-   'tapping a link in the sheet closes it')
-const here = await q(`return location.hash`)
+// A link to the section already showing changes no hash and so fires no route,
+// which is the case route()'s own close cannot cover.
 await q(`document.getElementById('sheetbtn').click(); return 1`)
 await wait(0.5)
 await q(`
-  const same = [...document.querySelectorAll('#sheet-body a')]
-    .find(a => a.getAttribute('href') === ${'`'}#${'$'}{location.hash.slice(1)}${'`'});
-  (same || document.querySelector('#sheet-body a'))?.click();
+  const links = [...document.querySelectorAll('#sheet-body a')];
+  const same = links.find(a => a.getAttribute('href') === '#' + location.hash.slice(1));
+  (same || links[0])?.click();
   return 1`)
 await wait(0.6)
 ok(!await q(`return document.getElementById('sheet').classList.contains('open')`),
-   'a link to the section already showing closes the sheet too')
+   'tapping a link in the sheet closes it, including one to the section showing')
 await cdp('Emulation.clearDeviceMetricsOverride')
 
 cliLog('=== the workbench ===')
@@ -143,8 +138,8 @@ await until(`document.getElementById('wraptoggle')`)
 const wrapBefore = await q(`return getComputedStyle(document.querySelector('textarea')).whiteSpace`)
 await q(`document.getElementById('wraptoggle').click(); return 1`)
 await wait(0.4)
-ok(await q(`return getComputedStyle(document.querySelector('textarea')).whiteSpace`) !== wrapBefore
-   && await q(`return document.getElementById('wraptoggle').getAttribute('aria-pressed') === 'true'`),
+ok(await q(`return getComputedStyle(document.querySelector('textarea')).whiteSpace !== ${JSON.stringify(wrapBefore)}
+                  && document.getElementById('wraptoggle').getAttribute('aria-pressed') === 'true'`),
    'wrap toggles and says so')
 await q(`document.getElementById('wraptoggle').click(); return 1`)
 
@@ -207,8 +202,7 @@ for (let i = 0; i < total + 2; i++) {
 }
 ok(await q(`return /\\d+ \\/ \\d+/.test(document.getElementById('quiz').textContent)`),
    'finishing the set shows a score')
-ok(await q(`return !!JSON.parse(localStorage.getItem('ph.progress') || '{}').drills?.['${unit}']`) ||
-   await q(`return (localStorage.getItem('ph.progress') || '').includes('drills')`),
+ok(await q(`return !!JSON.parse(localStorage.getItem('ph.progress') || '{}').drills?.['${unit}']`),
    'finishing the set is recorded')
 
 cliLog('=== progress ===')
@@ -217,7 +211,7 @@ await go('/progress', 1.2)
 const prog = await q(`return document.querySelector('main').textContent.replace(/\\s+/g, ' ')`)
 ok(/notes read/.test(prog) && /exercises passed/.test(prog) && /drill sets done/.test(prog),
    'progress reports notes, exercises and drills')
-ok(/\d+\/39/.test(prog), 'progress counts against the whole track')
+ok(prog.includes(`/${manifest.track.length}`), 'progress counts against the whole track')
 
 await q(`localStorage.setItem('ph.theme', 'dark'); localStorage.setItem('ph.vim', '1'); return 1`)
 await q(`
@@ -239,3 +233,16 @@ ok(await q(`return location.hash.startsWith('#/search')`), 'pressing / opens sea
 
 cliLog(`\nCONTROLS: ${problems.length} problems`)
 EOF
+
+# The ego-browser CLI's own exit status says nothing about the run, so the
+# verdict is this script's own summary line, and it exits on that. Keeping the
+# format's owner and its reader in one file is what makes these usable in CI
+# alone. The summary is found by its shape rather than by position: a clean run
+# ends with a blank line and a failed one with a message from the CLI, and the
+# per-unit lines are indented so they cannot stand in for the total.
+summary=$(grep -E '^[A-Z][A-Z ]*:.*[0-9]+ problems$' "$out" | tail -1)
+if [ -z "$summary" ]; then
+  echo "the run printed no summary, so it did not finish" >&2
+  exit 1
+fi
+printf '%s\n' "$summary" | grep -qE '(^|[^0-9])0 problems$'

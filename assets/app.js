@@ -43,7 +43,11 @@ let main, sheet, sheetBody, sheetBtn;
 
 const slugify = s => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
-const BLOCK = /^(```|#{2,4}\s|[-*]\s|\d+\.\s|\|)/;
+/* Bulleted and numbered lists differ only in their marker and their tag, and
+   BLOCK is built from MARKER so a third marker cannot be added to one and not
+   the other: a paragraph has to end where a list begins. */
+const MARKER = /^([-*]|\d+\.)\s+/;
+const BLOCK = new RegExp(`^(\`\`\`|#{2,4}\\s|\\||${MARKER.source.slice(1)})`);
 
 export function md(src) {
   const out = [];
@@ -78,16 +82,14 @@ export function md(src) {
       i++;
       continue;
     }
-    // Bulleted and numbered lists differ only in their marker and their tag.
-    const marker = /^([-*]|\d+\.)\s+/;
-    const bullet = marker.exec(line);
+    const bullet = MARKER.exec(line);
     if (bullet) {
-      const tag = bullet[1] === "-" || bullet[1] === "*" ? "ul" : "ol";
+      const ol = bullet[1].endsWith(".");
+      const tag = ol ? "ol" : "ul";
       const items = [];
       let m;
-      while (i < lines.length && (m = marker.exec(lines[i]))) {
-        const numbered = m[1] !== "-" && m[1] !== "*";
-        if (numbered !== (tag === "ol")) break;
+      // stop at the end of the run, and at a marker of the other kind
+      while (i < lines.length && (m = MARKER.exec(lines[i])) && m[1].endsWith(".") === ol) {
         items.push(inline(lines[i++].slice(m[0].length)));
       }
       out.push(`<${tag}>${items.map(t => `<li>${t}</li>`).join("")}</${tag}>`);

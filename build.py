@@ -215,7 +215,16 @@ def front_matter(text: str, path: Path) -> tuple[dict, str]:
             meta[k.strip()] = [s.strip() for s in v[1:-1].split(",") if s.strip()]
         else:
             meta[k.strip()] = v
-    return meta, text[m.end():]
+
+    body = text[m.end():]
+    # Every parser comes through here, so the house-style and cross-reference
+    # checks live here too rather than being pasted onto each one. Hanging them
+    # off the parsers left the glossary and the projects silently exempt, and
+    # made each parser re-derive the front matter's length to report a line.
+    lines_before = text.count("\n", 0, m.end())
+    _check_prose(path, body, lines_before)
+    _check_cross_references(path, body)
+    return meta, body
 
 
 def die(path: Path, msg: str) -> None:
@@ -227,15 +236,38 @@ def slugify(s: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", s.lower()).strip("-")
 
 
+def strip_code(text: str, blank: bool = False) -> str:
+    """The prose of a content file: fenced blocks, exercise blocks, inline code.
+
+    `blank=True` replaces the code with spaces rather than removing it, so every
+    newline survives and an offset into the result is still an offset into the
+    original. That is what lets a style complaint name the line to open.
+    """
+    out = (lambda m: re.sub(r"[^\n]", " ", m.group(0))) if blank else ""
+    text = re.sub(r"^```.*?^```", out, text, flags=re.M | re.S)
+    text = re.sub(r"^~~~.*?^~~~", out, text, flags=re.M | re.S)
+    return re.sub(r"`[^`]*`", out, text)
+
+
 def word_count(s: str) -> int:
     # prose only: fenced code and inline code do not count toward the budget
-    s = re.sub(r"^```.*?^```", "", s, flags=re.M | re.S)
-    s = re.sub(r"^~~~.*?^~~~", "", s, flags=re.M | re.S)
-    s = re.sub(r"`[^`]*`", "", s)
-    return len(s.split())
+    return len(strip_code(s).split())
 
 
 # ---------------------------------------------------------------- units
+
+# What the browser's markdown subset cannot draw. Anything here would reach the
+# reader as raw source, so the build refuses it. test_frontend.mjs asserts the
+# other half, that md() really cannot render each one, so the two lists fail
+# together instead of drifting: this is the contract between build.py and md().
+UNSUPPORTED_MARKDOWN = {
+    "blockquote": r"^> ",
+    "image": r"!\[",
+    "heading deeper than ####": r"^#{5,} ",
+    "setext heading": r"^=+$",
+    "html block": r"^<\w+",
+    "footnote": r"^\[\^",
+}
 
 NOTE_MIN, NOTE_MAX = 1400, 2600
 EXERCISES_PER_UNIT = 8
@@ -244,8 +276,6 @@ DRILLS_PER_UNIT = 15
 
 def parse_unit(path: Path) -> dict:
     meta, body = front_matter(path.read_text(), path)
-    _check_prose(path, body)
-    _check_cross_references(path, body, int(path.stem[:2]))
     words = word_count(body)
     if not (NOTE_MIN <= words <= NOTE_MAX):
         die(path, f"note is {words} words, must be {NOTE_MIN}-{NOTE_MAX}")
@@ -253,16 +283,8 @@ def parse_unit(path: Path) -> dict:
     # The browser renders these notes with a small hand-written markdown
     # subset. Anything it cannot draw would be shown to the reader as raw
     # source, so the build refuses it rather than letting it through.
-    prose = re.sub(r"^```.*?^```", "", body, flags=re.M | re.S)
-    unsupported = {
-        "blockquote": r"^> ",
-        "image": r"!\[",
-        "heading deeper than ####": r"^#{5,} ",
-        "setext heading": r"^=+$",
-        "html block": r"^<\w+",
-        "footnote": r"^\[\^",
-    }
-    for label, pat in unsupported.items():
+    prose = strip_code(body)
+    for label, pat in UNSUPPORTED_MARKDOWN.items():
         if re.search(pat, prose, re.M):
             die(path, f"note uses {label}, which the renderer does not support")
 
@@ -288,8 +310,6 @@ DIRECTIVE = re.compile(r"^@(expect|hint|diagnose)[ \t]+(.+)$", re.M)
 
 def parse_exercises(path: Path) -> list[dict]:
     meta, body = front_matter(path.read_text(), path)
-    _check_prose(path, body)
-    _check_cross_references(path, body, int(path.stem[:2]))
     chunks = re.split(r"^## ", body, flags=re.M)[1:]
     if not chunks:
         die(path, "no exercises found (need `## ` headings)")
@@ -358,8 +378,6 @@ OPTION = re.compile(r"^- \(([ x])\) (.+)$", re.M)
 
 def parse_drills(path: Path) -> list[dict]:
     meta, body = front_matter(path.read_text(), path)
-    _check_prose(path, body)
-    _check_cross_references(path, body, int(path.stem[:2]))
     chunks = re.split(r"^## ", body, flags=re.M)[1:]
     out = []
     for i, chunk in enumerate(chunks, 1):
@@ -515,13 +533,14 @@ _NAME_FEATURES = {
 # ordinary variables called `cache`.
 _ATTR_FEATURES = {"cache": "cache", "lru_cache": "cache"}
 
-# `from X import name` where the name belongs to a different unit than the
-# module as a whole, and the module's own gate should therefore not apply.
-# Only for a genuine mismatch: typing covers Optional, which is unit 24, and
-# NamedTuple, which is unit 23's own subject. Everything else adds both, because
-# `from re import compile` really does use `re` as well as `compile`, and
-# dropping the module gate there would let a unit-01 exercise import it.
-_IMPORT_OVERRIDES = {("typing", "NamedTuple"): "namedtuple"}
+# `from X import name` pairs where the module's own gate should not apply,
+# because the module stands in for one construct and this name is a different
+# one: `typing` is gated as unit 24's Optional, and NamedTuple is unit 23's own
+# subject. The name still resolves through _NAME_FEATURES, so the feature is
+# named in one place. Everything else adds both, because `from re import
+# compile` really does use `re` as well as `compile`, and dropping the module
+# gate there would let a unit-01 exercise import it.
+_IMPORT_SKIPS_MODULE = {("typing", "NamedTuple")}
 
 _MODULE_FEATURES = {
     "math": "math", "copy": "copy_module", "itertools": "itertools",
@@ -557,26 +576,13 @@ _PROSE_BANNED = {
 }
 
 
-def _strip_code(text: str) -> str:
-    """The prose only, with code blanked rather than removed.
+def _check_prose(path: Path, body: str, offset: int = 0) -> None:
+    """The house style, enforced rather than remembered.
 
-    Every newline survives, so an offset into the result is still an offset into
-    the original and the line number a failure reports is the line to open.
+    `offset` is how many lines precede `body` in the file, so that a complaint
+    names the line to open rather than a line number counted from the body.
     """
-    blank = lambda m: re.sub(r"[^\n]", " ", m.group(0))
-    text = re.sub(r"^~~~.*?^~~~", blank, text, flags=re.M | re.S)
-    text = re.sub(r"^```.*?^```", blank, text, flags=re.M | re.S)
-    return re.sub(r"`[^`]*`", blank, text)
-
-
-def _check_prose(path: Path, body: str) -> None:
-    """The house style, enforced rather than remembered."""
-    prose = _strip_code(body)
-    # `body` starts after the front matter, so a line number counted in it is
-    # short by however many lines that was.
-    full = path.read_text()
-    at = full.find(body)
-    offset = full.count("\n", 0, at) if at >= 0 else 0
+    prose = strip_code(body, blank=True)
     for label, pattern in _PROSE_BANNED.items():
         m = re.search(pattern, prose)
         if m:
@@ -595,12 +601,23 @@ _LOOKS_BACK = re.compile(
 _LOOKS_FORWARD = re.compile(r"unit (\d{2}) (?:is about|will|covers|gets to)\b")
 
 
-def _check_cross_references(path: Path, body: str, here: int) -> None:
-    """Every reference to another unit, checked against where this one sits."""
+_UNIT_NUMBERS = frozenset(u[0][:2] for u in TRACK)
+
+
+def _check_cross_references(path: Path, body: str) -> None:
+    """Every reference to another unit, checked against where this one sits.
+
+    A file whose name does not start with a unit number, the glossary and the
+    projects, still has its references checked for existing; only the "comes
+    later" half needs to know where it is.
+    """
     for m in re.finditer(r"[Uu]nits? (\d{2})(?: and (\d{2}))?", body):
         for group in m.groups():
-            if group is not None and not any(u[0].startswith(group) for u in TRACK):
+            if group is not None and group not in _UNIT_NUMBERS:
                 die(path, f"refers to unit {group}, which is not in the track")
+    here = int(path.stem[:2]) if path.stem[:2].isdigit() else None
+    if here is None:
+        return
     for m in _LOOKS_BACK.finditer(body):
         if int(m.group(1)) > here:
             die(path, f"says unit {m.group(1)} {m.group(2)}, but that unit comes later")
@@ -621,6 +638,14 @@ def _check_feature_tables() -> None:
              if sum(1 for feats in INTRODUCES.values() if f in feats) > 1]
     if twice:
         raise SystemExit(f"features introduced by more than one unit: {sorted(twice)}")
+
+    # TRACK and PROJECTS blurbs are prose too: they reach the reader through
+    # manifest.json. Enforcing the style on content/ and remembering it here is
+    # how the three em dashes this gate was written for got in.
+    for row in list(TRACK) + list(PROJECTS):
+        for field in row:
+            if isinstance(field, str):
+                _check_prose(Path("build.py"), field)
 
     # `from X import name` resolves per name, because one module can hold
     # constructs from different units: typing has both NamedTuple, which is
@@ -674,11 +699,8 @@ def features_used(source: str) -> set[str]:
                     found.add(_MODULE_FEATURES[alias.name])
         if isinstance(node, ast.ImportFrom):
             for alias in node.names:
-                override = _IMPORT_OVERRIDES.get((node.module, alias.name))
-                if override:
-                    found.add(override)
-                    continue
-                if node.module in _MODULE_FEATURES:
+                if (node.module in _MODULE_FEATURES
+                        and (node.module, alias.name) not in _IMPORT_SKIPS_MODULE):
                     found.add(_MODULE_FEATURES[node.module])
                 if alias.name in _NAME_FEATURES:
                     found.add(_NAME_FEATURES[alias.name])
