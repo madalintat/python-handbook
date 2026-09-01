@@ -2870,8 +2870,8 @@ rather than returning a list, because the values are on disk and building all
 of them in memory would undo the reason the index holds offsets.
 
 `with` matters more than it looks. A store owns an open file, and an open file
-that nobody closes is a resource leak that only shows up under load. Unit 09
-built the context manager protocol for exactly this shape of object.
+that nobody closes is a resource leak that only shows up under load. Unit 22
+built `__enter__` and `__exit__` for exactly this shape of object.
 
 Then the number that decides when to compact. A store that never compacts fills
 the disk and a store that always compacts does nothing else, so the useful
