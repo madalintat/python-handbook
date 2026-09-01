@@ -326,6 +326,18 @@ code, pre, kbd { font-family: var(--mono); }
 .note p, .note li { font-size: var(--t-read); line-height: 1.75; color: var(--ink-2); }
 .note strong { color: var(--ink); font-weight: 700; }
 .note code { font-size: 0.88em; background: var(--code-bg); border: 1px solid var(--border-soft); border-radius: var(--r-1); padding: 0.08em 0.32em; color: var(--ink); }
+/* A table is the one thing in a note that can genuinely be wider than the
+   measure, so it gets its own scroll rather than pushing the page sideways. */
+.tablewrap { overflow-x: auto; margin: 1.3rem 0; }
+.note table { border-collapse: collapse; width: 100%; font-size: var(--t-sm); }
+.note th, .note td {
+  text-align: left; padding: 0.5rem 0.8rem 0.5rem 0;
+  border-bottom: 1px solid var(--border-soft); vertical-align: top;
+}
+.note th { font-weight: 700; color: var(--ink); white-space: nowrap; }
+.note td { color: var(--ink-2); }
+.note tbody tr:last-child td { border-bottom: 0; }
+
 .note pre {
   background: var(--code-bg); border: 1px solid var(--border-soft); border-radius: var(--r-3);
   padding: 0.95rem 1.05rem; overflow-x: auto; font-size: var(--t-sm); line-height: 1.65;

@@ -247,6 +247,23 @@ def parse_unit(path: Path) -> dict:
     if not (NOTE_MIN <= words <= NOTE_MAX):
         die(path, f"note is {words} words, must be {NOTE_MIN}-{NOTE_MAX}")
 
+    # The browser renders these notes with a small hand-written markdown
+    # subset. Anything it cannot draw would be shown to the reader as raw
+    # source, so the build refuses it rather than letting it through.
+    prose = re.sub(r"^```.*?^```", "", body, flags=re.M | re.S)
+    unsupported = {
+        "ordered list": r"^\d+\. ",
+        "blockquote": r"^> ",
+        "image": r"!\[",
+        "heading deeper than ####": r"^#{5,} ",
+        "setext heading": r"^=+$",
+        "html block": r"^<\w+",
+        "footnote": r"^\[\^",
+    }
+    for label, pat in unsupported.items():
+        if re.search(pat, prose, re.M):
+            die(path, f"note uses {label}, which the renderer does not support")
+
     sections = []
     for m in re.finditer(r"^## (.+)$", body, re.M):
         sections.append({"title": m.group(1).strip(), "id": slugify(m.group(1))})
@@ -611,7 +628,11 @@ def build() -> int:
         if slug not in by_slug:
             die(path, f"slug {slug!r} is not in TRACK")
         by_slug[slug]["hasEx"] = len(ex)
-        (DATA / f"ex-{slug}.json").write_text(json.dumps(ex))
+        # The book gives hints and never answers. Shipping the solutions to the
+        # browser would put every one of them a single fetch away, so they stay
+        # in content/ where --validate can still compile and run them.
+        shipped = [{k: v for k, v in e.items() if k != "solution"} for e in ex]
+        (DATA / f"ex-{slug}.json").write_text(json.dumps(shipped))
         written += 1
 
     for path in sorted(CONTENT.glob("drills/*.md")):

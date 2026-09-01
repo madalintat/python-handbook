@@ -121,7 +121,7 @@ The useful rule is to catch at the layer that can decide what to do about it. A 
 
 Two consequences. Low-level code raises specific exceptions and catches almost nothing. High-level code, the request handler or the command-line entry point, catches broadly, because it is the only layer that knows the whole program should keep going rather than stop.
 
-That top-level handler is the one legitimate use of a wide `except Exception:` — and even there it must log the traceback rather than swallow it, or you have simply moved the silence to a more expensive place.
+That top-level handler is the one legitimate use of a wide `except Exception:`, and even there it must log the traceback rather than swallow it, or you have simply moved the silence to a more expensive place.
 
 The other half of the rule is to let a bug through. If the exception means your code is wrong rather than the world being awkward, the handler that catches it is turning a loud, locatable failure into a quiet, unlocatable one.
 

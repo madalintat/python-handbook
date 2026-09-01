@@ -492,6 +492,10 @@ export function mountWorkbench(host, ctx) {
     for (const m of (exec?.tb || "").matchAll(/your_code\.py", line (\d+)/g)) lines.add(Number(m[1]));
     editor.setErrorLines([...lines].filter(Boolean));
 
+    // The QA harness reads this to compare the browser's verdict against the one
+    // build.py --validate reached offline. Nothing in the page uses it.
+    globalThis.__phVerdict = { ruff, mypy, raises: exec?.exc || "", ok: !!exec?.ok };
+
     editor.el.classList.remove("running");
     if (exec?.ok) editor.el.classList.add("passed");
     renderReading({ ex, ruff, mypy, run: exec, reading, host, onPass, next });
@@ -507,8 +511,14 @@ function renderReading({ ex, ruff, mypy, run, reading, host, onPass, next }) {
 
   // pick the diagnose entry that matches what actually happened, in order of
   // how loudly it failed: an exception first, then the static judges, then silence.
+  // An AssertionError normally means the hidden tests failed, which is what the
+  // `silent` verdict describes. But an exercise can legitimately expect the
+  // reader's own code to raise one, and then AssertionError is the key.
+  const declaresSilent = ex.expects.some(e => e.judge === "silent");
   const keys = [];
-  if (run && run.exc) keys.push(run.exc === "AssertionError" ? "silent" : run.exc);
+  if (run && run.exc) {
+    keys.push(run.exc === "AssertionError" && declaresSilent ? "silent" : run.exc);
+  }
   ruff.forEach(d => keys.push(d.code));
   mypy.forEach(d => keys.push(d.code));
   if (passed && !ruff.length && !mypy.length) keys.length = 0;

@@ -47,7 +47,7 @@ sheet?.addEventListener("click", e => { if (e.target.closest("a")) sheet.classLi
 
 const slugify = s => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
-const BLOCK = /^(```|#{2,4}\s|[-*]\s)/;
+const BLOCK = /^(```|#{2,4}\s|[-*]\s|\|)/;
 
 function md(src) {
   const out = [];
@@ -64,6 +64,17 @@ function md(src) {
       out.push(`<pre><code>${highlightPython(body.join("\n"))}</code></pre>`);
       continue;
     }
+    // A table: a header row, a divider of dashes, then the body.
+    if (line.startsWith("|") && /^\|[\s:|-]+\|\s*$/.test(lines[i + 1] || "")) {
+      const rows = [];
+      while (i < lines.length && lines[i].startsWith("|")) rows.push(lines[i++]);
+      const cells = r => r.split("|").slice(1, -1).map(c => inline(c.trim()));
+      const head = cells(rows[0]).map(c => `<th>${c}</th>`).join("");
+      const body = rows.slice(2).map(r => `<tr>${cells(r).map(c => `<td>${c}</td>`).join("")}</tr>`).join("");
+      out.push(`<div class="tablewrap"><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`);
+      continue;
+    }
+
     const h = line.match(/^(#{2,4})\s+(.*)$/);
     if (h) {
       const level = h[1].length;
