@@ -538,6 +538,18 @@ function renderReading({ ex, ruff, mypy, run, reading, host, onPass, next }) {
       <p>${inline(ex.diagnose[k])}</p></div>`);
   }
 
+  // A complaint with no prose beside it is worse than no complaint. This has to
+  // be decided before the traceback goes in, because the traceback is evidence
+  // rather than explanation, and counting it would suppress the very message a
+  // reader with an unexplained error needs.
+  if (!parts.length && (run?.exc || ruff.length || mypy.length)) {
+    parts.push(`<div class="reading"><h4>Not one of this exercise's errors</h4>
+      <p>The judges are objecting to something the exercise does not have a written
+      reading for, usually a typo or a change further from the starter than the
+      exercise expects. Read their messages above; they are the real ones, not a
+      simplification. <b>reset</b> restores the starter if you want to begin again.</p></div>`);
+  }
+
   if (run && run.exc && run.tb) {
     parts.push(`<div class="verdict" style="margin-top:.9rem"><pre class="raw" style="border:0">${esc(run.tb.trim())}</pre></div>`);
   }
@@ -551,16 +563,6 @@ function renderReading({ ex, ruff, mypy, run, reading, host, onPass, next }) {
         ? "The hidden tests pass, so the behaviour is right. The static judges still have something to say, and they are worth reading: on a real codebase that is the difference between code that works today and code that still works next year."
         : "The tests pass and both static judges are clean. That is the whole traffic light green at once."}</p>
       ${next ? `<p><a class="btn sm" href="${next}">Next →</a></p>` : ""}</div>`);
-  }
-
-  // A complaint with no prose beside it is worse than no complaint, so say so
-  // rather than leaving the learner with three coloured rows and silence.
-  if (!parts.length && (run?.exc || ruff.length || mypy.length)) {
-    parts.push(`<div class="reading"><h4>Not one of this exercise's errors</h4>
-      <p>The judges are objecting to something the exercise does not have a written
-      reading for, usually a typo or a change further from the starter than the
-      exercise expects. Read their messages above; they are the real ones, not a
-      simplification. <b>reset</b> restores the starter if you want to begin again.</p></div>`);
   }
 
   reading.innerHTML = parts.join("");

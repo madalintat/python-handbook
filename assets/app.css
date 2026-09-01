@@ -191,6 +191,9 @@ code, pre, kbd { font-family: var(--mono); }
   transition: background var(--fast) ease;
 }
 .icon-btn:hover { background: var(--raised); color: var(--ink); }
+/* The desktop header has a real search box, so the icon is only for narrow
+   screens, where that box is hidden. */
+#searchbtn { display: none; font-size: 17px; text-decoration: none; }
 
 /* ---------------------------------------------------------------- home */
 
@@ -304,6 +307,7 @@ code, pre, kbd { font-family: var(--mono); }
 
 .sheetbtn {
   position: fixed; right: 14px; bottom: 70px; z-index: 47; display: none;
+  min-height: 44px;            /* only appears below 1060px, so it is a thumb target */
   padding: 0.5rem 0.85rem; border: 1.5px solid var(--btn-shadow); border-radius: var(--r-4);
   background: var(--accent); color: var(--btn-ink); cursor: pointer;
   font: 700 var(--t-tiny)/1 var(--sans);
@@ -653,10 +657,13 @@ mark { background: color-mix(in srgb, var(--accent) 30%, transparent); color: in
   .judges { grid-template-columns: 1fr; }
   /* a navigation row at the top of a phone is a row nobody can reach */
   .nav { display: none; }
-  /* and the search box squeezed the brand onto two lines. Search is one tap
-     away from the Track tab and one key away on a keyboard. */
+  /* The search box squeezed the brand onto two lines, so it is replaced by an
+     icon button rather than removed: the slash shortcut needs a keyboard, and
+     nothing else in the app links to search, so hiding the box outright left a
+     phone with no way to reach it at all. */
   .nav-search { display: none; }
   .brand { margin-right: auto; }
+  #searchbtn { display: grid; }
   .tabbar {
     display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 46;
     background: color-mix(in srgb, var(--bg) 94%, transparent); backdrop-filter: blur(10px);
@@ -664,6 +671,7 @@ mark { background: color-mix(in srgb, var(--accent) 30%, transparent); color: in
   }
   .tabbar a {
     flex: 1; display: grid; place-items: center; gap: 2px; padding: 0.35rem 0;
+    min-height: 44px;          /* only reachable by thumb, and on the screen edge */
     font: 600 var(--t-micro)/1 var(--sans); color: var(--ink-4);
   }
   .tabbar a[aria-current] { color: var(--accent); }
@@ -682,7 +690,7 @@ mark { background: color-mix(in srgb, var(--accent) 30%, transparent); color: in
    either alone is wrong: a coarse pointer catches tablets at any width, and the
    width catches a phone whose browser reports a fine pointer. A narrow window on
    a laptop getting slightly larger buttons costs nothing. */
-@media (pointer: coarse), (max-width: 620px) {
+@media (pointer: coarse), (max-width: 900px) {
   .ed-toolbar .btn { min-height: 40px; padding-inline: 0.7rem; }
   .exnav a { width: 40px; height: 40px; }
   .letters a { min-width: 40px; min-height: 40px; display: grid; place-items: center; }
