@@ -920,6 +920,18 @@ importlib.invalidate_caches()
 toy = importlib.import_module("toy")
 assert toy.__version__ == "3.0"
 
+# running it twice does not replace what is there. a generator that silently
+# writes a one line stub over somebody's module is a generator nobody can
+# safely run a second time
+write("demo/toy/__init__.py", "REAL CODE\n")
+assert scaffold(load_project("demo")) == [], "there was nothing new to write"
+assert Path("demo/toy/__init__.py").read_text() == "REAL CODE\n"
+
+# and force is how a caller says they meant it
+forced = scaffold(load_project("demo"), force=True)
+assert [x.name for x in forced] == ["__init__.py", "__main__.py"]
+assert Path("demo/toy/__init__.py").read_text() == '__version__ = "3.0"\n'
+
 # a project with no scripts still gets a package, with nothing to run
 write("bare/pyproject.toml", '[project]\nname = "bare"\nversion = "1"\n')
 written = scaffold(load_project("bare"))
@@ -1168,22 +1180,29 @@ def package_name(project):
     return project.name.replace("-", "_").replace(".", "_").lower()
 
 
-def scaffold(project, root=None):
-    """Write the package layout the project describes. Returns the paths written."""
+def scaffold(project, root=None, force=False):
+    """Write the package layout the project describes. Returns what it wrote.
+
+    A file that is already there is left alone. The alternative is a generator
+    that silently replaces somebody's module with a one line stub the first
+    time they run it twice, and `force=True` is how a caller says they meant
+    that.
+    """
     root = Path(root) if root is not None else project.root
     directory = root / package_name(project)
     directory.mkdir(parents=True, exist_ok=True)
-    written = []
 
-    init = directory / "__init__.py"
-    init.write_text(f'__version__ = "{project.version}"\n', encoding="utf-8")
-    written.append(init)
-
+    wanted = [(directory / "__init__.py", f'__version__ = "{project.version}"\n')]
     if project.scripts:
         target = project.scripts[sorted(project.scripts)[0]]
-        entry = directory / "__main__.py"
-        entry.write_text(main_module_source(target), encoding="utf-8")
-        written.append(entry)
+        wanted.append((directory / "__main__.py", main_module_source(target)))
+
+    written = []
+    for path, text in wanted:
+        if path.exists() and not force:
+            continue
+        path.write_text(text, encoding="utf-8")
+        written.append(path)
     return written
 ~~~
 
@@ -1439,22 +1458,29 @@ def package_name(project):
     return project.name.replace("-", "_").replace(".", "_").lower()
 
 
-def scaffold(project, root=None):
-    """Write the package layout the project describes. Returns the paths written."""
+def scaffold(project, root=None, force=False):
+    """Write the package layout the project describes. Returns what it wrote.
+
+    A file that is already there is left alone. The alternative is a generator
+    that silently replaces somebody's module with a one line stub the first
+    time they run it twice, and `force=True` is how a caller says they meant
+    that.
+    """
     root = Path(root) if root is not None else project.root
     directory = root / package_name(project)
     directory.mkdir(parents=True, exist_ok=True)
-    written = []
 
-    init = directory / "__init__.py"
-    init.write_text(f'__version__ = "{project.version}"\n', encoding="utf-8")
-    written.append(init)
-
+    wanted = [(directory / "__init__.py", f'__version__ = "{project.version}"\n')]
     if project.scripts:
         target = project.scripts[sorted(project.scripts)[0]]
-        entry = directory / "__main__.py"
-        entry.write_text(main_module_source(target), encoding="utf-8")
-        written.append(entry)
+        wanted.append((directory / "__main__.py", main_module_source(target)))
+
+    written = []
+    for path, text in wanted:
+        if path.exists() and not force:
+            continue
+        path.write_text(text, encoding="utf-8")
+        written.append(path)
     return written
 
 
@@ -1840,22 +1866,29 @@ def package_name(project):
     return project.name.replace("-", "_").replace(".", "_").lower()
 
 
-def scaffold(project, root=None):
-    """Write the package layout the project describes. Returns the paths written."""
+def scaffold(project, root=None, force=False):
+    """Write the package layout the project describes. Returns what it wrote.
+
+    A file that is already there is left alone. The alternative is a generator
+    that silently replaces somebody's module with a one line stub the first
+    time they run it twice, and `force=True` is how a caller says they meant
+    that.
+    """
     root = Path(root) if root is not None else project.root
     directory = root / package_name(project)
     directory.mkdir(parents=True, exist_ok=True)
-    written = []
 
-    init = directory / "__init__.py"
-    init.write_text(f'__version__ = "{project.version}"\n', encoding="utf-8")
-    written.append(init)
-
+    wanted = [(directory / "__init__.py", f'__version__ = "{project.version}"\n')]
     if project.scripts:
         target = project.scripts[sorted(project.scripts)[0]]
-        entry = directory / "__main__.py"
-        entry.write_text(main_module_source(target), encoding="utf-8")
-        written.append(entry)
+        wanted.append((directory / "__main__.py", main_module_source(target)))
+
+    written = []
+    for path, text in wanted:
+        if path.exists() and not force:
+            continue
+        path.write_text(text, encoding="utf-8")
+        written.append(path)
     return written
 
 VERSION_PATTERN = re.compile(
@@ -2245,22 +2278,29 @@ def package_name(project):
     return project.name.replace("-", "_").replace(".", "_").lower()
 
 
-def scaffold(project, root=None):
-    """Write the package layout the project describes. Returns the paths written."""
+def scaffold(project, root=None, force=False):
+    """Write the package layout the project describes. Returns what it wrote.
+
+    A file that is already there is left alone. The alternative is a generator
+    that silently replaces somebody's module with a one line stub the first
+    time they run it twice, and `force=True` is how a caller says they meant
+    that.
+    """
     root = Path(root) if root is not None else project.root
     directory = root / package_name(project)
     directory.mkdir(parents=True, exist_ok=True)
-    written = []
 
-    init = directory / "__init__.py"
-    init.write_text(f'__version__ = "{project.version}"\n', encoding="utf-8")
-    written.append(init)
-
+    wanted = [(directory / "__init__.py", f'__version__ = "{project.version}"\n')]
     if project.scripts:
         target = project.scripts[sorted(project.scripts)[0]]
-        entry = directory / "__main__.py"
-        entry.write_text(main_module_source(target), encoding="utf-8")
-        written.append(entry)
+        wanted.append((directory / "__main__.py", main_module_source(target)))
+
+    written = []
+    for path, text in wanted:
+        if path.exists() and not force:
+            continue
+        path.write_text(text, encoding="utf-8")
+        written.append(path)
     return written
 
 VERSION_PATTERN = re.compile(
@@ -2844,22 +2884,29 @@ def package_name(project):
     return project.name.replace("-", "_").replace(".", "_").lower()
 
 
-def scaffold(project, root=None):
-    """Write the package layout the project describes. Returns the paths written."""
+def scaffold(project, root=None, force=False):
+    """Write the package layout the project describes. Returns what it wrote.
+
+    A file that is already there is left alone. The alternative is a generator
+    that silently replaces somebody's module with a one line stub the first
+    time they run it twice, and `force=True` is how a caller says they meant
+    that.
+    """
     root = Path(root) if root is not None else project.root
     directory = root / package_name(project)
     directory.mkdir(parents=True, exist_ok=True)
-    written = []
 
-    init = directory / "__init__.py"
-    init.write_text(f'__version__ = "{project.version}"\n', encoding="utf-8")
-    written.append(init)
-
+    wanted = [(directory / "__init__.py", f'__version__ = "{project.version}"\n')]
     if project.scripts:
         target = project.scripts[sorted(project.scripts)[0]]
-        entry = directory / "__main__.py"
-        entry.write_text(main_module_source(target), encoding="utf-8")
-        written.append(entry)
+        wanted.append((directory / "__main__.py", main_module_source(target)))
+
+    written = []
+    for path, text in wanted:
+        if path.exists() and not force:
+            continue
+        path.write_text(text, encoding="utf-8")
+        written.append(path)
     return written
 
 VERSION_PATTERN = re.compile(
@@ -3119,9 +3166,12 @@ underscores, because a wheel filename is read by splitting it on hyphens into
 five fields and a name with one in it would break the reader. The importable
 package name is a third transformation, which stage three already did.
 
-A wheel filename is `name-version-python-abi-platform.whl`. Pure Python with
-nothing compiled is `py3-none-any`, meaning any Python 3, no particular ABI,
-any platform. A wheel with C in it names the interpreter and the platform it
+A wheel filename is `name-version-python-abi-platform.whl`, and the version is
+escaped the same way the name is, for the same reason: `1.0-1` is a perfectly
+legal post-release, and a hyphen inside a field of a hyphen-separated filename
+gives you six fields where the reader wants five. Pure Python with nothing
+compiled is `py3-none-any`, meaning any Python 3, no particular ABI, any
+platform. A wheel with C in it names the interpreter and the platform it
 was built for, which is why one release of numpy is dozens of files and one
 release of a tool like this is a single one.
 
@@ -3381,22 +3431,29 @@ def package_name(project):
     return project.name.replace("-", "_").replace(".", "_").lower()
 
 
-def scaffold(project, root=None):
-    """Write the package layout the project describes. Returns the paths written."""
+def scaffold(project, root=None, force=False):
+    """Write the package layout the project describes. Returns what it wrote.
+
+    A file that is already there is left alone. The alternative is a generator
+    that silently replaces somebody's module with a one line stub the first
+    time they run it twice, and `force=True` is how a caller says they meant
+    that.
+    """
     root = Path(root) if root is not None else project.root
     directory = root / package_name(project)
     directory.mkdir(parents=True, exist_ok=True)
-    written = []
 
-    init = directory / "__init__.py"
-    init.write_text(f'__version__ = "{project.version}"\n', encoding="utf-8")
-    written.append(init)
-
+    wanted = [(directory / "__init__.py", f'__version__ = "{project.version}"\n')]
     if project.scripts:
         target = project.scripts[sorted(project.scripts)[0]]
-        entry = directory / "__main__.py"
-        entry.write_text(main_module_source(target), encoding="utf-8")
-        written.append(entry)
+        wanted.append((directory / "__main__.py", main_module_source(target)))
+
+    written = []
+    for path, text in wanted:
+        if path.exists() and not force:
+            continue
+        path.write_text(text, encoding="utf-8")
+        written.append(path)
     return written
 
 VERSION_PATTERN = re.compile(
@@ -3657,6 +3714,16 @@ def wheel_escape(name):
     raise NotImplementedError
 
 
+def version_escape(version):
+    """A version with every run of non-alphanumerics collapsed to one underscore.
+
+    PEP 427, and the same reason the name is escaped. A wheel filename is read
+    by splitting it on hyphens into five fields, and `1.0-1` is a perfectly
+    legal post-release with a hyphen sitting in the middle of it.
+    """
+    return re.sub(r"[^\w\d.]+", "_", str(version))
+
+
 def wheel_filename(project, python_tag="py3", abi_tag="none", platform_tag="any"):
     """`{name}-{version}-{python}-{abi}-{platform}.whl`, the five fields."""
     raise NotImplementedError
@@ -3717,6 +3784,19 @@ assert dist_info_dir(project) == "my_tool-1.0.dist-info"
 # the version is normalised into the filename too, not copied from the file
 assert wheel_filename(Project(name="x", version="1.0.0")).startswith("x-1.0.0-")
 assert wheel_filename(Project(name="x", version="v1.0")) == "x-v1.0-py3-none-any.whl"
+
+# the version is escaped the same way the name is, because a post-release is
+# allowed a hyphen and a wheel filename is read by splitting on hyphens
+assert version_escape("1.0") == "1.0"
+assert version_escape("1.0-1") == "1.0_1"
+assert version_escape("1.0+ubuntu-2") == "1.0_ubuntu_2"
+assert version_escape("1!2.0") == "1_2.0"
+
+post = Project(name="mytool", version="1.0-1")
+built = wheel_filename(post)
+assert built == "mytool-1.0_1-py3-none-any.whl", built
+assert len(built.removesuffix(".whl").split("-")) == 5, "still five fields"
+assert dist_info_dir(post) == "mytool-1.0_1.dist-info"
 
 # a compiled wheel names what it was built for, which is why numpy has dozens
 compiled = wheel_filename(project, "cp312", "cp312", "manylinux_2_17_x86_64")
@@ -4029,22 +4109,29 @@ def package_name(project):
     return project.name.replace("-", "_").replace(".", "_").lower()
 
 
-def scaffold(project, root=None):
-    """Write the package layout the project describes. Returns the paths written."""
+def scaffold(project, root=None, force=False):
+    """Write the package layout the project describes. Returns what it wrote.
+
+    A file that is already there is left alone. The alternative is a generator
+    that silently replaces somebody's module with a one line stub the first
+    time they run it twice, and `force=True` is how a caller says they meant
+    that.
+    """
     root = Path(root) if root is not None else project.root
     directory = root / package_name(project)
     directory.mkdir(parents=True, exist_ok=True)
-    written = []
 
-    init = directory / "__init__.py"
-    init.write_text(f'__version__ = "{project.version}"\n', encoding="utf-8")
-    written.append(init)
-
+    wanted = [(directory / "__init__.py", f'__version__ = "{project.version}"\n')]
     if project.scripts:
         target = project.scripts[sorted(project.scripts)[0]]
-        entry = directory / "__main__.py"
-        entry.write_text(main_module_source(target), encoding="utf-8")
-        written.append(entry)
+        wanted.append((directory / "__main__.py", main_module_source(target)))
+
+    written = []
+    for path, text in wanted:
+        if path.exists() and not force:
+            continue
+        path.write_text(text, encoding="utf-8")
+        written.append(path)
     return written
 
 VERSION_PATTERN = re.compile(
@@ -4322,6 +4409,16 @@ def wheel_escape(name):
     return normalise_name(name).replace("-", "_")
 
 
+def version_escape(version):
+    """A version with every run of non-alphanumerics collapsed to one underscore.
+
+    PEP 427, and the same reason the name is escaped. A wheel filename is read
+    by splitting it on hyphens into five fields, and `1.0-1` is a perfectly
+    legal post-release with a hyphen sitting in the middle of it.
+    """
+    return re.sub(r"[^\w\d.]+", "_", str(version))
+
+
 def wheel_filename(project, python_tag="py3", abi_tag="none", platform_tag="any"):
     """`{name}-{version}-{python}-{abi}-{platform}.whl`, the five fields.
 
@@ -4330,14 +4427,15 @@ def wheel_filename(project, python_tag="py3", abi_tag="none", platform_tag="any"
     interpreter and the platform it was built for, which is why there are
     dozens of files behind one release of numpy and one behind most tools.
     """
-    version = Version(project.version)
+    version = version_escape(Version(project.version))
     return (f"{wheel_escape(project.name)}-{version}"
             f"-{python_tag}-{abi_tag}-{platform_tag}.whl")
 
 
 def dist_info_dir(project):
     """The `.dist-info` directory inside the wheel, which holds the metadata."""
-    return f"{wheel_escape(project.name)}-{Version(project.version)}.dist-info"
+    return (f"{wheel_escape(project.name)}-"
+            f"{version_escape(Version(project.version))}.dist-info")
 
 
 def metadata_text(project, candidates=DEFAULT_PYTHONS):
@@ -4640,22 +4738,29 @@ def package_name(project):
     return project.name.replace("-", "_").replace(".", "_").lower()
 
 
-def scaffold(project, root=None):
-    """Write the package layout the project describes. Returns the paths written."""
+def scaffold(project, root=None, force=False):
+    """Write the package layout the project describes. Returns what it wrote.
+
+    A file that is already there is left alone. The alternative is a generator
+    that silently replaces somebody's module with a one line stub the first
+    time they run it twice, and `force=True` is how a caller says they meant
+    that.
+    """
     root = Path(root) if root is not None else project.root
     directory = root / package_name(project)
     directory.mkdir(parents=True, exist_ok=True)
-    written = []
 
-    init = directory / "__init__.py"
-    init.write_text(f'__version__ = "{project.version}"\n', encoding="utf-8")
-    written.append(init)
-
+    wanted = [(directory / "__init__.py", f'__version__ = "{project.version}"\n')]
     if project.scripts:
         target = project.scripts[sorted(project.scripts)[0]]
-        entry = directory / "__main__.py"
-        entry.write_text(main_module_source(target), encoding="utf-8")
-        written.append(entry)
+        wanted.append((directory / "__main__.py", main_module_source(target)))
+
+    written = []
+    for path, text in wanted:
+        if path.exists() and not force:
+            continue
+        path.write_text(text, encoding="utf-8")
+        written.append(path)
     return written
 
 VERSION_PATTERN = re.compile(
@@ -4933,6 +5038,16 @@ def wheel_escape(name):
     return normalise_name(name).replace("-", "_")
 
 
+def version_escape(version):
+    """A version with every run of non-alphanumerics collapsed to one underscore.
+
+    PEP 427, and the same reason the name is escaped. A wheel filename is read
+    by splitting it on hyphens into five fields, and `1.0-1` is a perfectly
+    legal post-release with a hyphen sitting in the middle of it.
+    """
+    return re.sub(r"[^\w\d.]+", "_", str(version))
+
+
 def wheel_filename(project, python_tag="py3", abi_tag="none", platform_tag="any"):
     """`{name}-{version}-{python}-{abi}-{platform}.whl`, the five fields.
 
@@ -4941,14 +5056,15 @@ def wheel_filename(project, python_tag="py3", abi_tag="none", platform_tag="any"
     interpreter and the platform it was built for, which is why there are
     dozens of files behind one release of numpy and one behind most tools.
     """
-    version = Version(project.version)
+    version = version_escape(Version(project.version))
     return (f"{wheel_escape(project.name)}-{version}"
             f"-{python_tag}-{abi_tag}-{platform_tag}.whl")
 
 
 def dist_info_dir(project):
     """The `.dist-info` directory inside the wheel, which holds the metadata."""
-    return f"{wheel_escape(project.name)}-{Version(project.version)}.dist-info"
+    return (f"{wheel_escape(project.name)}-"
+            f"{version_escape(Version(project.version))}.dist-info")
 
 
 def metadata_text(project, candidates=DEFAULT_PYTHONS):
@@ -5390,22 +5506,29 @@ def package_name(project):
     return project.name.replace("-", "_").replace(".", "_").lower()
 
 
-def scaffold(project, root=None):
-    """Write the package layout the project describes. Returns the paths written."""
+def scaffold(project, root=None, force=False):
+    """Write the package layout the project describes. Returns what it wrote.
+
+    A file that is already there is left alone. The alternative is a generator
+    that silently replaces somebody's module with a one line stub the first
+    time they run it twice, and `force=True` is how a caller says they meant
+    that.
+    """
     root = Path(root) if root is not None else project.root
     directory = root / package_name(project)
     directory.mkdir(parents=True, exist_ok=True)
-    written = []
 
-    init = directory / "__init__.py"
-    init.write_text(f'__version__ = "{project.version}"\n', encoding="utf-8")
-    written.append(init)
-
+    wanted = [(directory / "__init__.py", f'__version__ = "{project.version}"\n')]
     if project.scripts:
         target = project.scripts[sorted(project.scripts)[0]]
-        entry = directory / "__main__.py"
-        entry.write_text(main_module_source(target), encoding="utf-8")
-        written.append(entry)
+        wanted.append((directory / "__main__.py", main_module_source(target)))
+
+    written = []
+    for path, text in wanted:
+        if path.exists() and not force:
+            continue
+        path.write_text(text, encoding="utf-8")
+        written.append(path)
     return written
 
 VERSION_PATTERN = re.compile(
@@ -5683,6 +5806,16 @@ def wheel_escape(name):
     return normalise_name(name).replace("-", "_")
 
 
+def version_escape(version):
+    """A version with every run of non-alphanumerics collapsed to one underscore.
+
+    PEP 427, and the same reason the name is escaped. A wheel filename is read
+    by splitting it on hyphens into five fields, and `1.0-1` is a perfectly
+    legal post-release with a hyphen sitting in the middle of it.
+    """
+    return re.sub(r"[^\w\d.]+", "_", str(version))
+
+
 def wheel_filename(project, python_tag="py3", abi_tag="none", platform_tag="any"):
     """`{name}-{version}-{python}-{abi}-{platform}.whl`, the five fields.
 
@@ -5691,14 +5824,15 @@ def wheel_filename(project, python_tag="py3", abi_tag="none", platform_tag="any"
     interpreter and the platform it was built for, which is why there are
     dozens of files behind one release of numpy and one behind most tools.
     """
-    version = Version(project.version)
+    version = version_escape(Version(project.version))
     return (f"{wheel_escape(project.name)}-{version}"
             f"-{python_tag}-{abi_tag}-{platform_tag}.whl")
 
 
 def dist_info_dir(project):
     """The `.dist-info` directory inside the wheel, which holds the metadata."""
-    return f"{wheel_escape(project.name)}-{Version(project.version)}.dist-info"
+    return (f"{wheel_escape(project.name)}-"
+            f"{version_escape(Version(project.version))}.dist-info")
 
 
 def metadata_text(project, candidates=DEFAULT_PYTHONS):
@@ -5827,6 +5961,13 @@ The rule for the return value is worth stating. `check_wheel` gives back a list
 of problems rather than raising on the first one, because somebody fixing a
 wheel wants to see all of them and fix them together. A checker that stops at
 the first mistake is a tripwire.
+
+That rule holds all the way down, and it is easy to break by accident. Every
+field read out of the archive is somebody else's bytes, so anything that parses
+one has to be ready for it to be nonsense. A `Version:` header that is not a
+version and a `Name:` that is not a name both go in the list. Letting either of
+them raise turns the promise into a traceback and hides whatever else was
+wrong.
 
 What it looks for is what actually goes wrong. A file whose bytes no longer
 match the hash RECORD wrote for it. A file smuggled into the archive that
@@ -6122,22 +6263,29 @@ def package_name(project):
     return project.name.replace("-", "_").replace(".", "_").lower()
 
 
-def scaffold(project, root=None):
-    """Write the package layout the project describes. Returns the paths written."""
+def scaffold(project, root=None, force=False):
+    """Write the package layout the project describes. Returns what it wrote.
+
+    A file that is already there is left alone. The alternative is a generator
+    that silently replaces somebody's module with a one line stub the first
+    time they run it twice, and `force=True` is how a caller says they meant
+    that.
+    """
     root = Path(root) if root is not None else project.root
     directory = root / package_name(project)
     directory.mkdir(parents=True, exist_ok=True)
-    written = []
 
-    init = directory / "__init__.py"
-    init.write_text(f'__version__ = "{project.version}"\n', encoding="utf-8")
-    written.append(init)
-
+    wanted = [(directory / "__init__.py", f'__version__ = "{project.version}"\n')]
     if project.scripts:
         target = project.scripts[sorted(project.scripts)[0]]
-        entry = directory / "__main__.py"
-        entry.write_text(main_module_source(target), encoding="utf-8")
-        written.append(entry)
+        wanted.append((directory / "__main__.py", main_module_source(target)))
+
+    written = []
+    for path, text in wanted:
+        if path.exists() and not force:
+            continue
+        path.write_text(text, encoding="utf-8")
+        written.append(path)
     return written
 
 VERSION_PATTERN = re.compile(
@@ -6415,6 +6563,16 @@ def wheel_escape(name):
     return normalise_name(name).replace("-", "_")
 
 
+def version_escape(version):
+    """A version with every run of non-alphanumerics collapsed to one underscore.
+
+    PEP 427, and the same reason the name is escaped. A wheel filename is read
+    by splitting it on hyphens into five fields, and `1.0-1` is a perfectly
+    legal post-release with a hyphen sitting in the middle of it.
+    """
+    return re.sub(r"[^\w\d.]+", "_", str(version))
+
+
 def wheel_filename(project, python_tag="py3", abi_tag="none", platform_tag="any"):
     """`{name}-{version}-{python}-{abi}-{platform}.whl`, the five fields.
 
@@ -6423,14 +6581,15 @@ def wheel_filename(project, python_tag="py3", abi_tag="none", platform_tag="any"
     interpreter and the platform it was built for, which is why there are
     dozens of files behind one release of numpy and one behind most tools.
     """
-    version = Version(project.version)
+    version = version_escape(Version(project.version))
     return (f"{wheel_escape(project.name)}-{version}"
             f"-{python_tag}-{abi_tag}-{platform_tag}.whl")
 
 
 def dist_info_dir(project):
     """The `.dist-info` directory inside the wheel, which holds the metadata."""
-    return f"{wheel_escape(project.name)}-{Version(project.version)}.dist-info"
+    return (f"{wheel_escape(project.name)}-"
+            f"{version_escape(Version(project.version))}.dist-info")
 
 
 def metadata_text(project, candidates=DEFAULT_PYTHONS):
@@ -6684,6 +6843,37 @@ def claim_own_hash(entries):
 selfish = rebuild("selfish", claim_own_hash)
 problems = check_wheel(selfish)
 assert any("hash for itself" in p for p in problems), problems
+
+# metadata inside a wheel is somebody else's bytes, so unreadable fields are
+# reported like everything else rather than raising out of a function that
+# promised a list
+def corrupt(entries):
+    return [
+        (n, d.replace(b"Version: 0.1.0", b"Version: nope").replace(
+            b"Name: pkgit", b"Name: -bad-") if n.endswith("METADATA") else d)
+        for n, d in entries
+    ]
+
+
+lying = rebuild("lies", corrupt)
+problems = check_wheel(lying)
+assert any("Version is not a version" in p for p in problems), problems
+assert any("Name is not a usable name" in p for p in problems), problems
+assert len(problems) >= 3, "and the hash mismatch as well, rather than stopping"
+
+# which means the command reports rather than showing somebody a traceback
+code, text = run(["check", str(lying)])
+assert code == 1
+assert text.startswith("pkgit: ")
+assert "Traceback" not in text
+
+# a project whose version carries a hyphen builds a wheel its own check accepts
+write("post/pyproject.toml", '[project]\nname = "post"\nversion = "1.0-1"\n')
+posted = load_project("post")
+scaffold(posted)
+code, text = run(["build", "post", "-o", "post/dist"])
+assert code == 0, text
+assert "post-1.0_1-py3-none-any.whl" in text, text
 
 # strict finds what is allowed but unwise
 write("thin/pyproject.toml", '[project]\nname = "thin"\nversion = "1.0"\n')
@@ -7026,22 +7216,29 @@ def package_name(project):
     return project.name.replace("-", "_").replace(".", "_").lower()
 
 
-def scaffold(project, root=None):
-    """Write the package layout the project describes. Returns the paths written."""
+def scaffold(project, root=None, force=False):
+    """Write the package layout the project describes. Returns what it wrote.
+
+    A file that is already there is left alone. The alternative is a generator
+    that silently replaces somebody's module with a one line stub the first
+    time they run it twice, and `force=True` is how a caller says they meant
+    that.
+    """
     root = Path(root) if root is not None else project.root
     directory = root / package_name(project)
     directory.mkdir(parents=True, exist_ok=True)
-    written = []
 
-    init = directory / "__init__.py"
-    init.write_text(f'__version__ = "{project.version}"\n', encoding="utf-8")
-    written.append(init)
-
+    wanted = [(directory / "__init__.py", f'__version__ = "{project.version}"\n')]
     if project.scripts:
         target = project.scripts[sorted(project.scripts)[0]]
-        entry = directory / "__main__.py"
-        entry.write_text(main_module_source(target), encoding="utf-8")
-        written.append(entry)
+        wanted.append((directory / "__main__.py", main_module_source(target)))
+
+    written = []
+    for path, text in wanted:
+        if path.exists() and not force:
+            continue
+        path.write_text(text, encoding="utf-8")
+        written.append(path)
     return written
 
 VERSION_PATTERN = re.compile(
@@ -7319,6 +7516,16 @@ def wheel_escape(name):
     return normalise_name(name).replace("-", "_")
 
 
+def version_escape(version):
+    """A version with every run of non-alphanumerics collapsed to one underscore.
+
+    PEP 427, and the same reason the name is escaped. A wheel filename is read
+    by splitting it on hyphens into five fields, and `1.0-1` is a perfectly
+    legal post-release with a hyphen sitting in the middle of it.
+    """
+    return re.sub(r"[^\w\d.]+", "_", str(version))
+
+
 def wheel_filename(project, python_tag="py3", abi_tag="none", platform_tag="any"):
     """`{name}-{version}-{python}-{abi}-{platform}.whl`, the five fields.
 
@@ -7327,14 +7534,15 @@ def wheel_filename(project, python_tag="py3", abi_tag="none", platform_tag="any"
     interpreter and the platform it was built for, which is why there are
     dozens of files behind one release of numpy and one behind most tools.
     """
-    version = Version(project.version)
+    version = version_escape(Version(project.version))
     return (f"{wheel_escape(project.name)}-{version}"
             f"-{python_tag}-{abi_tag}-{platform_tag}.whl")
 
 
 def dist_info_dir(project):
     """The `.dist-info` directory inside the wheel, which holds the metadata."""
-    return f"{wheel_escape(project.name)}-{Version(project.version)}.dist-info"
+    return (f"{wheel_escape(project.name)}-"
+            f"{version_escape(Version(project.version))}.dist-info")
 
 
 def metadata_text(project, candidates=DEFAULT_PYTHONS):
@@ -7524,16 +7732,31 @@ def _check_metadata(archive, names, info, name, version, strict):
     for header in ("Metadata-Version", "Name", "Version"):
         if not metadata[header]:
             problems.append(f"METADATA has no {header}")
-    if metadata["Name"] and wheel_escape(metadata["Name"]) != name:
-        problems.append(
-            f"METADATA says the name is {metadata['Name']!r} and the filename "
-            f"says {name!r}"
-        )
-    if metadata["Version"] and str(Version(metadata["Version"])) != version:
-        problems.append(
-            f"METADATA says version {metadata['Version']!r} and the filename "
-            f"says {version!r}"
-        )
+    # Everything below this point is somebody else's bytes. A checker that
+    # raises on the first unreadable field is a checker that cannot report the
+    # second one, and this one promised a list.
+    if metadata["Name"]:
+        try:
+            escaped = wheel_escape(metadata["Name"])
+        except ProjectError as exc:
+            problems.append(f"METADATA Name is not a usable name: {exc}")
+        else:
+            if escaped != name:
+                problems.append(
+                    f"METADATA says the name is {metadata['Name']!r} and the "
+                    f"filename says {name!r}"
+                )
+    if metadata["Version"]:
+        try:
+            declared = version_escape(Version(metadata["Version"]))
+        except InvalidVersion as exc:
+            problems.append(f"METADATA Version is not a version: {exc}")
+        else:
+            if declared != version:
+                problems.append(
+                    f"METADATA says version {metadata['Version']!r} and the "
+                    f"filename says {version!r}"
+                )
     if metadata["Requires-Python"]:
         try:
             SpecifierSet(metadata["Requires-Python"])
