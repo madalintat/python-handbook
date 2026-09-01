@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import ast
 import concurrent.futures
+import difflib
 import json
 import os
 import re
@@ -453,19 +454,24 @@ def _mark_work(stages: list[dict]) -> None:
     answer is the difference between this starter and the previous solution,
     which the file already contains.
 
-    Lines rather than characters, and a set of lines rather than ranges,
-    because the reader edits by line and the editor draws by line. A line that
-    also appears in the previous solution is carried even if it moved, which is
-    what stops a reformatted import block reading as new work.
+    A real diff rather than set membership. Asking "does this line appear
+    anywhere in the previous solution" gets the common case right and the
+    important case exactly wrong: `raise NotImplementedError` appears in every
+    starter, so the three of them a stage asks the reader to replace were
+    marked as carried, which is the opposite of true. difflib aligns the two
+    files and says which lines are actually new here, wherever they sit.
     """
-    previous: set[str] = set()
+    previous: list[str] = []
     for stage in stages:
         lines = stage["starter"].split("\n")
-        work = [i + 1 for i, line in enumerate(lines)
-                if line.strip() and line not in previous]
+        work = []
+        matcher = difflib.SequenceMatcher(None, previous, lines, autojunk=False)
+        for tag, _, _, start, end in matcher.get_opcodes():
+            if tag in ("insert", "replace"):
+                work.extend(i + 1 for i in range(start, end) if lines[i].strip())
         stage["work"] = work
         stage["outline"] = _outline(lines, set(work))
-        previous = set(stage["solution"].split("\n"))
+        previous = stage["solution"].split("\n")
 
 
 def _outline(lines: list[str], work: set[int]) -> list[dict]:

@@ -1,6 +1,6 @@
 /* Smallest thing that fails if the tokenizer breaks. Run: node test_frontend.mjs */
 import assert from "node:assert/strict";
-import { highlightPython as hl, cutStarter, derive, toFocus, fromFocus }
+import { highlightPython as hl, cutStarter, derive, toFocus, fromFocus, shownRowOf }
   from "./assets/workbench.js";
 
 let checks = 0;
@@ -127,6 +127,32 @@ for (const [name, src, element] of CANNOT_RENDER) {
   // rewriting carried code turns focus off rather than guessing
   ok(derive(starter.replace("def carried():", "def renamed():"), parts) === null,
      "a rewritten carried region gives up instead of guessing");
+
+  /* Where a whole-file line is showing while focus is on. Everything that
+     crosses this editor's edge speaks in whole-file lines: the judges, the
+     build's work marks, the outline. Getting this wrong points a reader at the
+     wrong row, or at no row, and says nothing about it. */
+  {
+    const segs2 = derive(starter, parts);
+    const shown = toFocus(segs2);
+    const at = (n) => shownRowOf(segs2, shown, n);
+    ok(at(6) === 2, "the first work line is on row 2, under one fold");
+    ok(at(7) === 3, "and the second is under it");
+    ok(at(1) === 1 && at(5) === 1, "everything folded lands on its fold row");
+    ok(at(9) === 4 && at(10) === 4, "and so does the fold after the work");
+
+    /* Once the reader adds lines, both files get longer. The whole file is
+       what the judges see, because they run code(), so line 9 of it is now the
+       reader's third new line rather than the carried code that used to be
+       there. Both sides move together, which is the property that makes an
+       error on line 9 land on the row showing line 9. */
+    const grown = shown.replace("    raise NotImplementedError",
+                                "    a = 1\n    b = 2\n    c = 3");
+    ok(shownRowOf(segs2, grown, 6) === 2, "the work still starts where it did");
+    ok(shownRowOf(segs2, grown, 9) === 5, "the last line they typed is the last row");
+    ok(shownRowOf(segs2, grown, 10) === 6,
+       "and the fold below has moved down by exactly what was typed");
+  }
 
   // several regions, each edit landing in its own slot
   const multi = ["a", "W1", "b", "b2", "W2", "c"].join("\n");

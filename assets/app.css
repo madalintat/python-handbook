@@ -429,16 +429,21 @@ code, pre, kbd { font-family: var(--mono); }
    a dead button. box-shadow is a paint property, so the ring lives on a
    pseudo-element and only its opacity animates, which the compositor can do
    without repainting the editor every frame. */
-.editor.running { border-color: var(--accent); }
-.editor.running::after {
+/* The shell exists because .editor scrolls, and a box that scrolls clips both
+   axes whatever you asked for, so anything drawn outside it is not drawn. The
+   ring and the pass flash live out here where they can be seen. */
+.ed-shell { position: relative; }
+.ed-shell.running .editor { border-color: var(--accent); }
+.ed-shell.running::after {
   content: ""; position: absolute; inset: -5px; pointer-events: none;
   border-radius: calc(var(--r-3) + 5px);
   box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 13%, transparent);
   animation: breathe 1.5s ease-in-out infinite;
 }
 @keyframes breathe { 0%, 100% { opacity: 0; } 50% { opacity: 1; } }
-.editor.passed::before {
+.ed-shell.passed::before {
   content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 2;
+  border-radius: var(--r-3);
   background: color-mix(in srgb, var(--ok) 20%, transparent);
   animation: washout 900ms ease forwards;
 }

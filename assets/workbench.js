@@ -283,6 +283,36 @@ export function derive(text, carriedParts) {
   return segs;
 }
 
+/* Where a line of the whole file is showing, while focus mode is on.
+
+   Worked out from the buffer each time rather than cached. The reader types in
+   focus mode, which is the point of it, and every line they add moves
+   everything below, so a map taken when focus was entered is wrong by the
+   first keystroke. A line inside a folded region lands on the row that stands
+   for it, which is where a reader would look for it. */
+export function shownRowOf(segs, text, full) {
+  const pieces = [[]];
+  for (const line of text.split("\n")) {
+    if (FOLD.test(line)) pieces.push([]);
+    else pieces[pieces.length - 1].push(line);
+  }
+  let atFull = 1, atShown = 1, piece = 0;
+  for (const seg of segs) {
+    if (seg.carried) {
+      if (full < atFull + seg.lines.length) return atShown;
+      atFull += seg.lines.length;
+      atShown += 1;
+      piece += 1;
+    } else {
+      const held = (pieces[piece] ?? []).length;
+      if (full < atFull + held) return atShown + (full - atFull);
+      atFull += held;
+      atShown += held;
+    }
+  }
+  return atShown;
+}
+
 export function foldLine(n) {
   return `# ⋯ ${n} line${n === 1 ? "" : "s"} you already built ⋯`;
 }
@@ -349,6 +379,7 @@ function buildEditor(host, initial, onRun, starter = initial, opts = {}) {
               title="Jump to the next thing this stage asks you to write (F2)">yours</button>
       <button class="btn ghost sm" id="resetcode" title="Restore the starter">reset</button>
     </div>
+    <div class="ed-shell" id="edshell">
     <div class="editor${flag(WRAP_KEY) ? " softwrap" : ""}" id="ed">
       <div class="gutter"></div>
       <div class="stack">
@@ -357,9 +388,11 @@ function buildEditor(host, initial, onRun, starter = initial, opts = {}) {
                   autocorrect="off" wrap="off" aria-label="Python source"></textarea>
       </div>
       <div class="vimbadge" hidden></div>
+    </div>
     </div>`;
 
   const ed = host.querySelector("#ed");
+  const shell = host.querySelector("#edshell");
   const gutterEl = host.querySelector(".gutter");
   const pre = host.querySelector("pre.hl");
   const ta = host.querySelector("textarea");
@@ -370,6 +403,7 @@ function buildEditor(host, initial, onRun, starter = initial, opts = {}) {
   // between this starter and the previous stage's solution. By the last stage
   // of a long project there are a dozen of them in a thousand line file.
   const workLines = new Set(opts.work || []);
+  let shownWork = workLines;             // the same rows, where they are now
   let lastHl = null, lastLines = -1, lastMarks = "";
   let relTo = null;          // cursor line for vim's relative numbering, or null
 
@@ -394,7 +428,10 @@ function buildEditor(host, initial, onRun, starter = initial, opts = {}) {
       lastLines = n;
       lastMarks = null;          // the loop below fills in every label and mark
     }
-    const marks = [...errLines].join(",") + "|" + relTo + "|" + workLines.size;
+    if (textChanged || shownWork === null) {
+      shownWork = segs ? new Set([...workLines].map(shownRow)) : workLines;
+    }
+    const marks = [...errLines].join(",") + "|" + relTo + "|" + [...shownWork].join(",");
     if (marks !== lastMarks) {
       // Only the marks moved. Vim calls paint() on every motion key, so
       // re-parsing the gutter's HTML for a cursor move was the bulk of the cost
@@ -405,7 +442,7 @@ function buildEditor(host, initial, onRun, starter = initial, opts = {}) {
         if (!el) break;
         const cur = relTo !== null && i === relTo + 1;
         const cls = "gl" + (errLines.has(i) ? " err" : "")
-                  + (workLines.has(i) ? " work" : "") + (cur ? " cur" : "");
+                  + (shownWork.has(i) ? " work" : "") + (cur ? " cur" : "");
         if (el.className !== cls) el.className = cls;   // assigning invalidates style even when equal
         const label = relTo === null || cur ? i : Math.abs(i - 1 - relTo);
         if (el.textContent !== String(label)) el.textContent = label;
@@ -437,6 +474,11 @@ function buildEditor(host, initial, onRun, starter = initial, opts = {}) {
     if (line === lastCaretLine) return;
     lastCaretLine = line;
     if (ed.scrollHeight <= ed.clientHeight) return;
+    // A wrapped line is several rows, so line times height is not where the
+    // caret is, and the further down the file the further out it is. The
+    // browser still scrolls a focused textarea into view on its own; what it
+    // will not do is the arithmetic below.
+    if (ed.classList.contains("softwrap")) return;
     const height = parseFloat(getComputedStyle(ta).lineHeight) || 26;
     const margin = height * 2;                      // keep two lines of context
     const top = line * height;
@@ -572,8 +614,11 @@ function buildEditor(host, initial, onRun, starter = initial, opts = {}) {
   let atRun = -1;
 
   function goToLine(line) {
+    // whole-file in, buffer row out: the outline and the work runs both point
+    // at the file, and in focus mode the buffer is a shorter thing
+    const row = shownRow(line);
     const lines = ta.value.split("\n");
-    const at = lines.slice(0, Math.max(0, line - 1)).join("\n").length + (line > 1 ? 1 : 0);
+    const at = lines.slice(0, Math.max(0, row - 1)).join("\n").length + (row > 1 ? 1 : 0);
     ta.focus();
     ta.setSelectionRange(at, at);
     lastCaretLine = -1;                 // force the reveal even onto the same line
@@ -593,7 +638,17 @@ function buildEditor(host, initial, onRun, starter = initial, opts = {}) {
      file, whichever mode the editor happens to be in. */
   const carriedParts = runs.length ? cutStarter(starter, runs) : [];
   let segs = null;                       // non-null exactly while focused
-  let focusMap = null;                   // full file line -> focus line
+
+  /* Every line number that crosses this editor's edge is a line of the whole
+     file: the judges count them there, the build's work marks are there, the
+     outline points there. Focus mode shows a shorter file, so they are
+     translated here.
+
+     Worked out from the buffer each time rather than cached when focus was
+     entered. The reader types in focus mode, which is the entire point of it,
+     and every line they add moves everything below. A map taken once is wrong
+     by the first keystroke. */
+  const shownRow = (full) => segs ? shownRowOf(segs, ta.value, full) : full;
 
   function code() {
     return segs ? fromFocus(ta.value, segs) : ta.value;
@@ -605,22 +660,12 @@ function buildEditor(host, initial, onRun, starter = initial, opts = {}) {
       const found = derive(ta.value, carriedParts);
       if (!found) return false;          // a carried region was rewritten
       segs = found;
-      focusMap = new Map();
-      let full = 1, shown = 1;
-      for (const seg of segs) {
-        if (seg.carried) {
-          for (let i = 0; i < seg.lines.length; i++) focusMap.set(full++, shown);
-          shown++;                       // the one fold line standing in for it
-        } else {
-          for (let i = 0; i < seg.lines.length; i++) focusMap.set(full++, shown++);
-        }
-      }
       ta.value = toFocus(segs);
     } else {
       ta.value = fromFocus(ta.value, segs);
       segs = null;
-      focusMap = null;
     }
+    shownWork = null;                    // recomputed on the next paint
     vim.sync();
     lastCaretLine = -1;
     paint();
@@ -661,12 +706,17 @@ function buildEditor(host, initial, onRun, starter = initial, opts = {}) {
     ta,
     paint,
     el: ed,
+    // The ring and the pass flash draw here. .editor clips, because it
+    // scrolls, and a box that clips cannot show anything outside itself.
+    shell,
     // Back to the exercise's starter, NOT to whatever the editor happened to
     // open with: after an edit and a reload those are the same value, and reset
     // would hand back the edit it was asked to discard.
     reset: () => {
       segs = null;                       // whole file again, whatever mode we were in
-      focusMap = null;
+      shownWork = null;
+      focusBtn.setAttribute("aria-pressed", "false");
+      focusBtn.classList.remove("on");
       ta.value = starter;
       vim.sync();
       paint();
@@ -675,7 +725,7 @@ function buildEditor(host, initial, onRun, starter = initial, opts = {}) {
     // showing a shorter one, so a line has to be moved to where it now sits,
     // and a line inside a collapsed region lands on the row that stands for it.
     setErrorLines(lines) {
-      errLines = new Set(focusMap ? lines.map(n => focusMap.get(n) ?? n) : lines);
+      errLines = new Set(lines.map(shownRow));
       paint();
     },
   };
@@ -749,7 +799,7 @@ export function mountWorkbench(host, ctx) {
   // Open on the work rather than on line one. A reader who lands on the top of
   // a thousand line file has to go looking for the thirteen lines that are the
   // point of the stage.
-  if (untouched && editor.runs.length) requestAnimationFrame(() => editor.goToWork(0));
+  if (untouched && editor.runs.length) requestAnimationFrame(() => editor.goToWork(1));
   renderOutline(host.querySelector("#outline"), untouched ? ex.outline : null, editor);
 
   // On the host rather than on document: a route change replaces this subtree,
@@ -791,8 +841,8 @@ export function mountWorkbench(host, ctx) {
     const btn = host.querySelector("#run");
     if (btn.disabled) return;
     btn.disabled = true;
-    editor.el.classList.add("running");
-    editor.el.classList.remove("passed");
+    editor.shell.classList.add("running");
+    editor.shell.classList.remove("passed");
     reading.innerHTML = "";
     editor.setErrorLines([]);
     const src = editor.code();
@@ -855,8 +905,8 @@ export function mountWorkbench(host, ctx) {
     // the page itself uses it.
     globalThis.__phVerdict = { ruff, mypy, raises: exec?.exc || "", ok: !!exec?.ok };
 
-    editor.el.classList.remove("running");
-    if (exec?.ok) editor.el.classList.add("passed");
+    editor.shell.classList.remove("running");
+    if (exec?.ok) editor.shell.classList.add("passed");
     renderReading({ ex, ruff, mypy, run: exec, reading, host, onPass, next });
     btn.disabled = false;
   }

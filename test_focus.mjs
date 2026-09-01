@@ -37,6 +37,29 @@ for (const file of readdirSync("data").filter(n => n.startsWith("project-"))) {
       continue;
     }
 
+    /* The one that matters, and the one a round trip cannot make. Round
+       tripping is trivially true for ANY partition derive happens to return,
+       including a wrong one: it hides some lines and puts them back. What has
+       to hold is that the lines the build called the reader's work are the
+       lines focus mode shows. Fold one of those away and the reader writes
+       their answer underneath an invisible `raise NotImplementedError` that
+       gets faithfully restored above it, and nothing tells them why. */
+    const visible = new Set();
+    let row = 1;
+    for (const seg of segs) {
+      for (const _ of seg.lines) { if (!seg.carried) visible.add(row); row++; }
+    }
+    const hidden = stage.work.filter(n => !visible.has(n));
+    if (hidden.length) fail(`${where}: focus mode hides work lines ${hidden}`);
+
+    // and no carried region may be ambiguous, or it can match the wrong place
+    for (const part of parts) {
+      const text = part.join("\n");
+      let count = 0, from = 0;
+      while ((from = stage.starter.indexOf(text, from)) >= 0) { count++; from++; }
+      if (count > 1) fail(`${where}: a carried region appears ${count} times`);
+    }
+
     const focus = toFocus(segs);
     const marker = "# EDITED_BY_THE_TEST";
     if (!fromFocus(focus.replace(/\n/, `\n${marker}\n`), segs).includes(marker)) {
