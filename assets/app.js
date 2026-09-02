@@ -8,10 +8,25 @@ const $ = (s, r = document) => r.querySelector(s);
 
 // cached() memoises the success and drops a failure, so one bad fetch does not
 // poison a key for the rest of the session.
-const load = name => cached(`data:${name}`, () => fetch(`data/${name}.json`).then(r => {
-  if (!r.ok) throw new Error(`${name} not built yet`);
-  return r.json();
-}));
+//
+// Every view awaits one of these before it writes to the page, so this is also
+// where a view finds out it has been left behind. Leave a unit while its JSON
+// is still downloading and, without this, the old view lands after the new one
+// and paints over it. route() bumps `epoch`; a load that started under an
+// older epoch rejects with STALE instead of resolving, and the router lets that
+// one rejection pass in silence.
+let epoch = 0;
+const STALE = Symbol("stale");
+const load = name => {
+  const mine = epoch;
+  return cached(`data:${name}`, () => fetch(`data/${name}.json`).then(r => {
+    if (!r.ok) throw new Error(`${name} not built yet`);
+    return r.json();
+  })).then(data => {
+    if (mine !== epoch) throw STALE;
+    return data;
+  });
+};
 
 /* ------------------------------------------------------------------ progress */
 
@@ -616,42 +631,60 @@ function excerpt(body, terms) {
   return (at ? "…" : "") + cut + (at + 220 < body.length ? "…" : "");
 }
 
-function markup(text, terms) {
-  let out = esc(text);
-  for (const q of terms) {
-    out = out.replace(new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "ig"), "<mark>$1</mark>");
-  }
-  return out;
+/* Split on the terms and escape the pieces, rather than escape and then
+   replace: the second order ran the terms over the entities the escaping had
+   introduced, so a search for "amp" marked the middle of every ampersand. A
+   capturing group makes split() hand back the matches at the odd indexes. */
+const termsRe = terms => new RegExp(`(${terms.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})`, "ig");
+export function markup(text, terms) {
+  if (!terms.length) return esc(text);
+  return text.split(termsRe(terms)).map((piece, i) => i % 2 ? `<mark>${esc(piece)}</mark>` : esc(piece)).join("");
 }
 
+/* Results are drawn into the page rather than by re-routing to a new hash on
+   every keystroke. Assigning location.hash pushes a history entry, so Back
+   after typing "dict" used to visit "dic", "di" and "d" on the way out, and the
+   re-render rebuilt the input under the reader's fingers, which put the caret
+   at the end of whatever they were in the middle of typing. */
 async function viewSearch(raw) {
-  const q = decodeURIComponent(raw || "").trim();
-  const terms = q.toLowerCase().split(/\s+/).filter(Boolean);
+  let q = "";
+  try { q = decodeURIComponent(raw || "").trim(); } catch { q = ""; }   // a bare % is not a query
   const index = await load("search");
-  const hits = terms.length
-    ? index.map(e => [score(e, terms), e]).filter(([s]) => s > 0).sort((a, b) => b[0] - a[0]).slice(0, 40)
-    : [];
 
   const href = e => e.kind === "term" ? `#/glossary#term-${slugify(e.title)}`
     : e.kind === "exercise" ? `#/work/${e.unit}/${e.n}`
     : e.id ? `#/unit/${e.unit}/${e.id}` : `#/unit/${e.unit}`;
 
   main.innerHTML = `<div class="wrap" style="padding:2rem 0 4rem;max-width:var(--measure)">
-    <h1 class="eyebrow" style="font:inherit">Search</h1>
-    <input class="searchbox big" id="q" value="${esc(q)}" placeholder="Search notes, exercises and terms" autofocus>
-    <p class="muted" style="margin:0.9rem 0 1.4rem">${terms.length ? `${hits.length} result${hits.length === 1 ? "" : "s"} for “${esc(q)}”` : "Type to search."}</p>
-    ${hits.map(([, e]) => `<a class="hit" href="${href(e)}">
+    <h1 class="eyebrow" style="font:inherit"><label for="q">Search</label></h1>
+    <input class="searchbox big" id="q" type="search" value="${esc(q)}" placeholder="Search notes, exercises and terms" autofocus>
+    <p class="muted" id="count" style="margin:0.9rem 0 1.4rem" aria-live="polite"></p>
+    <div id="hits"></div>
+  </div>`;
+
+  const box = $("#q"), count = $("#count"), hits = $("#hits");
+  const show = query => {
+    const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
+    const found = terms.length
+      ? index.map(e => [score(e, terms), e]).filter(([s]) => s > 0).sort((a, b) => b[0] - a[0]).slice(0, 40)
+      : [];
+    count.textContent = terms.length ? `${found.length} result${found.length === 1 ? "" : "s"} for “${query}”` : "Type to search.";
+    hits.innerHTML = found.map(([, e]) => `<a class="hit" href="${href(e)}">
       <span class="tag">${e.kind}</span>
       <b>${markup(e.title, terms)}</b>
       ${e.body ? `<span>${markup(excerpt(e.body, terms), terms)}</span>` : ""}
-    </a>`).join("")}
-  </div>`;
+    </a>`).join("");
+  };
+  show(q);
 
-  const box = $("#q");
   let timer;
   box.oninput = () => {
     clearTimeout(timer);
-    timer = setTimeout(() => { location.hash = `#/search/${encodeURIComponent(box.value)}`; }, 220);
+    timer = setTimeout(() => {
+      const query = box.value.trim();
+      history.replaceState(null, "", `#/search/${encodeURIComponent(query)}`);
+      show(query);
+    }, 220);
   };
   box.focus();
   box.setSelectionRange(box.value.length, box.value.length);
@@ -683,13 +716,16 @@ function maybeCompanion() {
 
 /* ------------------------------------------------------------------ streak */
 
-const todayKey = () => new Date().toISOString().slice(0, 10);
-function touchStreak() {
+// The reader's own calendar, not UTC's: toISOString() rolled the day over at
+// midnight in Greenwich, which for anyone east of it is the small hours, and
+// a session at one in the morning counted for the day before.
+const dayKey = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+export function touchStreak(now = new Date()) {
   const p = store.all();
   const s = p.streak || { last: null, run: 0, best: 0 };
-  const today = todayKey();
+  const today = dayKey(now);
   if (s.last === today) return s;
-  const yesterday = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
+  const yesterday = dayKey(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1));
   s.run = s.last === yesterday ? s.run + 1 : 1;
   s.last = today;
   s.best = Math.max(s.best || 0, s.run);
@@ -715,6 +751,7 @@ const routes = [
 ];
 
 async function route() {
+  epoch++;
   const path = location.hash.slice(1) || "/";
   if (sheetBtn) sheetBtn.hidden = !path.startsWith("/unit/");
   sheet?.classList.remove("open");
@@ -729,6 +766,7 @@ async function route() {
   } else {
     try { await hit[1](...path.match(hit[0]).slice(1)); }
     catch (err) {
+      if (err === STALE) return;       // a newer route owns the page now
       main.innerHTML = `<div class="wrap" style="padding:4rem 0"><h1>Could not load that</h1>
         <p class="muted mono">${esc(String(err.message))}</p>
         <p class="muted">If you are running this locally, make sure <code>python3 build.py</code> has been run.</p></div>`;

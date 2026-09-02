@@ -12,12 +12,12 @@ Marked before each commit. `[x]` done, `[~]` in progress, `[ ]` not started.
 - [x] Plan and this document
 - [x] `esc()` escapes quotes: a search query or stage title with a `"` in it
       broke out of an attribute, which is a reflected script injection via URL
-- [ ] Search: results render in place, typing no longer pushes a history entry
+- [x] Search: results render in place, typing no longer pushes a history entry
       per keystroke, the caret no longer jumps, a malformed query cannot crash
       the page, and a match inside an HTML entity cannot corrupt the markup
-- [ ] Router: a slow fetch from the route you left cannot overwrite the route
+- [x] Router: a slow fetch from the route you left cannot overwrite the route
       you are on
-- [ ] Streak counts days in the reader's timezone, not UTC
+- [x] Streak counts days in the reader's timezone, not UTC
 - [ ] Workbench: one page-hide flush instead of a leaked listener per mount;
       opening a project stage on a phone no longer scrolls past the brief and
       pops the keyboard; the run shortcut names the right key on the right

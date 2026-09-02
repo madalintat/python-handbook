@@ -39,7 +39,7 @@ ok(back === src, "tokenizer lost or duplicated characters");
 
 /* The note renderer. app.js only touches the DOM inside start(), which index.html
    calls and this file does not, so importing it here is enough. */
-import { md } from "./assets/app.js";
+import { md, markup, touchStreak } from "./assets/app.js";
 
 const renders = (src, want, why) => {
   checks++;
@@ -83,6 +83,34 @@ for (const [name, src, element] of CANNOT_RENDER) {
 
 
 
+
+/* Search highlighting splits on the terms and escapes the pieces. Escaping
+   first and marking second ran the terms over the entities, so a search for
+   "amp" marked the inside of every ampersand and broke the HTML. */
+ok(markup("Tom & Jerry ramp", ["amp"]) === "Tom &amp; Jerry r<mark>amp</mark>",
+   "a term inside an entity was marked, or the entity was lost");
+ok(markup("a.b", ["."]) === "a<mark>.</mark>b", "a regex character in a term was not escaped");
+ok(markup("<b>", []) === "&lt;b&gt;", "no terms still escapes");
+
+/* The streak counts days on the reader's own calendar. store falls back to an
+   empty object without localStorage, so a shim stands in for the browser's. */
+{
+  const mem = {};
+  globalThis.localStorage = {
+    getItem: k => (k in mem ? mem[k] : null),
+    setItem: (k, v) => { mem[k] = String(v); },
+    removeItem: k => { delete mem[k]; },
+  };
+  const at = (y, m, d, h = 12) => new Date(y, m - 1, d, h);
+  ok(touchStreak(at(2026, 3, 15, 1)).run === 1, "the first session starts a streak");
+  ok(touchStreak(at(2026, 3, 15, 23)).run === 1, "a second session the same day does not extend it");
+  ok(touchStreak(at(2026, 3, 16, 0)).run === 2, "the next local day extends it, even just after midnight");
+  ok(touchStreak(at(2026, 3, 18)).run === 1, "a missed day resets it");
+  ok(touchStreak(at(2026, 3, 18)).best === 2, "and the best is kept");
+  touchStreak(at(2026, 3, 31));
+  ok(touchStreak(at(2026, 4, 1)).run === 2, "a month boundary is still one day");
+  delete globalThis.localStorage;
+}
 
 /* Focus mode hides the code an earlier stage wrote, which means taking it out
    of the textarea, which means the only copy of it is the model below. Every
