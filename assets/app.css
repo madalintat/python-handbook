@@ -58,6 +58,9 @@
   --r-1: 4px; --r-2: 6px; --r-3: 8px; --r-4: 16px;
   --drop: 2px;
   --rail: 232px;
+  /* The phone tab bar's height, so the body, the sheet and the mascot all
+     clear it by the same amount. Three literals here disagreed once. */
+  --tabbar: 58px;
   --measure: 72ch;
   --fast: 90ms; --mid: 180ms; --slow: 320ms;
 }
@@ -777,8 +780,10 @@ mark { background: color-mix(in srgb, var(--accent) 30%, transparent); color: in
     font: 600 var(--t-micro)/1 var(--sans); color: var(--ink-4);
   }
   .tabbar a[aria-current] { color: var(--accent); }
-  body { padding-bottom: 58px; }
-  .companion { bottom: 70px; }
+  body { padding-bottom: var(--tabbar); }
+  /* The sheet sits on the tab bar, not under it: drawn at the viewport's
+     bottom, its last link was under the bar, 34 pixels of it. */
+  .sheet { bottom: calc(var(--tabbar) + env(safe-area-inset-bottom)); }
 }
 
 @media (max-width: 620px) {

@@ -23,7 +23,7 @@ Marked before each commit. `[x]` done, `[~]` in progress, `[ ]` not started.
       pops the keyboard; the run shortcut names the right key on the right
       platform and is hidden where there is no keyboard; a long brief scrolls
       inside its sticky column instead of being cut off
-- [ ] Phone chrome: the contents sheet sits above the tab bar, closes on tap
+- [x] Phone chrome: the contents sheet sits above the tab bar, closes on tap
       outside and on Escape, and says whether it is open; the mascot stays off
       phones and off the workbench; the browser chrome takes the page colour
 - [ ] Accessibility: verdicts, readings and drill answers are announced;

@@ -51,6 +51,19 @@ const railCollapsed = () => flag(RAIL_KEY);
 // Bound by start(), not at import: the module has to load without a document.
 let main, sheet, sheetBody, sheetBtn;
 
+function openSheet(open) {
+  if (!sheet) return;
+  sheet.classList.toggle("open", open);
+  sheetBtn.setAttribute("aria-expanded", String(open));
+}
+
+// The browser's own chrome takes the page's ground colour, read from the
+// stylesheet rather than repeated here.
+function syncThemeColor() {
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.content = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim();
+}
+
 /* ------------------------------------------------------------------ markdown
 
    Deliberately small: headings, paragraphs, fenced code, inline code, bold,
@@ -702,8 +715,13 @@ const LINES = [
   "Nothing here leaves your browser. Break whatever you like.",
 ];
 
-function maybeCompanion() {
+function maybeCompanion(path) {
   document.querySelector(".companion")?.remove();
+  // Not on a phone, where the bubble sat over the run button and the first
+  // verdict; and not on the workbench at any width, where the corner it
+  // takes is the corner the results appear in.
+  if (matchMedia("(max-width: 900px)").matches) return;
+  if (path.startsWith("/work/") || path.startsWith("/project/")) return;
   if (Math.random() > 0.22) return;
   const el = document.createElement("div");
   el.className = "companion";
@@ -754,7 +772,7 @@ async function route() {
   epoch++;
   const path = location.hash.slice(1) || "/";
   if (sheetBtn) sheetBtn.hidden = !path.startsWith("/unit/");
-  sheet?.classList.remove("open");
+  openSheet(false);
   if (!path.startsWith("/unit/")) { unwireRail?.(); unwireRail = null; renderedUnit = null; }
   // Before the view renders, not after: a view that jumps to a section would
   // otherwise have that jump undone the moment it finished. Skipped when we are
@@ -777,7 +795,7 @@ async function route() {
     if (href === "/" ? path === "/" : path.startsWith(href)) a.setAttribute("aria-current", "page");
     else a.removeAttribute("aria-current");
   });
-  maybeCompanion();
+  maybeCompanion(path);
 }
 
 /* This file is a module of functions and also the whole application. index.html
@@ -789,15 +807,21 @@ export function start() {
   sheet = document.getElementById("sheet");
   sheetBody = document.getElementById("sheet-body");
   sheetBtn = document.getElementById("sheetbtn");
-  sheetBtn?.addEventListener("click", () => sheet.classList.toggle("open"));
+  sheetBtn?.addEventListener("click", () => openSheet(!sheet.classList.contains("open")));
   // Tapping a link inside the sheet closes it. route() also closes it, but only
   // when the hash changes, and a link to the section already showing does not
   // change it, which would leave the sheet covering the page.
-  sheet?.addEventListener("click", e => { if (e.target.closest("a")) sheet.classList.remove("open"); });
+  sheet?.addEventListener("click", e => { if (e.target.closest("a")) openSheet(false); });
+  // So does tapping anywhere else, and so does Escape: the only ways out used
+  // to be the button that opened it or a link inside it.
+  document.addEventListener("click", e => {
+    if (sheet?.classList.contains("open") && !sheet.contains(e.target) && !sheetBtn.contains(e.target)) openSheet(false);
+  });
 
   addEventListener("hashchange", route);
 
   addEventListener("keydown", e => {
+    if (e.key === "Escape" && sheet?.classList.contains("open")) { openSheet(false); return; }
     const typing = /^(INPUT|TEXTAREA)$/.test(document.activeElement?.tagName);
     if (e.key === "/" && !typing && !e.metaKey && !e.ctrlKey) {
       e.preventDefault();
@@ -817,7 +841,9 @@ export function start() {
     const now = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
     document.documentElement.dataset.theme = now;
     try { localStorage.setItem("ph.theme", now); } catch {}
+    syncThemeColor();
   };
+  syncThemeColor();
 
   touchStreak();
 
