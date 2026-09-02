@@ -22,8 +22,12 @@ const BUILTINS = new Set(("abs aiter all any ascii bin bool bytearray bytes call
   "super tuple type vars zip Exception ValueError TypeError KeyError IndexError AttributeError NameError " +
   "RuntimeError StopIteration AssertionError ZeroDivisionError UnboundLocalError").split(" "));
 
-const ESC = { "&": "&amp;", "<": "&lt;", ">": "&gt;" };
-export const esc = s => s.replace(/[&<>]/g, c => ESC[c]);
+// Quotes too, not only the three that matter in text: this one function feeds
+// attribute values as well (a search query into `value`, a stage title into
+// `title`), and a quote that passes through unescaped closes the attribute and
+// opens the page to whatever follows it in the URL.
+const ESC = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+export const esc = s => s.replace(/[&<>"']/g, c => ESC[c]);
 
 // Markdown-ish inline formatting, used by the notes, the exercise prompts and
 // the diagnose readings. One definition: a second copy drifts.

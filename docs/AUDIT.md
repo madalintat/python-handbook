@@ -10,7 +10,7 @@ fails if it regresses, in the spirit of "enforce it or lose it".
 Marked before each commit. `[x]` done, `[~]` in progress, `[ ]` not started.
 
 - [x] Plan and this document
-- [ ] `esc()` escapes quotes: a search query or stage title with a `"` in it
+- [x] `esc()` escapes quotes: a search query or stage title with a `"` in it
       broke out of an attribute, which is a reflected script injection via URL
 - [ ] Search: results render in place, typing no longer pushes a history entry
       per keystroke, the caret no longer jumps, a malformed query cannot crash

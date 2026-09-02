@@ -1,6 +1,6 @@
 /* Smallest thing that fails if the tokenizer breaks. Run: node test_frontend.mjs */
 import assert from "node:assert/strict";
-import { highlightPython as hl, cutStarter, derive, toFocus, fromFocus, shownRowOf }
+import { highlightPython as hl, esc, cutStarter, derive, toFocus, fromFocus, shownRowOf }
   from "./assets/workbench.js";
 
 let checks = 0;
@@ -14,7 +14,7 @@ const ok = (cond, why) => { checks++; assert.ok(cond, why); };
 has("def foo():", "tk-kw", "def");
 has("def foo():", "tk-def", " foo");
 has("x = 42", "tk-num", "42");
-has('s = "hi"', "tk-str", '"hi"');
+has('s = "hi"', "tk-str", "&quot;hi&quot;");
 has("# note", "tk-com", "# note");
 has("@cache", "tk-dec", "@cache");
 has("print(x)", "tk-bi", "print");
@@ -27,6 +27,9 @@ ok(!hl('s = "# no"').includes("tk-com"), "# inside a string became a comment");
 ok(!hl('s = "def"').includes("tk-kw"), "keyword inside a string was highlighted");
 // html in source must be escaped, never emitted raw
 ok(!hl("x = '<script>'").includes("<script>"), "source html was not escaped");
+// and so must quotes: esc() feeds attribute values, where an unescaped quote
+// closes the attribute and a crafted search URL runs script in the page
+ok(esc(`"'`) === "&quot;&#39;", "esc() let a quote through");
 // triple-quoted strings survive newlines
 ok(hl('"""a\nb"""').includes('tk-str'), "triple-quoted string not tokenized");
 // round trip: stripping tags must give back the source (plus the escaping)
