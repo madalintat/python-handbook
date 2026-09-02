@@ -38,6 +38,9 @@ fi
 step "python tokenizer"
 node test_frontend.mjs; note $?
 
+step "contrast, every ink on every ground"
+node test_contrast.mjs; note $?
+
 step "focus mode, against every real stage"
 node test_focus.mjs; note $?
 

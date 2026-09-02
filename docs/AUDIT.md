@@ -26,10 +26,10 @@ Marked before each commit. `[x]` done, `[~]` in progress, `[ ]` not started.
 - [x] Phone chrome: the contents sheet sits above the tab bar, closes on tap
       outside and on Escape, and says whether it is open; the mascot stays off
       phones and off the workbench; the browser chrome takes the page colour
-- [ ] Accessibility: verdicts, readings and drill answers are announced;
+- [x] Accessibility: verdicts, readings and drill answers are announced;
       navigations and the exercise strip are labelled; the rail toggle says
       what it will do; answering a drill moves focus to Next
-- [ ] Contrast: every text colour meets WCAG AA against every ground it is
+- [x] Contrast: every text colour meets WCAG AA against every ground it is
       used on, in both themes, and a test proves it
 - [ ] Browser QA covers the new behaviour: history, sheet, companion, focus
 - [ ] README and release.sh know about the new check

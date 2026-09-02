@@ -51,7 +51,11 @@ a content change that forgets to rebuild is caught.
 In increasing order of what they cost and what they prove:
 
 ```sh
-./release.sh --check                    # everything that runs offline
+./release.sh --check                    # everything that runs offline: the build
+                                        # and its gates, the tokenizer, the note
+                                        # renderer, focus mode against every real
+                                        # stage, vim mode, and every text colour
+                                        # against every ground it sits on
 ./release.sh --check --net              # plus all three judges, on every
                                         # starter and solution, under two hash seeds
 ./release.sh --check --net --browser    # plus the same code judged in a real

@@ -13,24 +13,28 @@
   --border-soft: #d5d0c7;
   --code-bg:     #f3f0ea;
 
-  /* four inks, and the discipline about which one you may use */
+  /* four inks, and the discipline about which one you may use. Every ink and
+     every accent clears 4.5:1 against every ground it is used on, in both
+     themes; test_contrast.mjs reads this file and fails if one stops. The
+     faint ink was 2.4:1 once, on the eyebrow, the rail, every card's
+     metadata and every comment in every code block. */
   --ink:   #1d1b19;
   --ink-2: #4a4540;
-  --ink-3: #726c65;
-  --ink-4: #9b958c;
+  --ink-3: #605a54;
+  --ink-4: #6c6761;
 
   /* seven accents, one per unit, cycling so no two neighbours match */
-  --gold:  #b5790a;
+  --gold:  #8f5e02;
   --denim: #3f6699;
-  --ember: #b2551f;
-  --moss:  #5c7c33;
+  --ember: #a74f1c;
+  --moss:  #53712d;
   --teal:  #22736d;
   --plum:  #77488a;
   --clay:  #a34133;
 
   /* the traffic light: this is the verdict model, not decoration */
-  --ok:   #3f7a2d;
-  --warn: #a87c07;
+  --ok:   #3c752b;
+  --warn: #876200;
   --bad:  #b23b30;
   --ok-bg:   #e4eddf;
   --warn-bg: #f4ead2;
@@ -75,8 +79,8 @@
 
   --ink:   #faf9f7;
   --ink-2: #b6afa7;
-  --ink-3: #8f8880;
-  --ink-4: #69625b;
+  --ink-3: #9e9890;
+  --ink-4: #8e8882;
 
   --gold:  #e0a52c;
   --denim: #7ba0d4;

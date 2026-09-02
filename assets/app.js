@@ -276,9 +276,8 @@ async function viewUnit(slug, anchor) {
   main.innerHTML = `<div class="wrap" data-accent="${meta.accent}">
     <div class="unit-layout">
       <aside class="rail${railCollapsed() ? " collapsed" : ""}" id="railaside">
-        <button class="railtoggle" id="railtoggle" title="Collapse the contents"
-                aria-label="Collapse the contents">${railCollapsed() ? "\u203a" : "\u2039"}</button>
-        <nav><ol id="rail"><div class="fill" id="railfill" style="height:0"></div>
+        <button class="railtoggle" id="railtoggle"></button>
+        <nav aria-label="Contents"><ol id="rail"><div class="fill" id="railfill" style="height:0"></div>
         ${unit.sections.map(s => `<li><a href="#/unit/${slug}/${s.id}" data-sec="${s.id}">${esc(s.title)}</a></li>`).join("")}
       </ol></nav></aside>
       <article class="note">
@@ -299,12 +298,21 @@ async function viewUnit(slug, anchor) {
   store.set("read", slug, true);
   wireRail(unit.sections);
 
+  // The toggle says what pressing it will do, so its label flips with the
+  // state; "Collapse" on a collapsed rail was a lie to a screen reader.
   const aside = $("#railaside"), toggle = $("#railtoggle");
+  const paintToggle = () => {
+    const collapsed = railCollapsed();
+    toggle.textContent = collapsed ? "\u203a" : "\u2039";
+    toggle.title = toggle.ariaLabel = collapsed ? "Expand the contents" : "Collapse the contents";
+    toggle.setAttribute("aria-expanded", String(!collapsed));
+  };
+  paintToggle();
   toggle.onclick = () => {
     const now = !railCollapsed();
     setFlag(RAIL_KEY, now);
     aside.classList.toggle("collapsed", now);
-    toggle.textContent = now ? "\u203a" : "\u2039";
+    paintToggle();
   };
 
   // Below 1060px the rail is gone, so the same contents live in a bottom sheet.
@@ -360,10 +368,11 @@ async function viewWork(slug, n) {
     <div class="wb">
       <section class="wb-brief">
         <p class="eyebrow"><a href="#/unit/${slug}" class="muted">Unit ${pad(meta.n)} · ${esc(meta.title)}</a></p>
-        <div class="exnav">${exercises.map((_, k) => {
+        <nav class="exnav" aria-label="Exercises">${exercises.map((_, k) => {
           const passed = store.get("passed", `${slug}:${k + 1}`);
-          return `<a href="#/work/${slug}/${k + 1}" class="${passed ? "passed" : ""}" ${k + 1 === i ? 'aria-current="true"' : ""}>${k + 1}</a>`;
-        }).join("")}</div>
+          return `<a href="#/work/${slug}/${k + 1}" class="${passed ? "passed" : ""}" ${k + 1 === i ? 'aria-current="true"' : ""}
+                     aria-label="Exercise ${k + 1}${passed ? ", passed" : ""}">${k + 1}</a>`;
+        }).join("")}</nav>
         <h1>${esc(ex.title)}</h1>
         ${md(ex.prompt)}
         <div class="hintbox" id="hintbox"></div>
@@ -423,7 +432,7 @@ async function viewDrills(slug) {
     $("#quiz").innerHTML = `<p class="eyebrow">Drill ${at + 1} of ${drills.length}</p>
       <p class="drill-q">${inline(d.q)}</p>
       ${d.options.map((o, k) => `<button class="opt" data-k="${k}">${inline(o)}</button>`).join("")}
-      <div id="why"></div>`;
+      <div id="why" aria-live="polite"></div>`;
 
     $("#quiz").querySelectorAll(".opt").forEach(b => {
       b.onclick = () => {
@@ -435,6 +444,9 @@ async function viewDrills(slug) {
         $("#why").innerHTML = `<div class="reading"><h4>Why</h4><p>${inline(d.why)}</p></div>
           <div style="margin-top:1rem"><button class="btn" id="nextq">${at + 1 < drills.length ? "Next" : "Finish"}</button></div>`;
         $("#nextq").onclick = () => { at++; render(); };
+        // The option just pressed is disabled now, and a disabled button drops
+        // focus on the floor. Next is where a keyboard goes anyway.
+        $("#nextq").focus({ preventScroll: true });
       };
     });
   };
@@ -484,10 +496,11 @@ async function viewProject(slug, n) {
     <div class="wb">
       <section class="wb-brief">
         <p class="eyebrow"><a href="#/projects" class="muted">${p.tierLabel} · ${esc(p.title)}</a></p>
-        <div class="exnav">${stages.map((s, k) => {
+        <nav class="exnav" aria-label="Stages">${stages.map((s, k) => {
           const done = store.get("stage", `${slug}:${k + 1}`);
-          return `<a href="#/project/${slug}/${k + 1}" class="${done ? "passed" : ""}" ${k + 1 === i ? 'aria-current="true"' : ""} title="${esc(s.title)}">${k + 1}</a>`;
-        }).join("")}</div>
+          return `<a href="#/project/${slug}/${k + 1}" class="${done ? "passed" : ""}" ${k + 1 === i ? 'aria-current="true"' : ""}
+                     title="${esc(s.title)}" aria-label="Stage ${k + 1}, ${esc(s.title)}${done ? ", built" : ""}">${k + 1}</a>`;
+        }).join("")}</nav>
         <h1>${esc(stage.title)}</h1>
         ${md(stage.brief)}
         <div class="reading" style="margin-top:1.2rem"><h4>Stage ${i} of ${stages.length}</h4>

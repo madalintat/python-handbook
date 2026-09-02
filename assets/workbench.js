@@ -855,8 +855,8 @@ export function mountWorkbench(host, ctx) {
       <span id="wbstatus" class="mono faint" style="font-size:var(--t-micro)"></span>
       <span style="margin-left:auto" id="passslot"></span>
     </div>
-    <div id="verdict"></div>
-    <div id="reading"></div>`;
+    <div id="verdict" aria-live="polite"></div>
+    <div id="reading" aria-live="polite"></div>`;
 
   /* The build's work marks are line numbers in the starter, so an edit moves
      them. Rather than dropping the marks at the first keystroke, they are moved:
