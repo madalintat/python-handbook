@@ -890,6 +890,10 @@ function attach(ta, { paint, onRun, badge, gutter }) {
 
   return {
     isOn: () => on,
+    // No focus() here. The toolbar button focuses after toggling, which is
+    // the one case where the reader asked for it; enable() also runs at mount
+    // for a reader who left vim on, and focusing then scrolled a phone to the
+    // editor and raised the keyboard before the brief had been read.
     enable() {
       on = true;
       setOn(true);
@@ -897,7 +901,6 @@ function attach(ta, { paint, onRun, badge, gutter }) {
       vim.state.mode = 'normal';
       vim.setCursor(ta.selectionStart);
       render();
-      ta.focus();
     },
     disable() {
       on = false;

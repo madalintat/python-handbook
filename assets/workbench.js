@@ -645,23 +645,29 @@ function buildEditor(host, initial, onRun, starter = initial, opts = {}) {
   const runs = groupRuns(workLines);
   let atRun = -1;
 
-  function goToLine(line) {
+  /* `focus` is false on a phone at mount: focusing a textarea there scrolls
+     the page to it and raises the keyboard, which on a project stage meant
+     opening sixteen hundred pixels past the brief with the brief unread. The
+     caret still goes to the work, so the first tap on the editor lands there.
+     preventScroll for the rest: the editor pane scrolls itself in reveal(),
+     and the page has no business moving. */
+  function goToLine(line, focus = true) {
     // whole-file in, buffer row out: the outline and the work runs both point
     // at the file, and in focus mode the buffer is a shorter thing
     const row = shownRow(line);
     const lines = ta.value.split("\n");
     const at = lines.slice(0, Math.max(0, row - 1)).join("\n").length + (row > 1 ? 1 : 0);
-    ta.focus();
+    if (focus) ta.focus({ preventScroll: true });
     ta.setSelectionRange(at, at);
     lastCaretLine = lastCaretAt = -1;   // force the reveal even onto the same line
     reveal();
     paint();
   }
 
-  function goToWork(step = 1) {
+  function goToWork(step = 1, focus = true) {
     if (!runs.length) return;
     atRun = (atRun + step + runs.length) % runs.length;
-    goToLine(runs[atRun][0]);
+    goToLine(runs[atRun][0], focus);
   }
 
   /* Focus mode. The carried regions come out of the textarea and go into
@@ -821,16 +827,31 @@ function workMarks(ex, saved) {
   return lines;
 }
 
+/* One flush on the way out of the page, pointing at whichever editor is
+   mounted. Each mount used to add its own beforeunload listener and nothing
+   removed them, so a session's worth of exercises left a session's worth of
+   closures each saving a detached editor. pagehide rather than beforeunload:
+   it is the one that fires on a phone when the tab is put away. */
+let flush = null;
+let flushWired = false;
+
 export function mountWorkbench(host, ctx) {
   const { exercise: ex, storageKey, onPass, next } = ctx;
 
   let saved = "";
   try { saved = localStorage.getItem(storageKey) || ""; } catch {}
 
+  // Coarse pointer or the single-column layout, which app.css puts at 1060px:
+  // either one means the editor is somewhere the page must not jump to.
+  const touch = matchMedia("(pointer: coarse), (max-width: 1060px)").matches;
+  // The shortcut named for the keyboard in front of the reader. The CSS hides
+  // it entirely where there is no keyboard.
+  const mac = /Mac|iPhone|iPad|iPod/.test(navigator.platform || "");
+  const runKey = mac ? "\u2318\u23ce" : "Ctrl \u23ce";
   host.innerHTML = `<div id="outline"></div>
     <div id="edhost"></div>
     <div class="wb-actions">
-      <button class="btn" id="run">Run <kbd class="runkey">\u2318\u23ce</kbd></button>
+      <button class="btn" id="run" aria-keyshortcuts="${mac ? "Meta" : "Control"}+Enter">Run <kbd class="runkey" aria-hidden="true">${runKey}</kbd></button>
       <span id="wbstatus" class="mono faint" style="font-size:var(--t-micro)"></span>
       <span style="margin-left:auto" id="passslot"></span>
     </div>
@@ -851,7 +872,7 @@ export function mountWorkbench(host, ctx) {
   // Open on the work rather than on line one. A reader who lands on the top of
   // a thousand line file has to go looking for the thirteen lines that are the
   // point of the stage.
-  if (editor.runs.length) requestAnimationFrame(() => editor.goToWork(1));
+  if (editor.runs.length) requestAnimationFrame(() => editor.goToWork(1, !touch));
   renderOutline(host.querySelector("#outline"), marks.length ? ex.outline : null, editor);
 
   // On the host rather than on document: a route change replaces this subtree,
@@ -881,7 +902,11 @@ export function mountWorkbench(host, ctx) {
     saveTimer = setTimeout(save, 400);
   });
   editor.ta.addEventListener("blur", () => { clearTimeout(saveTimer); save(); });
-  addEventListener("beforeunload", save);
+  flush = save;
+  if (!flushWired) {
+    addEventListener("pagehide", () => flush?.());
+    flushWired = true;
+  }
   host.querySelector("#resetcode").onclick = () => {
     editor.reset();
     try { localStorage.removeItem(storageKey); } catch {}

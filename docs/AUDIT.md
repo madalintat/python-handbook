@@ -18,7 +18,7 @@ Marked before each commit. `[x]` done, `[~]` in progress, `[ ]` not started.
 - [x] Router: a slow fetch from the route you left cannot overwrite the route
       you are on
 - [x] Streak counts days in the reader's timezone, not UTC
-- [ ] Workbench: one page-hide flush instead of a leaked listener per mount;
+- [x] Workbench: one page-hide flush instead of a leaked listener per mount;
       opening a project stage on a phone no longer scrolls past the brief and
       pops the keyboard; the run shortcut names the right key on the right
       platform and is hidden where there is no keyboard; a long brief scrolls
@@ -75,7 +75,8 @@ closures each saving a detached editor on exit.
 ### Mobile
 
 **A project stage opened 1,600 pixels down with the keyboard up.** Placing the
-caret on the stage's work called `focus()`, which on a phone scrolls the page
+caret on the stage's work called `focus()`, and so did enabling vim mode at
+mount for a reader who had left it on. On a phone either one scrolls the page
 to the editor and raises the keyboard before the reader has seen the brief.
 Measured: `scrollY` 1632 and the textarea active on mount at 390px wide.
 

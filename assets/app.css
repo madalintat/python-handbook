@@ -371,7 +371,13 @@ code, pre, kbd { font-family: var(--mono); }
 /* ---------------------------------------------------------------- workbench */
 
 .wb { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 5fr); gap: 1.4rem; padding: 1.4rem 0 4rem; align-items: start; }
-.wb-brief { position: sticky; top: 78px; }
+/* Sticky, and it scrolls inside itself. A brief taller than the viewport
+   used to stick at the top with its last paragraphs below the fold, and they
+   stayed there until the results column had been scrolled past. */
+.wb-brief {
+  position: sticky; top: 78px;
+  max-height: calc(100vh - 78px - 1rem); overflow-y: auto; overscroll-behavior: contain;
+}
 .wb-brief h1 { font-size: var(--t-h3); margin: 0.45rem 0 0.8rem; }
 .wb-brief p { font-size: var(--t-body); color: var(--ink-2); line-height: 1.68; }
 .wb-brief code { font-size: 0.88em; background: var(--code-bg); border: 1px solid var(--border-soft); border-radius: var(--r-1); padding: 0.08em 0.32em; }
@@ -734,7 +740,7 @@ mark { background: color-mix(in srgb, var(--accent) 30%, transparent); color: in
   .unit-layout { grid-template-columns: minmax(0, 1fr); gap: 0; }
   .rail { display: none; }
   .wb { grid-template-columns: minmax(0, 1fr); }
-  .wb-brief { position: static; }
+  .wb-brief { position: static; max-height: none; overflow: visible; }
   .sheet {
     display: block; position: fixed; left: 0; right: 0; bottom: 0; z-index: 45;
     background: var(--surface); border-top: 1px solid var(--border);
@@ -788,6 +794,7 @@ mark { background: color-mix(in srgb, var(--accent) 30%, transparent); color: in
    a laptop getting slightly larger buttons costs nothing. */
 @media (pointer: coarse), (max-width: 900px) {
   .ed-toolbar .btn { min-height: 40px; padding-inline: 0.7rem; }
+  kbd.runkey { display: none; }        /* a shortcut for a keyboard that is not there */
   .exnav a { width: 40px; height: 40px; }
   .letters a { min-width: 40px; min-height: 40px; display: grid; place-items: center; }
   .icon-btn { width: 40px; height: 40px; }
