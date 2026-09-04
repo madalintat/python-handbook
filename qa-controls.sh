@@ -319,12 +319,27 @@ ok(await q(`return document.querySelector('.hero-cta .btn').getAttribute('href')
 
 cliLog('=== keyboard ===')
 await go('/track', 1)
-// The first thing a keyboard reaches, on every route: without it the header
-// and five navigation links come before the content every time.
-await q(`document.getElementById('skip').focus(); return 1`)
-await wait(1)
+/* The first thing a keyboard reaches, on every route: without it the header
+   and five navigation links come before the content every time.
+
+   Two things about measuring it here. A background tab's document does not
+   have focus, so :focus styles do not apply until focus is emulated. And a
+   background tab does not run transitions, so the link slides to a position it
+   never reaches and the check reads its hiding place, which looks exactly like
+   the bug. Emulating reduced motion removes the transition altogether, through
+   the rule the stylesheet already has for readers who ask for that. */
+await cdp('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] })
+await cdp('Emulation.setFocusEmulationEnabled', { enabled: true })
+await q(`document.getElementById('skip').blur(); document.getElementById('skip').focus(); return 1`)
+await wait(0.5)
 ok(await q(`const r = document.getElementById('skip').getBoundingClientRect();
             return r.top >= 0 && r.bottom <= innerHeight`), 'the skip link appears when it is tabbed to')
+await q(`document.getElementById('skip').blur(); return 1`)
+await wait(0.3)
+ok(await q(`return document.getElementById('skip').getBoundingClientRect().bottom <= 0`),
+   'and gets out of the way again')
+await cdp('Emulation.setFocusEmulationEnabled', { enabled: false })
+await cdp('Emulation.setEmulatedMedia', { features: [] })
 await q(`document.getElementById('skip').click(); return 1`)
 await wait(0.4)
 ok(await q(`return document.activeElement === document.getElementById('main')`),

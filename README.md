@@ -143,7 +143,10 @@ palette stays legible while it keeps being tuned.
 session failed on a page that was correct: the contents sheet was measured
 mid-slide and reported below the fold, exactly as the bug it was written for
 would look. Anything that moves has to be polled to its resting position, not
-waited for by a number somebody guessed.
+waited for by a number somebody guessed. A background tab is worse than slow:
+it does not run transitions at all, so an element waits at its starting point
+for as long as you care to watch. The way to measure where a hover or focus
+style puts something is to emulate reduced motion and remove the transition.
 
 **Two documents holding the same rules is one document and a bug.** This README
 was a near-duplicate of the authoring contract until it was noticed, which is
