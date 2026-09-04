@@ -147,6 +147,21 @@ p { margin: 0 0 1em; }
 code, pre, kbd { font-family: var(--mono); }
 
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--r-1); }
+/* main takes focus from the skip link, and a focused region does not need a
+   ring drawn round the whole page to prove it. */
+main:focus { outline: none; }
+
+/* Out of the way until it is tabbed to, which is the first thing a keyboard
+   reaches on every page: without it the header and five navigation links come
+   before the content, on every route. */
+.skip {
+  position: fixed; top: 0; left: 50%; translate: -50% -120%; z-index: 60;
+  padding: 0.7rem 1.2rem; border: 1px solid var(--border); border-radius: 0 0 var(--r-3) var(--r-3);
+  border-top: 0; background: var(--surface); color: var(--ink);
+  font: 600 var(--t-sm)/1 var(--sans); cursor: pointer;
+  transition: translate var(--fast) ease;
+}
+.skip:focus { translate: -50% 0; }
 
 .wrap { width: min(1240px, 100% - var(--gutter)); margin-inline: auto; }
 .muted { color: var(--ink-3); }

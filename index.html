@@ -25,6 +25,10 @@
 </head>
 <body>
 
+<!-- A button, not a link to #main: the hash is the router's, and pointing this
+     at it would navigate to a route that does not exist. -->
+<button class="skip" id="skip">Skip to content</button>
+
 <header class="top">
   <div class="wrap">
     <a class="brand" href="#/">
@@ -44,7 +48,7 @@
   </div>
 </header>
 
-<main id="main"></main>
+<main id="main" tabindex="-1"></main>
 
 <footer class="foot">
   <div class="wrap">

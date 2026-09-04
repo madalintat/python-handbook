@@ -307,8 +307,28 @@ ok(await q(`return localStorage.getItem('ph.theme') === 'dark' && localStorage.g
    'erasing progress keeps preferences')
 ok(await q(`return !localStorage.getItem('ph.progress')`), 'erasing progress clears progress')
 
+cliLog('=== the way back in ===')
+await q(`localStorage.removeItem('ph.progress'); return 1`)
+await go('/track', 0.6); await go('/', 1.2)
+ok(/start at unit/i.test(await q(`return document.querySelector('.hero-cta .btn').textContent`)),
+   'a reader with no progress is offered the first unit')
+await go(`/unit/${unit}`, 1.2)
+await go('/track', 0.6); await go('/', 1.2)
+ok(await q(`return document.querySelector('.hero-cta .btn').getAttribute('href')`) === `#/unit/${unit}`,
+   'a reader who has been here is offered the way back to where they were')
+
 cliLog('=== keyboard ===')
 await go('/track', 1)
+// The first thing a keyboard reaches, on every route: without it the header
+// and five navigation links come before the content every time.
+await q(`document.getElementById('skip').focus(); return 1`)
+await wait(1)
+ok(await q(`const r = document.getElementById('skip').getBoundingClientRect();
+            return r.top >= 0 && r.bottom <= innerHeight`), 'the skip link appears when it is tabbed to')
+await q(`document.getElementById('skip').click(); return 1`)
+await wait(0.4)
+ok(await q(`return document.activeElement === document.getElementById('main')`),
+   'and moves focus past the header')
 await q(`
   document.body.dispatchEvent(new KeyboardEvent('keydown', { key: '/', bubbles: true }));
   return 1`)

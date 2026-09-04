@@ -131,6 +131,20 @@ was a 28x speed-up and a memory leak; passing the gradient as an argument
 removed the cycles for the cost of one parameter and beat the workaround on
 every axis.
 
+**A colour nobody measured is a colour that fails.** Six of this book's inks
+and accents were below the contrast ratio text needs, including the one used
+for every card's metadata, every rail link and every code comment, at 2.4 to
+1. Nobody noticed by looking, because the page reads well to somebody with the
+eyesight it was designed on. `test_contrast.mjs` reads the two `:root` blocks
+and checks every pair the stylesheet actually draws, which is the only way a
+palette stays legible while it keeps being tuned.
+
+**Measuring during an animation measures the animation.** Two checks in this
+session failed on a page that was correct: the contents sheet was measured
+mid-slide and reported below the fold, exactly as the bug it was written for
+would look. Anything that moves has to be polled to its resting position, not
+waited for by a number somebody guessed.
+
 **Two documents holding the same rules is one document and a bug.** This README
 was a near-duplicate of the authoring contract until it was noticed, which is
 exactly how long that kind of thing survives.

@@ -39,7 +39,7 @@ ok(back === src, "tokenizer lost or duplicated characters");
 
 /* The note renderer. app.js only touches the DOM inside start(), which index.html
    calls and this file does not, so importing it here is enough. */
-import { md, markup, touchStreak } from "./assets/app.js";
+import { md, markup, touchStreak, resumeUnit } from "./assets/app.js";
 
 const renders = (src, want, why) => {
   checks++;
@@ -91,6 +91,28 @@ ok(markup("Tom & Jerry ramp", ["amp"]) === "Tom &amp; Jerry r<mark>amp</mark>",
    "a term inside an entity was marked, or the entity was lost");
 ok(markup("a.b", ["."]) === "a<mark>.</mark>b", "a regex character in a term was not escaped");
 ok(markup("<b>", []) === "&lt;b&gt;", "no terms still escapes");
+
+/* Where a returning reader is sent back to. The front page offers unit 01 to
+   somebody who has read twelve of them otherwise, and the track is a long
+   page to hunt through. */
+{
+  const track = [
+    { slug: "00-toolchain", n: 0, hasNote: true },
+    { slug: "01-names", n: 1, hasNote: true },
+    { slug: "02-mutability", n: 2, hasNote: true },
+    { slug: "03-data-model", n: 3, hasNote: false },   // in the manifest, not written
+  ];
+  ok(resumeUnit(track, {}) === null, "a first visit resumes nothing");
+  ok(resumeUnit(track, { read: { "01-names": true } }).slug === "01-names", "a read note is where they were");
+  ok(resumeUnit(track, { read: { "01-names": true, "00-toolchain": true } }).slug === "01-names",
+     "the furthest one, not the first one stored");
+  ok(resumeUnit(track, { passed: { "02-mutability:3": true } }).slug === "02-mutability",
+     "an exercise passed counts, and its unit is taken from the key");
+  ok(resumeUnit(track, { drills: { "02-mutability": {} } }).slug === "02-mutability", "a drill set counts");
+  ok(resumeUnit(track, { read: { "03-data-model": true } }) === null,
+     "a unit with no note is never resumed into");
+  ok(resumeUnit(track, { read: { "99-gone": true } }) === null, "a slug no longer in the track is ignored");
+}
 
 /* The streak counts days on the reader's own calendar. store falls back to an
    empty object without localStorage, so a shim stands in for the browser's. */

@@ -138,6 +138,26 @@ export function md(src) {
 
 const stagger = els => els.forEach((el, n) => (el.style.animationDelay = `${Math.min(n * 26, 400)}ms`));
 
+/* Where a returning reader left off: the furthest unit they have touched at
+   all, by note read, exercise passed or drill set done. Exported because the
+   rule is worth a test, and because a second copy of "what counts as touched"
+   would drift from the one the progress page counts.
+
+   The furthest rather than the most recent: nothing records when anything
+   happened, and inventing a timestamp to answer this would be a second source
+   of truth about progress. Null when the reader has done nothing at all,
+   which is what keeps the front page honest for a first visit. */
+export function resumeUnit(track, progress) {
+  const touched = new Set([
+    ...Object.keys(progress.read || {}),
+    ...Object.keys(progress.drills || {}),
+    ...Object.keys(progress.passed || {}).map(k => k.split(":")[0]),
+  ]);
+  let best = null;
+  for (const u of track) if (touched.has(u.slug) && u.hasNote) best = u;
+  return best;
+}
+
 async function viewHome() {
   const m = await load("manifest");
   const units = m.track.length;
@@ -147,6 +167,9 @@ async function viewHome() {
   // cannot reach is the one thing a progress figure must never do.
   const writtenEx = m.track.reduce((n, u) => n + u.hasEx, 0);
   const writtenDrills = m.track.reduce((n, u) => n + u.hasDrills, 0);
+  // A reader who has been here before is offered the way back in, rather than
+  // the first unit and a hunt through the track for the one they were on.
+  const resume = resumeUnit(m.track, store.all());
 
   main.innerHTML = `
   <section class="hero"><div class="wrap hero-grid">
@@ -158,8 +181,11 @@ async function viewHome() {
       back a wrong answer and says nothing at all. Every exercise here runs for real in your
       own browser, judged by three tools that disagree with each other.</p>
       <div class="hero-cta">
-        <a class="btn" href="#/unit/01-names">Start at unit 01</a>
-        <a class="btn ghost" href="#/track">See the whole track</a>
+        ${resume
+          ? `<a class="btn" href="#/unit/${resume.slug}">Back to unit ${pad(resume.n)}: ${esc(resume.title)}</a>
+             <a class="btn ghost" href="#/track">See the whole track</a>`
+          : `<a class="btn" href="#/unit/${m.track[1].slug}">Start at unit ${pad(m.track[1].n)}</a>
+             <a class="btn ghost" href="#/track">See the whole track</a>`}
       </div>
     </div>
     <img class="hero-mascot" src="assets/mascot-512.png" alt="The handbook's mascot, a python in a hard hat with a laptop">
@@ -820,6 +846,10 @@ export function start() {
   sheet = document.getElementById("sheet");
   sheetBody = document.getElementById("sheet-body");
   sheetBtn = document.getElementById("sheetbtn");
+  $("#skip")?.addEventListener("click", () => {
+    main.focus();
+    main.scrollIntoView({ behavior: "instant", block: "start" });
+  });
   sheetBtn?.addEventListener("click", () => openSheet(!sheet.classList.contains("open")));
   // Tapping a link inside the sheet closes it. route() also closes it, but only
   // when the hash changes, and a link to the section already showing does not

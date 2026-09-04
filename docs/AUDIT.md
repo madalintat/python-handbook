@@ -31,8 +31,10 @@ Marked before each commit. `[x]` done, `[~]` in progress, `[ ]` not started.
       what it will do; answering a drill moves focus to Next
 - [x] Contrast: every text colour meets WCAG AA against every ground it is
       used on, in both themes, and a test proves it
+- [x] A skip link, and a front page that offers a returning reader the unit
+      they were on rather than the first one
 - [x] Browser QA covers the new behaviour: history, sheet, companion, focus
-- [ ] README and release.sh know about the new check
+- [x] README and release.sh know about the new check
 
 ## Findings
 
@@ -116,6 +118,22 @@ strip was eight unlabelled links reading "1" to "8". The two navigations had
 no names. The rail toggle said "Collapse" whether or not it was collapsed.
 Answering a drill disabled the button that had focus, dropping focus to the
 document.
+
+### Flow
+
+**No way past the header.** A keyboard reader met the brand, five navigation
+links, the search box and the theme button before the content, on every route.
+There is a skip link now. It is a button rather than a link to `#main`,
+because the hash belongs to the router and pointing it there would navigate to
+a route that does not exist.
+
+**The front page did not know the reader had been here.** It offered "Start at
+unit 01" to somebody twelve units in, and the only way back to where they were
+was to scan the track. It now offers the furthest unit they have touched, by
+note read, exercise passed or drill set done. The furthest rather than the most
+recent: nothing records when anything happened, and a timestamp invented to
+answer this would be a second account of progress to keep in step with the
+first.
 
 ### Verified clean
 
