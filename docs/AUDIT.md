@@ -127,6 +127,11 @@ There is a skip link now. It is a button rather than a link to `#main`,
 because the hash belongs to the router and pointing it there would navigate to
 a route that does not exist.
 
+**The front page sent every beginner past unit 00.** The hero's link was
+written by hand as `#/unit/01-names`, and the track starts at `00-toolchain`.
+It is taken from the manifest now, so it cannot point at the wrong end of a
+list it does not read.
+
 **The front page did not know the reader had been here.** It offered "Start at
 unit 01" to somebody twelve units in, and the only way back to where they were
 was to scan the track. It now offers the furthest unit they have touched, by

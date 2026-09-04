@@ -167,9 +167,15 @@ async function viewHome() {
   // cannot reach is the one thing a progress figure must never do.
   const writtenEx = m.track.reduce((n, u) => n + u.hasEx, 0);
   const writtenDrills = m.track.reduce((n, u) => n + u.hasDrills, 0);
-  // A reader who has been here before is offered the way back in, rather than
-  // the first unit and a hunt through the track for the one they were on.
+  /* A reader who has been here before is offered the way back in, rather than
+     the first unit and a hunt through the track for the one they were on.
+
+     For a first visit the first unit of the track, taken from the manifest.
+     The link was written by hand as unit 01, which is the second one: the
+     front page sent every beginner past the unit about what running a Python
+     file actually does. */
   const resume = resumeUnit(m.track, store.all());
+  const start = resume || m.track.find(u => u.hasNote);
 
   main.innerHTML = `
   <section class="hero"><div class="wrap hero-grid">
@@ -181,11 +187,9 @@ async function viewHome() {
       back a wrong answer and says nothing at all. Every exercise here runs for real in your
       own browser, judged by three tools that disagree with each other.</p>
       <div class="hero-cta">
-        ${resume
-          ? `<a class="btn" href="#/unit/${resume.slug}">Back to unit ${pad(resume.n)}: ${esc(resume.title)}</a>
-             <a class="btn ghost" href="#/track">See the whole track</a>`
-          : `<a class="btn" href="#/unit/${m.track[1].slug}">Start at unit ${pad(m.track[1].n)}</a>
-             <a class="btn ghost" href="#/track">See the whole track</a>`}
+        <a class="btn" href="#/unit/${start.slug}">${resume
+          ? `Back to unit ${pad(start.n)}: ${esc(start.title)}` : `Start at unit ${pad(start.n)}`}</a>
+        <a class="btn ghost" href="#/track">See the whole track</a>
       </div>
     </div>
     <img class="hero-mascot" src="assets/mascot-512.png" alt="The handbook's mascot, a python in a hard hat with a laptop">
