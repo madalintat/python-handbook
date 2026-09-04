@@ -140,9 +140,26 @@ recent: nothing records when anything happened, and a timestamp invented to
 answer this would be a second account of progress to keep in step with the
 first.
 
-### Verified clean
+### What was run
 
-`./release.sh --check` passes, `qa-views.sh` reports no overflow at seven
-widths in both themes, the judges run and agree in the browser, hidden
-solutions are not shipped, progress erasure keeps preferences. None of that
-changes here.
+Everything below passed on the finished branch.
+
+| check | result |
+| --- | --- |
+| `./release.sh --check` | all checks passed |
+| `python3 build.py --validate` | 312 exercises and 108 stages, all clean |
+| `./qa-views.sh` | 14 routes at 7 widths in 2 themes, 0 problems |
+| `./qa-controls.sh` | 55 controls, 0 problems |
+| `./qa-browser.sh 01-names 07-functions` | 16 exercises, 0 problems |
+| `./qa-solutions.sh bloom-filter retry-decorator` | 8 stages, 0 problems |
+
+The two browser sweeps were run over a sample rather than the whole book,
+because nothing on this branch touches content and both had already agreed
+with the offline judges before it started. `./release.sh --check --net
+--browser` runs all of it.
+
+### Unchanged
+
+The judges still agree between the browser and the subprocess, hidden
+solutions are still not shipped, and erasing progress still keeps the
+reader's preferences. None of that is touched here.
