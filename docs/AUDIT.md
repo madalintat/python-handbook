@@ -31,7 +31,7 @@ Marked before each commit. `[x]` done, `[~]` in progress, `[ ]` not started.
       what it will do; answering a drill moves focus to Next
 - [x] Contrast: every text colour meets WCAG AA against every ground it is
       used on, in both themes, and a test proves it
-- [ ] Browser QA covers the new behaviour: history, sheet, companion, focus
+- [x] Browser QA covers the new behaviour: history, sheet, companion, focus
 - [ ] README and release.sh know about the new check
 
 ## Findings

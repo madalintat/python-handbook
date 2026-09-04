@@ -71,6 +71,23 @@ await go('/search/zzzznotathing')
 ok(await q(`return (document.querySelector('main').textContent || '').trim().length > 10`),
    'a search with no results still says something')
 
+// Typing draws the results in place and replaces the URL. It used to assign
+// the hash per keystroke, so Back walked out through "dic", "di" and "d".
+await go('/search/', 1)
+const histBefore = await q(`return history.length`)
+for (const ch of ['d', 'i', 'c']) {
+  await q(`const b = document.getElementById('q'); b.focus();
+           b.setSelectionRange(b.value.length, b.value.length);
+           document.execCommand('insertText', false, ${JSON.stringify(ch)}); return 1`)
+  await wait(0.4)
+}
+await wait(0.4)
+ok(await q(`return history.length`) === histBefore, 'typing in search pushes no history entries')
+ok(await q(`return location.hash === '#/search/dic' && document.querySelectorAll('#hits a').length > 0`),
+   'the URL follows the typed query and the results appear in place')
+ok(await q(`const b = document.getElementById('q'); return document.activeElement === b && b.value === 'dic'`),
+   'the input keeps focus and its text while typing')
+
 cliLog('=== contents rail and sheet ===')
 await cdp('Emulation.setDeviceMetricsOverride', { width: 1400, height: 900, deviceScaleFactor: 1, mobile: false })
 await go('/unit/' + unit, 1.5)
@@ -80,6 +97,8 @@ await q(`document.getElementById('railtoggle')?.click(); return 1`)
 await wait(0.6)
 const railAfter = await q(`return document.querySelector('#railaside, .rail')?.getBoundingClientRect().width || 0`)
 ok(railAfter !== railBefore, `the rail collapses (${Math.round(railBefore)} -> ${Math.round(railAfter)})`)
+ok(await q(`return /expand/i.test(document.getElementById('railtoggle').getAttribute('aria-label'))`),
+   'a collapsed rail offers to expand')
 await q(`document.getElementById('railtoggle')?.click(); return 1`)
 await wait(0.5)
 
@@ -91,18 +110,56 @@ if (sections.length) {
 
 await cdp('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true })
 await go('/unit/' + unit, 1.5)
+/* The sheet slides in, and the animation runs slower under emulation than the
+   stylesheet asks for, so its resting position is polled rather than waited
+   for. Measuring during the slide reported it below the fold and looked
+   exactly like the bug this checks for. */
+const sheetRested = () => until(`(() => {
+  const s = document.getElementById('sheet');
+  return s.classList.contains('open') && getComputedStyle(s).transform === 'none';
+})()`, 10)
 await q(`document.getElementById('sheetbtn').click(); return 1`)
-await wait(0.6)
-ok(await q(`return document.getElementById('sheet').classList.contains('open')`), 'the contents sheet opens on a phone')
+ok(await sheetRested(), 'the contents sheet opens on a phone')
 ok(await q(`return (document.getElementById('sheet-body').textContent || '').trim().length > 0`), 'the sheet has contents in it')
+/* The sheet's own box has to clear the tab bar. A unit with more sections than
+   fit scrolls inside the sheet, which is what the max-height is for, so the
+   check is that the box clears the bar and that scrolling to the end brings
+   the last link with it. Asserting every link fits without scrolling would
+   fail on any long unit for the wrong reason. */
+ok(await q(`const s = document.getElementById('sheet').getBoundingClientRect();
+            const t = document.getElementById('tabbar').getBoundingClientRect().top;
+            return s.bottom <= t + 1`),
+   'the sheet sits above the tab bar rather than under it')
+ok(await q(`const s = document.getElementById('sheet');
+            s.scrollTop = s.scrollHeight;
+            return 1`) && await (async () => { await wait(0.4); return q(`
+            const t = document.getElementById('tabbar').getBoundingClientRect().top;
+            const links = [...document.querySelectorAll('#sheet-body a')];
+            return links[links.length - 1].getBoundingClientRect().bottom <= t + 1`) })(),
+   'the last section is reachable, whatever the unit is')
+ok(await q(`return document.getElementById('sheetbtn').getAttribute('aria-expanded') === 'true'`),
+   'the sheet button says it is open')
 await q(`document.getElementById('sheetbtn').click(); return 1`)
 await wait(0.4)
 ok(!await q(`return document.getElementById('sheet').classList.contains('open')`), 'the sheet closes again')
+ok(await q(`return document.getElementById('sheetbtn').getAttribute('aria-expanded') === 'false'`),
+   'and says so')
+
+await q(`document.getElementById('sheetbtn').click(); return 1`)
+await sheetRested()
+await q(`document.querySelector('main h1').click(); return 1`)
+await wait(0.4)
+ok(!await q(`return document.getElementById('sheet').classList.contains('open')`), 'tapping outside the sheet closes it')
+await q(`document.getElementById('sheetbtn').click(); return 1`)
+await sheetRested()
+await q(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); return 1`)
+await wait(0.3)
+ok(!await q(`return document.getElementById('sheet').classList.contains('open')`), 'Escape closes the sheet')
 
 // A link to the section already showing changes no hash and so fires no route,
 // which is the case route()'s own close cannot cover.
 await q(`document.getElementById('sheetbtn').click(); return 1`)
-await wait(0.5)
+await sheetRested()
 await q(`
   const links = [...document.querySelectorAll('#sheet-body a')];
   const same = links.find(a => a.getAttribute('href') === '#' + location.hash.slice(1));
@@ -111,9 +168,36 @@ await q(`
 await wait(0.6)
 ok(!await q(`return document.getElementById('sheet').classList.contains('open')`),
    'tapping a link in the sheet closes it, including one to the section showing')
+
+cliLog('=== a phone opens the work without jumping to it ===')
+// The last stage of the biggest project, with vim mode left on: both the
+// caret placement and vim's enable used to focus the editor at mount, which
+// on a phone scrolls past the brief and raises the keyboard.
+const project = manifest.projects.filter(p => p.hasBody).sort((a, b) => b.stages - a.stages)[0]
+await q(`localStorage.setItem('ph.vim', '1'); return 1`)
+await go('/track', 0.6)
+await go(`/project/${project.slug}/${project.stages}`, 3)
+ok(await until(`document.getElementById('run') && document.querySelector('textarea')`), 'the last stage mounts')
+ok(await q(`return scrollY < 10 && document.activeElement !== document.querySelector('textarea')`),
+   'the page stays at the brief and the keyboard stays down')
+ok(await q(`return getComputedStyle(document.querySelector('kbd.runkey')).display === 'none'`),
+   'no keyboard shortcut is advertised where there is no keyboard')
+await q(`localStorage.setItem('ph.vim', '0'); return 1`)
+let companions = 0
+for (let i = 0; i < 20; i++) {
+  await go(i % 2 ? '/track' : '/glossary', 0.3)
+  if (await q(`return !!document.querySelector('.companion')`)) companions++
+}
+ok(companions === 0, 'the mascot stays off phones')
 await cdp('Emulation.clearDeviceMetricsOverride')
 
 cliLog('=== the workbench ===')
+let onBench = 0
+for (let i = 0; i < 20; i++) {
+  await go(i % 2 ? `/work/${unit}/1` : `/work/${unit}/2`, 0.3)
+  if (await q(`return !!document.querySelector('.companion')`)) onBench++
+}
+ok(onBench === 0, 'the mascot stays off the workbench, where the results appear')
 await go(`/work/${unit}/1`, 1)
 ok(await until(`document.getElementById('run') && document.querySelector('textarea')`),
    'the editor mounts')
